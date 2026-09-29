@@ -12,7 +12,7 @@ function notice(message){$('notice').textContent=message;$('notice').hidden=!mes
 async function api(path,method='GET',data){const r=await fetch(path,{method,headers:{'X-Agent-Token':state.token,...(data!==undefined?{'Content-Type':'application/json'}:{})},body:data!==undefined?JSON.stringify(data):undefined});let body;try{body=await r.json();}catch{throw Error('服务返回了无法识别的数据，请检查终端日志。');}if(!r.ok)throw Error(body.error||`请求失败 (${r.status})`);return body;}
 function safe(fn){return (...args)=>Promise.resolve().then(()=>fn(...args)).catch(e=>toast(e.message));}
 function setMode(mode){state.mode=mode;for(const v of ['chat','agent']){$('mode-'+v).classList.toggle('active',v===mode);$('mode-'+v).setAttribute('aria-pressed',String(v===mode));}$('mode-hint').textContent=mode==='chat'?'直接回答，不调用工具':'写入与执行前需要确认';}
-function controls(){const busy=!!state.run;$('send-button').hidden=busy;$('stop-button').hidden=!busy;$('send-button').disabled=!state.runtime?.ready||!$('message-input').value.trim()||state.uploading;$('upload-button').disabled=busy||state.uploading;$('mode-chat').disabled=busy;$('mode-agent').disabled=busy;}
+function controls(){const busy=!!state.run||!!state.sending;$('send-button').hidden=!!state.run;$('stop-button').hidden=!state.run;$('send-button').disabled=busy||!state.runtime?.ready||!$('message-input').value.trim()||state.uploading;$('upload-button').disabled=busy||state.uploading;$('mode-chat').disabled=busy;$('mode-agent').disabled=busy;}
 function closeSidebar() {document.body.classList.remove('sidebar-open');$('mobile-scrim').hidden=true;}
 function toggleSidebar(){if(innerWidth<=800){const open=document.body.classList.toggle('sidebar-open');$('mobile-scrim').hidden=!open;}else document.body.classList.toggle('sidebar-collapsed');}
 function setTheme(theme){document.documentElement.dataset.theme=theme;storage.set('local-agent-theme',theme);}
@@ -59,12 +59,28 @@ function renderMessages(){const scroll=$('scroll-area');const near=scroll.scroll
   for(const d of list.querySelectorAll('details'))if(opened.includes(d.dataset.step))d.open=true;
   if(near||!messages.length)requestAnimationFrame(()=>scroll.scrollTop=scroll.scrollHeight);
 }
-async function send(){if(state.run)return toast('请先完成或停止当前任务。');const message=$('message-input').value.trim();if(!message)return;if(!state.runtime?.ready)return toast('请先配置本地模型。');const s=await ensureSession();const submitted=await api(`/api/sessions/${s.id}/messages`,'POST',{message,mode:state.mode,max_new_tokens:Number($('token-limit').value),attachments:state.attachments.map(x=>x.path)});state.session=submitted.session;state.attachments=[];$('message-input').value='';$('message-input').rows=2;renderAttachments();renderMessages();await refreshSessions();watchRun(submitted.run_id,s.id);requestAnimationFrame(()=>$('scroll-area').scrollTop=$('scroll-area').scrollHeight);}
+async function send(){
+  if(state.run||state.sending)return toast('请先完成或停止当前任务。');
+  const message=$('message-input').value.trim();if(!message)return;if(!state.runtime?.ready)return toast('请先配置本地模型。');
+  const payload={message,mode:state.mode,max_new_tokens:Number($('token-limit').value),attachments:state.attachments.map(x=>x.path)};
+  state.sending=true;controls();
+  try{const s=await ensureSession();const submitted=await api(`/api/sessions/${s.id}/messages`,'POST',payload);
+    if(state.session?.id===s.id){state.session=submitted.session;state.attachments=[];$('message-input').value='';$('message-input').rows=2;renderAttachments();renderMessages();}
+    // Start observing immediately, before any asynchronous sidebar refresh.
+    watchRun(submitted.run_id,s.id);await refreshSessions();
+    requestAnimationFrame(()=>$('scroll-area').scrollTop=$('scroll-area').scrollHeight);
+  }finally{state.sending=false;controls();}
+}
 async function watchRun(rid,sid){if(state.run)return;state.run=rid;state.runSession=sid;state.traces=[];state.approval=null;state.stopping=false;$('stop-button').disabled=false;controls();let cursor=0;
   try {while(state.run===rid){const result=await api(`/api/runs/${rid}/events?after=${cursor}`);cursor=result.cursor;for(const e of result.events){if(e.event==='approval_required')state.approval=e.approval;if(e.event==='approval_resolved')state.approval=null;if(e.event==='stopping')state.stopping=true;if(e.event!=='done')state.traces.push(e);if(e.event==='done'&&state.session?.id===sid){const m=state.session.messages.find(m=>m.id===e.message.id);if(m)Object.assign(m,e.message);state.session.active_run=null;}}
       if(state.session?.id===sid)renderMessages();if(terminal.has(result.status))break;
     }}catch(e){notice('与任务的连接中断：'+e.message+'。刷新页面可重新查询任务状态。');}
-  finally{state.run=null;state.runSession=null;state.approval=null;state.traces=[];state.stopping=false;controls();try{await refreshSessions();if(state.session?.id===sid){state.session=await api('/api/sessions/'+sid);renderMessages();if(!$('file-panel').hidden)await showFiles();}}catch(e){toast(e.message);}}
+  finally{
+    // Keep the current run locked until its final session refresh completes.
+    // Otherwise a late response can erase the next run's assistant/approval card.
+    try{await refreshSessions();if(state.session?.id===sid){const session=await api('/api/sessions/'+sid);if(state.session?.id===sid){state.session=session;renderMessages();if(!$('file-panel').hidden)await showFiles();}}}catch(e){toast(e.message);}
+    finally{if(state.run===rid){state.run=null;state.runSession=null;state.approval=null;state.traces=[];state.stopping=false;}controls();renderMessages();}
+  }
 }
 function renderAttachments(){const root=$('attachments');root.replaceChildren();for(const item of state.attachments){const chip=el('div','attachment-chip');chip.append(icon('file'),el('span','',item.name),button('移除附件','close',()=>{state.attachments=state.attachments.filter(x=>x!==item);renderAttachments();}));root.append(chip);}}
 async function upload(files){state.uploading=true;controls();try{const s=await ensureSession();for(const file of files){if(state.attachments.length>=10)throw Error('最多附加 10 个文件。');if(!file.size||file.size>8*1024*1024)throw Error('单个文件必须为 1 字节至 8 MiB。');const bytes=new Uint8Array(await file.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));const result=await api(`/api/sessions/${s.id}/upload`,'POST',{name:file.name,data:btoa(binary)});state.attachments.push(result);renderAttachments();}toast('文件已上传到当前对话工作区');if(!$('file-panel').hidden)await showFiles();}finally{state.uploading=false;$('file-input').value='';controls();}}

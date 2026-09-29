@@ -58,6 +58,12 @@ def main():
                 ctx=browser.new_context(viewport={'width':1440,'height':960},color_scheme='dark',reduced_motion='reduce')
                 page=ctx.new_page();page.on('pageerror',lambda e:errors.append(str(e)))
                 page.on('request',lambda r:external.append(r.url) if not r.url.startswith(base) else None)
+                # Delay the real session response to expose final-refresh/next-send races.
+                # The HTTP response bytes are unchanged; this is network timing only.
+                def delayed_session(route):
+                    response=route.fetch();time.sleep(.2);route.fulfill(response=response)
+                import re
+                page.route(re.compile(re.escape(base)+r'/api/sessions/[0-9a-f]{32}$'), delayed_session)
                 page.goto(base);expect(page.locator('#connection-status')).to_have_text('本机服务已连接')
                 expect(page.locator('h1')).to_have_text('把想法，变成本地工作流。')
                 page.screenshot(path=str(a.output/'desktop-dark.png'),full_page=True);passed('desktop welcome + runtime identity')
@@ -80,7 +86,7 @@ def main():
                 expect(page.locator('#attachments')).to_contain_text('measurements.csv')
                 page.locator('#message-input').fill('分析附件');page.locator('#send-button').click();expect(page.locator('#messages .assistant .code-block')).to_have_count(3);expect(page.locator('#stop-button')).to_be_hidden(timeout=10000)
                 assert any('UNTRUSTED FILE DATA' in m[-1]['content'] for m in calls);passed('upload + text attachment context')
-                page.locator('#mode-agent').click();page.locator('#message-input').fill('创建并读取 web-demo.txt');page.locator('#send-button').click()
+                page.locator('#mode-agent').click();expect(page.locator('#mode-agent')).to_have_attribute('aria-pressed','true');page.locator('#message-input').fill('创建并读取 web-demo.txt');page.locator('#send-button').click()
                 expect(page.locator('.approval-card')).to_be_visible(timeout=10000)
                 sid=app.sessions.list()[0]['id'];assert not (app.workspace/sid/'web-demo.txt').exists()
                 page.screenshot(path=str(a.output/'tool-approval.png'),full_page=True);passed('write pauses for human approval')
@@ -119,6 +125,9 @@ def main():
         except Exception as exc:
             cases.append({'name':'browser execution','status':'failed','error':f'{type(exc).__name__}: {exc}'})
             print(cases[-1],file=sys.stderr)
+            report['failure_sessions']=[app.sessions.get(s['id']) for s in app.sessions.list()]
+            report['failure_runs']=[{'id':r.id,'status':r.status,'events':r.events} for r in app.runs.values()]
+            report['fixture_inputs']=calls
         finally:
             for rid in list(app.runs):app.cancel(rid)
             deadline=time.monotonic()+3

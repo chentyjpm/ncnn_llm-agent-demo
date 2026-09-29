@@ -6,6 +6,7 @@ on:
     paths:
       - 'local_agent/**'
       - 'scripts/browser*.py'
+      - 'scripts/test_ui_lifecycle.js'
       - 'scripts/web_real_smoke.py'
       - 'tests/test_web.py'
       - '.github/workflows/web-ui.yml'
@@ -15,6 +16,7 @@ on:
     paths:
       - 'local_agent/**'
       - 'scripts/browser*.py'
+      - 'scripts/test_ui_lifecycle.js'
       - 'tests/test_web.py'
       - '.github/workflows/web-ui.yml'
 permissions:
@@ -37,6 +39,10 @@ jobs:
         run: python -m pip install -r requirements-office.txt
       - name: Real HTTP, document and consent regressions
         run: python scripts/run_tests.py --output-dir reports/web-unit
+      - name: Verify real UI event ordering with controlled timing
+        run: |
+          node --check local_agent/webui/app.js
+          node scripts/test_ui_lifecycle.js
       - name: Install browser test dependencies (not app requirements)
         run: |
           python -m pip install playwright==1.57.0
