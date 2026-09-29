@@ -10,4 +10,3 @@ demo_workspace*/
 configs/local.json
 reports/runs/*
 !reports/runs/.gitkeep
-

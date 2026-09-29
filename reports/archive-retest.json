@@ -1,0 +1,8 @@
+{
+  "test": "Source ZIP extracted into a fresh temporary directory and re-tested",
+  "command": "python -m unittest discover -s tests -v",
+  "returncode": 0,
+  "passed": true,
+  "elapsed_seconds": 19.106,
+  "scope": "Same tool/protocol suite, not real model inference or native compilation."
+}

@@ -1,0 +1,5 @@
+{
+  "url": "https://raw.githubusercontent.com/futz12/ncnn_llm/main/xmake.lua",
+  "ok": false,
+  "error": "URLError: <urlopen error [Errno -3] Temporary failure in name resolution>"
+}

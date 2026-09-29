@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "backend": "SCRIPTED_TEST_DOUBLE_NOT_LLM",
+  "steps": 9,
+  "tool_calls": 8,
+  "final": "预置集成演示完成。文件操作、Python 执行与 MCP 调用已实际运行；规划和纠错动作由固定脚本给出，不代表大模型能力。",
+  "integration_checks": {
+    "agent_finished": true,
+    "python_real_result": true,
+    "expected_error_observed": true,
+    "mcp_real_process_result": true,
+    "fixed_command_ran": true,
+    "only_expected_error": true
+  },
+  "audit_log": "/mnt/data/ncnn-local-agent/reports/runs/demo-9295c54b90af4ceb9c668594ed828af8.jsonl",
+  "workspace": "/mnt/data/ncnn-local-agent/reports/demo_workspace",
+  "disclaimer": "Planning/repair decisions are scripted. Python, file operations and MCP subprocess calls are real. No ncnn inference here."
+}

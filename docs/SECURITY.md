@@ -1,0 +1,41 @@
+# 安全边界：不要把“本地运行”误当成“安全运行”
+
+## 默认权限
+
+`configs/local.example.json` 默认只暴露工作区文件工具。Python、预定义系统命令、外部 MCP 与生图都关闭。运行任意 Python 不能仅靠切换 cwd 或 Python `-I` 获得隔离。
+
+文件工具接受工作区相对路径，拒绝父目录跳转、绝对/Windows 驱动器路径、UNC、ADS、符号链接、硬链接、保留文件名和内部名称；写入需要显式覆盖许可，patch 必须只匹配一次，读写上限 1 MiB。**这些检查要求工作区没有不可信并发修改者**：没有实现全路径 `openat2`/Windows handle-based 原子隔离，不能抵御所有目录替换竞争条件。工作区不是审计日志的安全存储位置。
+
+## Python 三种模式
+
+| 模式 | 行为 | 边界 |
+|---|---|---|
+| disabled | 不注册 Python 工具 | 默认 |
+| docker | 显式配置后用本地 Docker 镜像运行；断网、只读 rootfs、drop caps、no-new-privileges、非 root、资源限制，仅绑定工作区 | 当前未实机验证；共享宿主内核，不等价于虚拟机；未限制工作区总磁盘占用 |
+| unsafe-host | 必须在配置中选择，并额外传 `--allow-unsafe-host-python` | 没有文件/网络/系统调用隔离；只适合自己审查过的代码和演示 |
+
+Docker 模式找不到 Docker、镜像或守护进程时直接失败，**不降级到宿主机执行**。镜像使用 `--pull=never`，不会运行时自动下载。timeout 后还会 `docker rm -f` 清理容器，而不是只杀 Docker CLI。建议普通用户/Rootless Docker，勿用管理员运行整个 Agent。Linux 非 root 用户使用自己的 UID/GID；以 root 启动时容器改用 65534 用户，工作区写权限需要管理员正确配置，不能用 chmod 777 草率解决。
+
+演示和本次 Python 实测使用 **unsafe-host**，只执行包中可阅读的预置脚本。不能由此推断恶意 Python 已被隔离。Windows 只保证终止直接子进程，未实现 Job Object，子孙进程强制回收需进一步加固；本次只在 Linux 测试。
+
+## 系统命令
+
+`system.run` 只能选择配置里已经固定好的命令名，不能让模型传入自由命令文本或额外参数。底层 `shell=False`、argv 数组避免 shell 插值。它不是通用命令沙箱：配置 `cmake --build`、测试脚本或 `python -c` 仍能执行项目里的任意代码。命令必须由使用者审查，启动时显式 `--allow-commands`。
+
+没有提供任意 Shell、管理员命令、磁盘格式化、注册表修改、系统服务管理或网络配置修改工具。用窄权限 MCP/受审查固定命令逐步扩展，而不是靠危险字符串黑名单。
+
+## MCP
+
+支持真实 JSON-RPC/stdio 子进程、initialize、initialized 通知、tools/list（含分页）、tools/call、ping、通知、超时和关闭。只注册配置 allowlist 里的工具；没有通配符默认全放行。
+
+MCP Server 在宿主机上作为独立程序启动。**本客户端的工作区校验不会约束第三方 MCP Server 自己的文件和网络访问**。配置文件需要审查，启用后还需 `--trust-mcp`。这代表使用者信任该程序及所选工具，并非逐次人工批准。环境变量默认只传基础系统变量；确有需要的凭证可在受保护的服务器配置中设置，勿提交到版本库。
+
+本版本不实现远程 Streamable HTTP、OAuth、sampling、elicitation、resources、prompts、tasks；未通过第三方 MCP 兼容性认证。外部服务器的复杂 JSON Schema 交由服务器验证，本地简化验证器主要用于内置工具。工具描述、返回文本和文件内容均视为不可信数据，但 prompt injection 无法单凭一段 system prompt 彻底消除，安全性必须由宿主权限和工具范围限制。
+
+## 模型与审计
+
+模型输出只在完整 JSON 动作验证后执行。不执行部分 token 或模型任意生成的 shell 字符串。限制轮数、重复调用、格式重试、消息大小、子进程时间和输出量；上下文字符预算不是模型 token 上下文上限，实际模型仍可能需要更短任务。
+
+审计记录包含任务、模型原文、工具参数和结果，可能有敏感业务内容。保存在 `reports/runs/`，不要公开上传真实业务运行日志。它不是抗篡改日志或合规审计系统。宿主执行、第三方 MCP 或模型解码库本身的漏洞可能绕过应用层限制。
+
+生产用途应增加：每工具风险分级和逐次确认、只读项目快照、OS/VM 沙箱、磁盘配额、Windows Job Objects、崩溃恢复、模型/依赖校验、真实负载和跨平台测试。本原型没有宣称完成这些事项。

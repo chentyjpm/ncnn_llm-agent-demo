@@ -1,0 +1,59 @@
+[
+  {
+    "tool": "files.write",
+    "arguments": {
+      "path": "measurements.csv",
+      "content": "sample,distance_m\n1,232\n2,234\n3,236\n"
+    }
+  },
+  {
+    "tool": "files.read",
+    "arguments": {
+      "path": "measurements.csv"
+    }
+  },
+  {
+    "tool": "python.run",
+    "arguments": {
+      "code": "import csv\nwith open('measurements.csv', encoding='utf-8', newline='') as f:\n    values = [float(row['distance']) for row in csv.DictReader(f)]\n"
+    }
+  },
+  {
+    "tool": "python.run",
+    "arguments": {
+      "code": "import csv, json, statistics\nwith open('measurements.csv', encoding='utf-8', newline='') as f:\n    values = [float(row['distance_m']) for row in csv.DictReader(f)]\nsummary = {'count': len(values), 'mean_m': statistics.mean(values), 'min_m': min(values), 'max_m': max(values)}\nwith open('distance_summary.json', 'w', encoding='utf-8') as f:\n    json.dump(summary, f, ensure_ascii=False, indent=2)\nprint(json.dumps(summary, ensure_ascii=False))\n"
+    }
+  },
+  {
+    "tool": "mcp__math__summarize_numbers",
+    "arguments": {
+      "values": [
+        232,
+        234,
+        236
+      ]
+    }
+  },
+  {
+    "tool": "files.read",
+    "arguments": {
+      "path": "distance_summary.json"
+    }
+  },
+  {
+    "tool": "files.write",
+    "arguments": {
+      "path": "summary.md",
+      "content": "# 本地工作流演示\n\n这是合成样本，不是现场测距测试数据。\n\n样本数：3；平均距离：234 米。\nPython 与 MCP 统计结果一致。\n"
+    }
+  },
+  {
+    "tool": "system.run",
+    "arguments": {
+      "name": "python_version"
+    }
+  },
+  {
+    "final": "预置集成演示完成。文件操作、Python 执行与 MCP 调用已实际运行；规划和纠错动作由固定脚本给出，不代表大模型能力。"
+  }
+]

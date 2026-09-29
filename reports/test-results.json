@@ -1,0 +1,301 @@
+{
+  "tests_run": 72,
+  "passed": 72,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "elapsed_seconds": 18.588,
+  "python": "3.13.5",
+  "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+  "scope": "Real file/Python/MCP subprocess tests; model/image processes in adapter tests are explicitly fake fixtures. No ncnn model inference, C++ compilation, GPU or Docker runtime validation.",
+  "tests": [
+    {
+      "test": "tests.test_project.AdapterTests.test_edit_dimensions_require_32_multiple",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.AdapterTests.test_image_cli_arguments",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.AdapterTests.test_image_fake_process_contract_not_inference",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.AdapterTests.test_image_output_no_overwrite",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.AdapterTests.test_image_output_path_escape",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.AdapterTests.test_image_reference_flags",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.AdapterTests.test_missing_image_output_is_error",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.AdapterTests.test_native_bridge_transport_using_fake_process",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.AdapterTests.test_ncnn_cli_transport_using_fake_process",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.AdapterTests.test_ncnn_missing_model_fails_without_mock_fallback",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.AgentTests.test_action_json",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.AgentTests.test_audit_written",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.AgentTests.test_completed_think_removed",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.AgentTests.test_context_budget",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.AgentTests.test_end_to_end_with_scripted_backend",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.AgentTests.test_fenced_action",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.AgentTests.test_invalid_json_retry_then_succeed",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.AgentTests.test_reject_malformed_or_ambiguous_actions",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.AgentTests.test_repeat_loop_blocked",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.AgentTests.test_step_limit",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.AgentTests.test_three_bad_formats_stop",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.AgentTests.test_tool_types_and_extra_arguments",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.AgentTests.test_unknown_tool_cannot_execute",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.CLITests.test_demo_full_actual_tools_scripted_planner",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.CLITests.test_demo_requires_consent",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.CLITests.test_doctor_runs_without_models",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.CLITests.test_real_run_missing_weights_is_error",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.ExecutionTests.test_argv_no_shell_interpolation",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.ExecutionTests.test_command_disabled",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.ExecutionTests.test_default_python_disabled",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.ExecutionTests.test_docker_does_not_fallback",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.ExecutionTests.test_docker_flags_contract_only",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.ExecutionTests.test_fixed_command_executes",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.ExecutionTests.test_output_is_bounded",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.ExecutionTests.test_real_python_creates_file",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.ExecutionTests.test_real_python_error_reported",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.ExecutionTests.test_real_python_timeout",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.ExecutionTests.test_unknown_command_blocked",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.ExecutionTests.test_unsafe_mode_requires_consent",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.MCPTests.test_allowlist_and_namespace",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.MCPTests.test_duplicate_tool_registration_fails",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.MCPTests.test_mcp_arguments_cannot_override_bound_remote_name",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.MCPTests.test_missing_tools_capability_fails",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.MCPTests.test_real_demo_server_statistics",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.MCPTests.test_real_handshake_and_pagination",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.MCPTests.test_real_server_error",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.MCPTests.test_repeated_cursor_fails",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.MCPTests.test_version_mismatch_fails",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.RPCTests.test_bad_json_fails",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.RPCTests.test_close_idempotent",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.RPCTests.test_notifications_do_not_corrupt_result",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.RPCTests.test_real_subprocess_echo",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.RPCTests.test_server_ping_handled",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.RPCTests.test_timeout_closes_process",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.RPCTests.test_wrong_id_fails",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.WorkspaceTests.test_absolute_blocked",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.WorkspaceTests.test_ambiguous_patch_fails",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.WorkspaceTests.test_empty_patch_fails",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.WorkspaceTests.test_explicit_overwrite",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.WorkspaceTests.test_hardlink_blocked",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.WorkspaceTests.test_internal_paths_blocked",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.WorkspaceTests.test_list",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.WorkspaceTests.test_no_implicit_overwrite",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.WorkspaceTests.test_parent_traversal_blocked",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.WorkspaceTests.test_patch_exactly_one",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.WorkspaceTests.test_platform_reserved_names_blocked",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.WorkspaceTests.test_size_limit_read",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.WorkspaceTests.test_size_limit_write",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.WorkspaceTests.test_symlink_directory_blocked",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.WorkspaceTests.test_symlink_escape_blocked",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.WorkspaceTests.test_unicode_roundtrip",
+      "status": "passed"
+    },
+    {
+      "test": "tests.test_project.WorkspaceTests.test_windows_drive_unc_ads_blocked",
+      "status": "passed"
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "test_kind": "REAL_MODEL_SMOKE_TEST",
+  "ok": false,
+  "llm": {
+    "status": "not_run"
+  },
+  "image": {
+    "status": "not_requested"
+  },
+  "environment": {
+    "python": "3.13.5",
+    "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+    "orchestrator": "stdlib Python; native inference is separate",
+    "llm_backend": "ncnn_cli",
+    "llm_executable_found": false,
+    "llm_model_json_found": false,
+    "image_enabled": false,
+    "image_executable_found": false,
+    "image_model_directory_found": false,
+    "docker_executable_found": false,
+    "gpu_device_nodes_linux": [],
+    "gpu_note": "Empty Linux device nodes do not diagnose Windows/macOS GPU availability. No Vulkan inference probe was performed.",
+    "python_mode": "disabled",
+    "mcp_enabled": [],
+    "weights_bundled": false
+  },
+  "error": "PolicyError: ncnn model/model.json not found; no fallback to a fake model",
+  "elapsed_seconds": 0.002
+}

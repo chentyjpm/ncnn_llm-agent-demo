@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ncnn-local-agent"
+version = "0.1.0"
+description = "Offline-first ncnn agent orchestration with stdio MCP and explicit execution permissions"
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.setuptools]
+packages = ["local_agent"]
+
+# Run from the source directory with python -m local_agent.
+# A wheel alone does not bundle configs/examples/native/reports; prefer the project ZIP.

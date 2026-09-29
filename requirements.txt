@@ -1,0 +1,2 @@
+# No third-party Python package is required for the orchestrator or its test suite.
+# Python >= 3.10. Native ncnn libraries/models and optional Docker are separate.

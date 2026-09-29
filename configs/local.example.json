@@ -1,0 +1,51 @@
+{
+  "workspace": "workspace",
+  "max_steps": 12,
+  "llm": {
+    "backend": "ncnn_cli",
+    "command": [
+      "bin/llm_ncnn_run"
+    ],
+    "model": "models/qwen3_0.6b",
+    "threads": 4,
+    "vulkan": false,
+    "gpu": 0,
+    "timeout": 180,
+    "max_new_tokens": 1024
+  },
+  "python": {
+    "mode": "disabled",
+    "timeout": 20,
+    "docker_image": "python:3.12-slim"
+  },
+  "commands": {
+    "python_version": [
+      "@python",
+      "--version"
+    ]
+  },
+  "mcp_servers": [
+    {
+      "name": "math",
+      "enabled": false,
+      "command": [
+        "@python",
+        "-u",
+        "@project/examples/mcp_server.py"
+      ],
+      "allowed_tools": [
+        "summarize_numbers"
+      ],
+      "timeout": 30
+    }
+  ],
+  "image": {
+    "enabled": false,
+    "command": [
+      "bin/qwenimage-ncnn-vulkan"
+    ],
+    "model": "models/qwenimage21",
+    "gpu": 0,
+    "timeout": 1800
+  }
+}
