@@ -19,8 +19,17 @@ class CISupportTests(unittest.TestCase):
         cmd = configure_command('bridge', 'Windows', self.root)
         self.assertIn('-A', cmd)
         self.assertEqual(cmd[cmd.index('-A') + 1], 'x64')
-        self.assertIn('-DCMAKE_CXX_FLAGS=/utf-8', cmd)
+        self.assertIn('-DCMAKE_CXX_FLAGS_INIT=/utf-8 /MP2', cmd)
         self.assertIn('-DNCNN_VULKAN=ON', cmd)
+
+    def test_windows_does_not_overwrite_default_exception_flags(self):
+        # Regression: replacing CMAKE_CXX_FLAGS removed /EHsc and made malformed
+        # model.json crash on Windows instead of reaching the error handler.
+        for component in ('bridge', 'image'):
+            with self.subTest(component=component):
+                cmd = configure_command(component, 'Windows', self.root)
+                self.assertFalse(any(v.startswith('-DCMAKE_CXX_FLAGS=') for v in cmd))
+                self.assertTrue(any(v.startswith('-DCMAKE_CXX_FLAGS_INIT=') for v in cmd))
 
     def test_macos_uses_native_runner_architecture(self):
         cmd = configure_command('bridge', 'Darwin', self.root)

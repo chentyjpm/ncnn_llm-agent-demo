@@ -1,6 +1,6 @@
 # CI 回归用例与验收方法
 
-本轮在原有 82 项工具/CI 辅助测试上追加 32 项回归测试，共 114 项。
+本轮在原有 82 项工具/CI 辅助测试上追加 33 项回归测试，共 115 项。
 Windows 原有 3 项 POSIX 链接测试仍按条件跳过，不计入通过数。
 另外对真正编译的 C++ 程序和打包后的程序分别执行原生测试，不能用 Python fixture 替代。
 
@@ -35,7 +35,8 @@ Windows 原有 3 项 POSIX 链接测试仍按条件跳过，不计入通过数�
 `native/cli_options_test.cpp` 包含 20 个参数解析用例，覆盖有效边界、空串、字母、尾随字符、小数、空白、负数和整数溢出。
 Release 模式使用显式失败计数和非零退出，不使用会被 NDEBUG 删除的 assert。
 
-CMake/CTest 中有 `bridge_cli_parse`、`bridge_help`、`bridge_version` 三个测试。
+CMake/CTest 中有 `bridge_cli_parse`、`bridge_exception_unwind`、`bridge_help`、`bridge_version` 四个测试。
+`native/exception_unwind_test.cpp` 追加 3 个异常展开用例，检查跨函数抛异常、捕获后重新抛出以及正常析构；MSVC 未启用 `_CPPUNWIND` 时直接编译失败。
 
 `scripts/native_regression.py` 只接收 ELF/PE/Mach-O 文件，并真实启动程序：
 
@@ -44,6 +45,17 @@ CMake/CTest 中有 `bridge_cli_parse`、`bridge_help`、`bridge_version` 三个�
 
 这些用例不下载或加载有效权重，不初始化 GPU 推理。损坏 model.json 仅用于检查加载前的 JSON 解析错误。
 每个构建 job 先测试构建目录中的程序，打包后再取出归档中的实际程序完整复测一次。
+
+
+## Windows 异常展开故障的复现与修复
+
+提交 `ac8f6dd` 的原生运行 `36553742330` 中，Windows bridge 编译和基础 CTest 通过，但新增的 `malformed_model_json` 用例真实失败：进程返回 `3221226505`（`0xC0000409`），而不是预期的受控错误码 2。其余 21 个 bridge CLI 用例通过。这一失败没有被忽略或跳过。
+
+编译日志出现 C4530，`CMakeCache.txt` 显示 `CMAKE_CXX_FLAGS=/utf-8`：CI 直接覆盖了 CMake 默认编译标志，丢失 MSVC `/EHsc` 异常展开支持。
+修复为用 `CMAKE_CXX_FLAGS_INIT` 追加 UTF-8 与受限 `/MP2` 并行编译标志，保留工具链默认值；依赖 C++ 异常的 bridge 目标显式启用 `/EHsc`。
+新增测试同时从配置、防止缺少异常展开的编译检查、实际栈对象析构及保留的损坏 JSON 可执行程序回归验证。`/we4530` 让 bridge 的异常展开警告成为编译失败，不会再次被静默带入程序。
+
+这轮修复后的结果必须以新提交的完整平台矩阵为准；不能把 `ac8f6dd` 的 11 个成功任务混作新提交通过。
 
 ## 执行与证据
 

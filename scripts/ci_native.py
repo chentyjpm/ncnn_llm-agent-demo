@@ -51,7 +51,8 @@ def configure_command(component: str, system: str, root: Path = ROOT) -> list[st
            '-DNCNN_OPENMP=OFF', '-DNCNN_SHARED_LIB=OFF', '-DBUILD_SHARED_LIBS=OFF',
            '-DCMAKE_POLICY_VERSION_MINIMUM=3.5']
     if system == 'Windows':
-        cmd += ['-A', 'x64', '-DCMAKE_CXX_FLAGS=/utf-8',
+        # Initialize additional flags without replacing CMake's /EHsc defaults.
+        cmd += ['-A', 'x64', '-DCMAKE_CXX_FLAGS_INIT=/utf-8 /MP2',
                 '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded$<$<CONFIG:Debug>:Debug>']
     if component == 'bridge':
         cmd += [f'-DNCNN_LLM_SOURCE_DIR={deps / "ncnn_llm"}',
@@ -212,7 +213,8 @@ def main() -> int:
             run_logged(configure_command(component, platform.system()), evidence / 'configure.log', timeout=600)
         elif stage == 'build':
             run_logged(['cmake', '--build', str(build), '--config', 'Release', '--parallel', '2',
-                        '--target', TARGETS[component]] + (['bridge_cli_tests'] if component == 'bridge' else []),
+                        '--target'] + (['bridge_cli_tests', 'bridge_exception_tests'] if component == 'bridge' else [])
+                       + [TARGETS[component]],
                        evidence / 'build.log')
             state['binary'] = str(find_binary(component))
             state['built_binary_sha256'] = hashlib.sha256(Path(state['binary']).read_bytes()).hexdigest()
