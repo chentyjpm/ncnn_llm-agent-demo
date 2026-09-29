@@ -118,7 +118,10 @@ class DeviceTests(unittest.TestCase):
         with patch.object(device,'run_process',return_value=value) as run:
             for _ in range(2): device.select(self.config,'llm')
             self.assertEqual(run.call_count,1);self.assertEqual(run.call_args.kwargs['timeout'],15)
-            self.assertEqual(run.call_args.args[0],[str(self.probe)])
+            # Windows 8.3 names and macOS /var aliases may resolve differently.
+            # Keep checking the exact canonical sibling probe and its cwd.
+            self.assertEqual(run.call_args.args[0],[str(self.probe.resolve())])
+            self.assertEqual(run.call_args.kwargs['cwd'],self.probe.resolve().parent)
 
     def test_driver_change_invalidates_cache(self):
         value={'timed_out':False,'returncode':0,'output_truncated':False,'stdout':json.dumps(report())}
@@ -131,7 +134,8 @@ class DeviceTests(unittest.TestCase):
         folder=self.root/'engines/bridge';folder.mkdir(parents=True);binary=folder/'bridge';binary.touch()
         runtime=self.root/'engines/vulkan';runtime.mkdir();(runtime/'libMoltenVK.dylib').touch()
         with patch.object(device.sys,'platform','darwin'): env=device.engine_env([str(binary)])
-        self.assertEqual(env['DYLD_LIBRARY_PATH'],str(runtime))
+        self.assertEqual(env['DYLD_LIBRARY_PATH'],str(runtime.resolve()))
+        self.assertEqual(env['DYLD_FALLBACK_LIBRARY_PATH'],str(runtime.resolve()))
 
     def test_engine_env_does_not_leak_credentials(self):
         with patch.dict(os.environ,{'TEST_SECRET':'secret','VK_DRIVER_FILES':'driver.json'}): env=device.engine_env([str(self.engine)])
@@ -167,3 +171,25 @@ class DeviceTests(unittest.TestCase):
             backend=NcnnBridgeBackend(dict(self.config,model=str(model)),self.root)
             with self.assertRaisesRegex(RuntimeError,'invalid weights'): backend.complete([])
             self.assertEqual(rpc.call_count,1);backend.release()
+
+    def test_noncanonical_engine_path_uses_matching_canonical_probe(self):
+        # No symlink privileges required: exercise dot-dot normalization on every OS.
+        (self.root / 'alias').mkdir()
+        command = [str(self.root / 'alias' / '..' / self.engine.name)]
+        value = {'timed_out': False, 'returncode': 0, 'output_truncated': False,
+                 'stdout': json.dumps(report(gpu()))}
+        with patch.object(device, 'run_process', return_value=value) as run:
+            selected = device.select({'command': command, 'device': 'auto'}, 'llm')
+        self.assertEqual(selected['selected'], 'vulkan')
+        self.assertEqual(run.call_args.args[0], [str(self.probe.resolve())])
+        self.assertEqual(run.call_args.kwargs['cwd'], self.probe.resolve().parent)
+
+    def test_missing_macos_runtime_does_not_inject_library_search_paths(self):
+        folder = self.root / 'engines' / 'bridge'
+        folder.mkdir(parents=True)
+        binary = folder / 'bridge'
+        binary.touch()
+        with patch.object(device.sys, 'platform', 'darwin'):
+            env = device.engine_env([str(binary)])
+        self.assertNotIn('DYLD_LIBRARY_PATH', env)
+        self.assertNotIn('DYLD_FALLBACK_LIBRARY_PATH', env)

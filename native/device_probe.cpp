@@ -1,5 +1,5 @@
 // Built separately against EACH engine's ncnn. No model weights are loaded.
-// A successful device result requires an actual Vulkan ReLU dispatch/download.
+// A successful device result requires an actual Vulkan MAX(x, 0) dispatch/download.
 #include <algorithm>
 #include <cmath>
 #include <cctype>
@@ -37,9 +37,12 @@ static bool compute(int index) {
     net.opt.blob_vkallocator = &blob;
     net.opt.workspace_vkallocator = &blob;
     net.opt.staging_vkallocator = &staging;
-    if (net.load_param_mem("7767517\n2 2\nInput input 0 1 in\nReLU relu 1 1 in out 0=0\n") != 0) return false;
+    // Qwen Image's reduced ncnn build omits ReLU but includes BinaryOp.
+    // MAX(x, 0) is exactly ReLU: keep the same nontrivial numerical acceptance
+    // and require an actual VkMat result; never accept a CPU-only extraction.
+    if (net.load_param_mem("7767517\n2 2\nInput input 0 1 in\nBinaryOp relu 1 1 in out 0=4 1=1 2=0\n") != 0) return false;
     static const unsigned int weights[1] = {0};
-    net.load_model(reinterpret_cast<const unsigned char*>(weights));
+    if (net.load_model(reinterpret_cast<const unsigned char*>(weights)) != 0) return false;
     if (!net.opt.use_vulkan_compute || net.layers().size() != 2 || !net.layers()[1]->support_vulkan) return false;
     ncnn::Mat input(8), output;
     for (int i = 0; i < 8; ++i) input[i] = float(i - 4);
@@ -50,7 +53,7 @@ static bool compute(int index) {
     cmd.record_download(gpu_output, output, net.opt);
     if (cmd.submit_and_wait() != 0 || output.total() != 8) return false;
     for (int i = 0; i < 8; ++i)
-        if (!std::isfinite(output[i]) || std::abs(output[i] - std::max(0.f, input[i])) > 1e-6f) return false;
+        if (!std::isfinite(output[i]) || std::abs(output[i] - std::max(0.f, float(i - 4))) > 1e-6f) return false;
     return true;
 }
 #endif
