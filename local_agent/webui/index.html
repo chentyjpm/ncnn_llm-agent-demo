@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark light">
+  <meta name="description" content="本地 ncnn Agent 的离线 H5 工作台。聊天、文件、工具执行，一处完成。">
+  <title>Local Agent · 本地工作台</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+<svg class="icon-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 3 2.4 6.6L21 12l-6.6 2.4L12 21l-2.4-6.6L3 12l6.6-2.4Z"/><path d="m20 2 1 3 3 1"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H4l1.6-4A7.5 7.5 0 1 1 20 11.5Z"/></symbol>
+  <symbol id="i-panel" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16M5.5 8h1M5.5 12h1"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v9H3Z"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H5v18h14V8Zm0 0v5h5M8 12h8M8 16h5"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 20"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 3v17h17M8 15v-4m5 4V6m5 9V9"/></symbol>
+  <symbol id="i-tool" viewBox="0 0 24 24"><path d="M14 4a6 6 0 0 0-6 8L3 17a3 3 0 0 0 4 4l5-5a6 6 0 0 0 8-7l-4 3-4-4 3-4Z"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 15A8.5 8.5 0 0 1 9 4a8.5 8.5 0 1 0 11 11Z"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M12 19V5m-6 6 6-6 6 6"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><path d="m8 13 7-7a3 3 0 0 1 4 4L9 20a5 5 0 0 1-7-7L13 2m-5 11 7-7"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="m15 4 5 5M4 20l1-6L16 3l5 5-11 11Z"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6Zm-4 9 3 3 5-6"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+</defs></svg>
+<div id="mobile-scrim" class="scrim" hidden></div>
+<div class="app-shell">
+  <aside id="sidebar" class="sidebar" aria-label="会话导航">
+    <div class="brand"><span class="brand-mark"><svg class="icon"><use href="#i-spark"/></svg></span><span>Local Agent<small>你的本地 AI 工作台</small></span><button id="close-sidebar" class="icon-button mobile-only" aria-label="关闭侧栏"><svg class="icon"><use href="#i-close"/></svg></button></div>
+    <button id="new-chat" class="new-chat"><svg class="icon"><use href="#i-plus"/></svg>新建对话<kbd>⌘ K</kbd></button>
+    <label class="search-box"><svg class="icon"><use href="#i-search"/></svg><input id="session-search" type="search" placeholder="搜索对话" aria-label="搜索对话" autocomplete="off"></label>
+    <div class="section-label">你的对话 <span id="session-count">0</span></div>
+    <nav id="session-list" class="session-list" aria-label="历史对话"></nav>
+    <div class="sidebar-bottom">
+      <div class="local-card"><svg class="icon"><use href="#i-shield"/></svg><div>本机连接<small>模型与工具在此设备运行</small></div><span class="live-dot"></span></div>
+      <button id="settings-button" class="nav-button"><svg class="icon"><use href="#i-settings"/></svg>运行设置<span>⌥</span></button>
+      <div class="profile"><div class="avatar">L</div><div>本地工作区<small>ncnn · Vulkan · MCP</small></div><button id="theme-button" class="icon-button" aria-label="切换明暗主题" title="切换明暗主题"><svg class="icon"><use href="#i-moon"/></svg></button></div>
+    </div>
+  </aside>
+  <main class="main">
+    <header class="topbar">
+      <div class="topbar-start"><button id="toggle-sidebar" class="icon-button" aria-label="切换侧栏"><svg class="icon"><use href="#i-panel"/></svg></button><button id="model-button" class="model-button"><span id="model-name">正在连接本地服务</span><span id="device-badge" class="badge">CPU</span></button></div>
+      <div class="topbar-end"><span id="connection-status" class="connection-status">连接中</span><button id="files-button" class="soft-button"><svg class="icon"><use href="#i-folder"/></svg><span>工作文件</span></button><button id="export-chat" class="icon-button" aria-label="导出对话" title="导出为 Markdown"><svg class="icon"><use href="#i-down"/></svg></button></div>
+    </header>
+    <div id="notice" class="notice" role="status" hidden></div>
+    <div id="scroll-area" class="scroll-area">
+      <section id="welcome" class="welcome">
+        <div class="welcome-mark"><svg class="icon"><use href="#i-spark"/></svg></div>
+        <div class="eyebrow">LOCAL INTELLIGENCE. YOUR CONTROL.</div>
+        <h1>把想法，变成本地工作流。</h1>
+        <p>聊一个问题，分析一份文件，或让 Agent 帮你完成下一步。</p>
+        <div class="suggestions">
+          <button class="suggestion" data-prompt="帮我梳理一份技术方案的结构，先给出提纲和需要补充的信息。"><svg class="icon"><use href="#i-file"/></svg><strong>整理技术方案</strong><span>从想法到清晰的文档结构</span><svg class="icon corner"><use href="#i-chevron"/></svg></button>
+          <button class="suggestion" data-prompt="请分析我上传的 CSV 文件，概括数据特点并说明分析方法。"><svg class="icon"><use href="#i-chart"/></svg><strong>分析数据文件</strong><span>读取表格，发现关键规律</span><svg class="icon corner"><use href="#i-chevron"/></svg></button>
+          <button class="suggestion" data-prompt="帮我写一段 Python 代码来汇总 CSV 数据，并解释代码。先不要执行。"><svg class="icon"><use href="#i-code"/></svg><strong>编写和检查代码</strong><span>先审阅，再决定是否运行</span><svg class="icon corner"><use href="#i-chevron"/></svg></button>
+          <button class="suggestion" data-mode="agent" data-prompt="列出当前工作区里的文件，告诉我有哪些文件可以进一步处理。"><svg class="icon"><use href="#i-tool"/></svg><strong>让 Agent 动手</strong><span>连接文件、代码与本地工具</span><svg class="icon corner"><use href="#i-chevron"/></svg></button>
+        </div>
+        <div class="welcome-note"><span class="live-dot"></span>无需云端 API · 工具操作由你确认</div>
+      </section>
+      <div id="messages" class="messages" aria-label="对话内容" aria-live="polite"></div>
+    </div>
+    <footer class="composer-area">
+      <form id="composer" class="composer">
+        <div id="attachments" class="attachments"></div>
+        <label for="message-input" class="sr-only">消息</label>
+        <textarea id="message-input" placeholder="发消息，或交给 Agent 处理文件…" rows="2" maxlength="12000"></textarea>
+        <div class="composer-toolbar"><div class="composer-tools"><button id="upload-button" type="button" class="icon-button" aria-label="上传文件" title="上传文件，单个文件不超过 8 MiB"><svg class="icon"><use href="#i-plus"/></svg></button><input id="file-input" type="file" hidden multiple><div class="mode-switch" aria-label="运行模式"><button id="mode-chat" type="button" class="mode-button active" aria-pressed="true"><svg class="icon"><use href="#i-chat"/></svg>对话</button><button id="mode-agent" type="button" class="mode-button" aria-pressed="false"><svg class="icon"><use href="#i-spark"/></svg>Agent</button></div></div><div class="composer-actions"><span id="mode-hint">直接回答，不调用工具</span><button id="send-button" type="submit" class="send-button" aria-label="发送消息" disabled><svg class="icon"><use href="#i-arrow"/></svg></button><button id="stop-button" type="button" class="send-button stop" aria-label="停止任务" hidden><span></span></button></div></div>
+      </form>
+      <p class="composer-footnote">本地模型也可能出错，请核实重要信息。<span>Enter 发送 · Shift + Enter 换行</span></p>
+    </footer>
+  </main>
+  <aside id="file-panel" class="file-panel" aria-label="工作文件" hidden><div class="panel-heading"><div><h2>工作文件</h2><p>仅当前对话的独立工作区</p></div><button id="close-files" class="icon-button" aria-label="关闭文件面板"><svg class="icon"><use href="#i-close"/></svg></button></div><button id="parent-folder" class="soft-button" hidden>← 返回上一级</button><div id="folder-path" class="folder-path">/</div><div id="file-list" class="file-list"></div><div class="panel-note">文本可预览，其他文件可下载。图片附件不会自动变成视觉模型输入。</div><pre id="file-preview" class="file-preview" hidden></pre><img id="image-preview" class="image-preview" alt="工作区图片预览" hidden></aside>
+</div>
+<dialog id="settings-dialog"><div class="dialog-header"><div><h2>运行设置</h2><p>连接真实的本地模型，不经过云端代理</p></div><button id="close-settings" class="icon-button" aria-label="关闭设置"><svg class="icon"><use href="#i-close"/></svg></button></div><div id="runtime-details" class="runtime-details"></div><label class="setting-row">单次输出 token 上限<select id="token-limit"><option value="128">128 · 更快响应</option><option value="512" selected>512 · 日常使用</option><option value="1024">1024 · 较长回答</option><option value="2048">2048 · 长文与代码</option></select></label><p class="setting-note">只影响后续请求；ncnn_cli 后端不支持此参数。模型路径和工具权限在启动配置中设置，网页不能提升权限。</p><div class="setup-code"><strong>启动示例</strong><pre>python -m local_agent serve --config configs/local.json --open</pre><p>CPU 文本推理：llm.vulkan = false<br>CPU 生图：image.gpu = -1</p></div></dialog>
+<dialog id="rename-dialog"><form id="rename-form"><h2>重命名对话</h2><label for="rename-input">对话名称</label><input id="rename-input" maxlength="80" required><div class="dialog-actions"><button type="button" id="cancel-rename" class="soft-button">取消</button><button class="primary-button">保存</button></div></form></dialog>
+<dialog id="delete-dialog"><h2>删除这段对话？</h2><p>对话记录将被删除。工作文件和审计日志保留在本机，不会一并删除。</p><div class="dialog-actions"><button id="cancel-delete" class="soft-button">取消</button><button id="confirm-delete" class="danger-button">删除对话</button></div></dialog>
+<div id="toast" class="toast" role="status" hidden></div>
+</body></html>

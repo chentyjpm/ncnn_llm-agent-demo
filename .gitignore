@@ -15,3 +15,8 @@ reports/runs/*
 .ci-src/
 dist/
 reports/ci/
+
+# H5 local history, logs and verification artifacts
+web-data/
+reports/web-*/
+source-checkout.zip

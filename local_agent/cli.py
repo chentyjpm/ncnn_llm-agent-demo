@@ -130,13 +130,17 @@ def run_demo(args):
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Local ncnn Agent MVP (offline orchestration)")
     sub = parser.add_subparsers(dest="subcommand", required=True)
-    for name in ("doctor", "tools", "run", "tool", "demo"):
+    for name in ("doctor", "tools", "run", "tool", "demo", "serve"):
         p = sub.add_parser(name)
         p.add_argument("--config")
         p.add_argument("--workspace")
         p.add_argument("--allow-unsafe-host-python", action="store_true")
         p.add_argument("--allow-commands", action="store_true")
         p.add_argument("--trust-mcp", action="store_true")
+        if name == "serve":
+            p.add_argument("--port", type=int, default=8765)
+            p.add_argument("--data-dir", default="web-data")
+            p.add_argument("--open", action="store_true", dest="open_browser")
         if name == "run":
             p.add_argument("--task", required=True)
         if name == "tool":
@@ -145,6 +149,9 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     clients = []
     try:
+        if args.subcommand == "serve":
+            from .web import serve
+            return serve(load_config(args.config), args)
         if args.subcommand == "demo":
             result = run_demo(args)
         else:

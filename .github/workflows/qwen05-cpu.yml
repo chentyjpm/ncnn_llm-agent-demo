@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/qwen05-cpu.yml'
       - 'scripts/qwen05_*.py'
+      - 'scripts/web_real_smoke.py'
       - 'model-tests/**'
       - 'tests/test_qwen05_cpu.py'
       - 'native/**'
@@ -79,6 +80,8 @@ jobs:
         run: build/qwen05/qwen05_logits models/ncnn-qwen05 reports/qwen05/reference.json reports/qwen05/numerical.json
       - name: Run actual CPU text generation and file-tool workflow
         run: python scripts/qwen05_cpu_test.py --binary build/qwen05/bridge/ncnn_agent_bridge --model models/ncnn-qwen05 --output reports/qwen05/inference
+      - name: Real Qwen CPU through H5 HTTP with conversation history
+        run: python scripts/web_real_smoke.py --binary build/qwen05/bridge/ncnn_agent_bridge --model models/ncnn-qwen05 --output reports/qwen05/web-http
       - name: Upload current-run evidence only (no model weights)
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f

@@ -1,0 +1,57 @@
+name: H5 browser acceptance
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'local_agent/**'
+      - 'scripts/browser_web.py'
+      - 'scripts/web_real_smoke.py'
+      - 'tests/test_web.py'
+      - '.github/workflows/web-ui.yml'
+      - 'README.md'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'local_agent/**'
+      - 'scripts/browser_web.py'
+      - 'tests/test_web.py'
+      - '.github/workflows/web-ui.yml'
+permissions:
+  contents: read
+concurrency:
+  group: web-ui-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.13'
+      - name: Run all stdlib tests including real HTTP and consent tests
+        run: python scripts/run_tests.py --output-dir reports/web-unit
+      - name: Install browser test dependencies (not app runtime dependencies)
+        run: |
+          python -m pip install playwright==1.57.0
+          python -m playwright install --with-deps chromium
+      - name: Exercise real browser against the local server (labelled model fixture)
+        run: python scripts/browser_web.py --output reports/web-browser
+      - name: Package this exact source checkout for verification
+        if: always()
+        run: git archive --format=zip --output=source-checkout.zip HEAD
+      - name: Save test results, screenshots and source (no user data or weights)
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: h5-ui-${{ github.run_id }}
+          path: |
+            reports/web-unit/
+            reports/web-browser/
+            source-checkout.zip
+          retention-days: 14
+          if-no-files-found: error

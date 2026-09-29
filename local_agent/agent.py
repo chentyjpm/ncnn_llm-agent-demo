@@ -4,6 +4,9 @@ from pathlib import Path
 import re
 import time
 
+class OperationCancelled(RuntimeError):
+    pass
+
 class ActionError(ValueError):
     pass
 
@@ -72,9 +75,19 @@ class Agent:
         self.backend, self.registry = backend, registry
         self.max_steps, self.max_context_chars = max_steps, max_context_chars
         self.audit = audit or Audit()
-    def run(self, task: str) -> dict:
-        messages = [{"role": "system", "content": system_prompt(self.registry.schemas())},
-                    {"role": "user", "content": task}]
+    def run(self, task: str, *, history: list[dict] | None = None, cancelled=None) -> dict:
+        # Web sessions pass only completed user/assistant turns, never a client system role.
+        history = history or []
+        if len(history) > 100 or any(not isinstance(m, dict) or
+            m.get("role") not in ("user", "assistant") or not isinstance(m.get("content"), str)
+            for m in history):
+            raise ValueError("Invalid conversation history")
+        messages = [{"role": "system", "content": system_prompt(self.registry.schemas())}]
+        messages += [{"role": m["role"], "content": m["content"]} for m in history]
+        messages.append({"role": "user", "content": task})
+        def check_cancel():
+            if cancelled and cancelled():
+                raise OperationCancelled("Stopped by user; completed tools are not rolled back")
         self.audit.add("start", backend=self.backend.label, task=task)
         tool_count, format_errors, prior, repeated = 0, 0, None, 0
         try:
@@ -82,7 +95,10 @@ class Agent:
                 # Character budget is a transport cap, NOT a tokenizer-specific context guarantee.
                 if sum(len(m["content"]) for m in messages) > self.max_context_chars:
                     raise RuntimeError("Conversation exceeds configured character budget")
+                check_cancel()
+                self.audit.add("model_start", step=step)
                 raw = self.backend.complete(messages)
+                check_cancel()
                 self.audit.add("model_output", step=step, text=raw)
                 messages.append({"role": "assistant", "content": raw})
                 try:
@@ -106,10 +122,13 @@ class Agent:
                     raise RuntimeError("Repeated identical tool call loop stopped")
                 if action["tool"] == "images.generate":
                     self.backend.release()  # Free LLM process memory before image generation.
+                check_cancel()
+                self.audit.add("tool_start", step=step, tool=action["tool"], arguments=action["arguments"])
                 result = self.registry.call(action["tool"], action["arguments"])
                 tool_count += 1
                 self.audit.add("tool_result", step=step, tool=action["tool"],
                                arguments=action["arguments"], result=result)
+                check_cancel()  # Record completed side effects even when cancellation arrived during the tool.
                 encoded = json.dumps(result, ensure_ascii=False, allow_nan=False)
                 if len(encoded) > 16000:
                     encoded = json.dumps({"truncated": True, "preview": encoded[:15000]}, ensure_ascii=False)
@@ -118,6 +137,8 @@ class Agent:
         except Exception as e:
             result = {"ok": False, "backend": self.backend.label, "tool_calls": tool_count,
                       "error": f"{type(e).__name__}: {e}"}
+            if isinstance(e, OperationCancelled) or (cancelled and cancelled()):
+                result["cancelled"] = True
             self.audit.add("failure", **result)
             return result
         finally:

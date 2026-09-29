@@ -14,3 +14,6 @@ packages = ["local_agent"]
 
 # Run from the source directory with python -m local_agent.
 # A wheel alone does not bundle configs/examples/native/reports; prefer the project ZIP.
+
+[tool.setuptools.package-data]
+local_agent = ["webui/*.html", "webui/*.css", "webui/*.js"]
