@@ -41,6 +41,12 @@ def engine_env(command: list[str]) -> dict[str, str]:
         if (runtime / 'libMoltenVK.dylib').is_file():
             env['DYLD_LIBRARY_PATH'] = str(runtime)
             env['DYLD_FALLBACK_LIBRARY_PATH'] = str(runtime)
+            # MoltenVK alone is not the Vulkan loader. Its bundled ICD manifest
+            # tells that loader where to find this application's driver.
+            # Never override an administrator/CI's deliberate ICD selection.
+            manifest = runtime / 'MoltenVK_icd.json'
+            if manifest.is_file() and not any(k in env for k in ('VK_DRIVER_FILES', 'VK_ICD_FILENAMES')):
+                env['VK_DRIVER_FILES'] = str(manifest)
     return env
 
 
@@ -102,7 +108,8 @@ def probe(command: list[str], *, software: bool = False) -> dict:
         if result['timed_out']:
             raise RuntimeError('probe_timeout')
         if result['returncode'] != 0 or result['output_truncated']:
-            raise RuntimeError('probe_process_failed')
+            raise RuntimeError('probe_process_failed: exit=' + str(result['returncode']) +
+                               '; stderr=' + result.get('stderr', '')[-400:])
         report = validate_report(json.loads(result['stdout']))
     except (OSError, ValueError, RuntimeError) as exc:
         report = {'version': 1, 'compiled': False, 'devices': [], 'reason': 'probe_unavailable',

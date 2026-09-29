@@ -13,8 +13,10 @@ on:
       - 'scripts/probe_regression.py'
       - 'ci/**'
       - 'scripts/package_desktop.py'
+      - 'scripts/macos_runtime.py'
       - 'scripts/test_installed_app.py'
       - 'tests/test_desktop.py'
+      - 'tests/test_macos*.py'
       - '.github/workflows/installers.yml'
 permissions:
   contents: read
@@ -143,9 +145,9 @@ jobs:
         with:
           name: app-engine-image-${{ matrix.os }}
           path: build/native-inputs/image
-      - name: Prepare bundled macOS Vulkan runtime
+      - name: Prepare complete bundled macOS Vulkan loader and driver
         if: runner.os == 'macOS'
-        run: brew install molten-vk
+        run: brew install molten-vk vulkan-loader
       - name: Run all tests with complete Office runtime
         run: python scripts/run_tests.py --output-dir reports/desktop/unit
       - name: Freeze, test with clean PATH, build and check installer

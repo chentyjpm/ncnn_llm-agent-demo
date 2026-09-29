@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Freeze the app from same-run verified native packages on each target OS.
 
-Packages both engines/probes, Office libraries, Python, H5 and macOS MoltenVK.
-Model weights are installed with explicit consent, not included in the package.
+Packages both engines/probes, Office libraries, Python, H5 and the full macOS
+Vulkan loader + MoltenVK runtime. Model weights require explicit consent.
 """
 from __future__ import annotations
 import argparse
@@ -19,6 +19,8 @@ import tarfile
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from scripts.macos_runtime import prepare_runtime, verify_frozen_dependencies
 NAMES = {'bridge': 'ncnn_agent_bridge', 'image': 'qwenimage-ncnn-vulkan'}
 
 
@@ -71,21 +73,7 @@ def prepare(archives: Path, staging: Path):
         if probe_sha != source['probe_sha256']: raise ValueError('Vulkan probe checksum mismatch')
         info['engines']['llm' if component == 'bridge' else 'image'] = {'sha256': sha, 'probe_sha256': probe_sha, 'source': source}
     if platform.system() == 'Darwin':
-        prefix = Path(subprocess.check_output(['brew', '--prefix', 'molten-vk'], text=True).strip())
-        dylib = prefix / 'lib/libMoltenVK.dylib'
-        if not dylib.is_file(): raise RuntimeError('macOS build must provide MoltenVK; end users do not configure it')
-        target = staging / 'engines/vulkan/libMoltenVK.dylib'
-        target.parent.mkdir(parents=True, exist_ok=True); shutil.copy2(dylib, target)
-        for line in subprocess.check_output(['otool', '-L', str(target)], text=True).splitlines()[2:]:
-            dependency = line.strip().split(' (')[0]
-            if dependency and not dependency.startswith(('/usr/lib/', '/System/Library/')):
-                raise RuntimeError('Unbundled MoltenVK dependency: ' + dependency)
-        info['moltenvk'] = {'sha256': hashlib.sha256(target.read_bytes()).hexdigest(),
-            'version': subprocess.check_output(['brew', 'list', '--versions', 'molten-vk'], text=True).strip()}
-        for source in prefix.rglob('*'):
-            if source.is_file() and source.name.lower().startswith(('license', 'notice', 'copying')):
-                target = staging / 'licenses/moltenvk' / source.relative_to(prefix)
-                target.parent.mkdir(parents=True, exist_ok=True); shutil.copy2(source, target)
+        info['vulkan_runtime'] = prepare_runtime(staging)
     for package in ('pyinstaller', 'python-docx', 'openpyxl', 'python-pptx', 'numpy', 'lxml', 'Pillow',
                     'XlsxWriter', 'defusedxml', 'certifi', 'typing_extensions', 'et_xmlfile'):
         dist = importlib.metadata.distribution(package)
@@ -116,6 +104,7 @@ def main():
     args = parser.parse_args()
     os.chdir(ROOT)
     staging = ROOT / 'build/desktop-payload'
+    reports = ROOT / 'reports/desktop'; reports.mkdir(parents=True, exist_ok=True)
     prepare(args.archives.resolve(), staging)
     name = 'LocalAgent'
     options = [sys.executable, '-m', 'PyInstaller', '--noconfirm', '--clean', '--onedir', '--name', name,
@@ -133,7 +122,8 @@ def main():
         probe = engine.with_name('ncnn_device_probe.exe' if os.name == 'nt' else 'ncnn_device_probe')
         options += ['--add-binary', str(probe) + os.pathsep + 'engines/' + component]
     if platform.system() == 'Darwin':
-        options += ['--add-binary', str(staging / 'engines/vulkan/libMoltenVK.dylib') + os.pathsep + 'engines/vulkan']
+        for library in sorted((staging / 'engines/vulkan').glob('*.dylib')):
+            options += ['--add-binary', str(library) + os.pathsep + 'engines/vulkan']
     if platform.system() in ('Windows', 'Darwin'): options += ['--windowed']
     if platform.system() == 'Darwin': options += ['--osx-bundle-identifier', 'io.localagent.workbench']
     run(options + [ROOT / 'packaging/launch.py'])
@@ -151,9 +141,20 @@ def main():
         record['pre_freeze_sha256'] = record['sha256']; record['pre_freeze_probe_sha256'] = record['probe_sha256']
         record['sha256'] = hashlib.sha256(executable.read_bytes()).hexdigest()
         record['probe_sha256'] = hashlib.sha256(probe.read_bytes()).hexdigest()
-    frozen_info['hash_note'] = 'Source hashes checked before PyInstaller; final hashes include relocation/ad-hoc signatures.'
+    if platform.system() == 'Darwin':
+        dependencies = verify_frozen_dependencies(manifest.parent)
+        (reports / 'macos-dependencies.json').write_text(json.dumps(dependencies, indent=2), encoding='utf-8')
+        runtime = manifest.parent / 'engines/vulkan'
+        frozen_info['vulkan_runtime']['frozen_hashes'] = {
+            file.name: hashlib.sha256(file.read_bytes()).hexdigest() for file in runtime.iterdir() if file.is_file()}
+        frozen_info['signing'] = 'ad-hoc resource seal only; not Developer ID signed or notarized'
+    frozen_info['hash_note'] = 'Source hashes checked before staging/PyInstaller; final hashes include relocation/ad-hoc signatures.'
     manifest.write_text(json.dumps(frozen_info, indent=2, ensure_ascii=False), encoding='utf-8')
-    reports = ROOT / 'reports/desktop'; reports.mkdir(parents=True, exist_ok=True)
+    if platform.system() == 'Darwin':
+        # Updating BUNDLE.json invalidates the outer resource seal. Reseal only
+        # the app (NOT --deep signing) so measured nested binaries remain intact.
+        run(['codesign', '--force', '--sign', '-', '--timestamp=none', bundle])
+        run(['codesign', '--verify', '--deep', '--strict', '--verbose=2', bundle])
     run([exe, '--self-test', reports / 'bundle-self-test.json'])
     if not json.loads((reports / 'bundle-self-test.json').read_text())['ok']:
         raise RuntimeError('Frozen app self-test failed')
