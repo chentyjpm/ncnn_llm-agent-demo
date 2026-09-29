@@ -5,7 +5,6 @@
 #include <cctype>
 #include <cstdio>
 #include <sstream>
-#include <stdexcept>
 #include <string>
 #include "net.h"
 #include "gpu.h"
@@ -75,7 +74,8 @@ int main(int argc, char** argv) {
             props.deviceType == VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU ? "virtual" :
             props.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU ? "cpu" : "other";
         bool ok = false;
-        if (hardware || software) { try { ok = compute(i); } catch (...) {} }
+        // ncnn may export -fno-exceptions; process isolation handles fatal driver errors.
+        if (hardware || software) ok = compute(i);
         if (i) out << ',';
         out << "{\"id\":" << i << ",\"name\":" << quoted(name) << ",\"type\":" << quoted(type)
             << ",\"hardware\":" << (hardware ? "true" : "false") << ",\"compute_ok\":" << (ok ? "true" : "false") << '}';
