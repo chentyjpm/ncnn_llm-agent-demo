@@ -10,3 +10,8 @@ demo_workspace*/
 configs/local.json
 reports/runs/*
 !reports/runs/.gitkeep
+
+# Cross-platform CI outputs
+.ci-src/
+dist/
+reports/ci/

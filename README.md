@@ -4,6 +4,10 @@
 
 **本包已经通过工具层测试；没有附带模型权重、ncnn 可执行文件或 C++ 依赖。原生 C++ 编译、真实模型推理、生图、GPU 和 Docker 隔离尚未完成实机验证。** 详细证据见 `reports/TEST_REPORT.md`，不要把 mock/protocol 测试当成模型性能或能力测试。
 
+## 跨平台自动测试与编译
+
+现已提供 Windows、Linux、macOS（Apple Silicon / Intel）的 GitHub Actions：工具层测试与真实 C++ 编译分开执行，不下载模型权重。工作流配置不代表已全部通过，**各平台当前结果以 Actions 对应提交为准**；上面的初次交付报告保持原样。使用和产物说明见 [docs/CI.md](docs/CI.md)。
+
 ## 已经实现
 
 Python 3.10+ 标准库编排，无第三方 Python 依赖。原生推理仍在 C++/ncnn 可执行程序中，**整个项目不是纯 C++**。

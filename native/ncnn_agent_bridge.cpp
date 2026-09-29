@@ -29,6 +29,16 @@
 using J = nlohmann::json;
 
 int main(int argc, char** argv) {
+    // Loader/CLI smoke checks must not instantiate a model or initialize a GPU.
+    if (argc == 2 && (std::string(argv[1]) == "--help" || std::string(argv[1]) == "-h")) {
+        std::puts("Usage: ncnn_agent_bridge --model DIR [--threads N] [--vulkan] [--vulkan-device N]");
+        std::puts("JSON-RPC stdio bridge. Model weights are required for inference, not for --help/--version.");
+        return 0;
+    }
+    if (argc == 2 && std::string(argv[1]) == "--version") {
+        std::puts("ncnn_agent_bridge 0.1.0");
+        return 0;
+    }
     // Preserve protocol output and redirect ALL library stdout logging to stderr.
     std::fflush(stdout);
     FILE* protocol = FDOPEN(DUP(FILENO(stdout)), "wb");

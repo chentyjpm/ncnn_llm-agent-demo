@@ -1,0 +1,118 @@
+name: Native C++ build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/native-build.yml'
+      - 'native/**'
+      - 'ci/**'
+      - 'scripts/ci_native.py'
+      - 'upstream-lock.json'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/native-build.yml'
+      - 'native/**'
+      - 'ci/**'
+      - 'scripts/ci_native.py'
+      - 'upstream-lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONUTF8: '1'
+  PYTHONIOENCODING: utf-8
+  CMAKE_BUILD_PARALLEL_LEVEL: '2'
+
+jobs:
+  native:
+    name: C++ / ${{ matrix.component }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-15, macos-15-intel]
+        component: [bridge, image]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+      - name: Read and validate pinned dependency commits
+        id: pins
+        run: python scripts/ci_native.py refs --component ${{ matrix.component }}
+      - name: Checkout ncnn_llm
+        if: matrix.component == 'bridge'
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: futz12/ncnn_llm
+          ref: ${{ steps.pins.outputs.ncnn_llm }}
+          path: .ci-src/ncnn_llm
+          persist-credentials: false
+      - name: Checkout ncnn and pinned Vulkan compiler submodules
+        if: matrix.component == 'bridge'
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: Tencent/ncnn
+          ref: ${{ steps.pins.outputs.ncnn }}
+          path: .ci-src/ncnn
+          submodules: recursive
+          persist-credentials: false
+      - name: Checkout JSON headers
+        if: matrix.component == 'bridge'
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: nlohmann/json
+          ref: ${{ steps.pins.outputs.json }}
+          path: .ci-src/json
+          persist-credentials: false
+      - name: Checkout Qwen Image with its pinned ncnn and codec submodules
+        if: matrix.component == 'image'
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: nihui/qwenimage-ncnn-vulkan
+          ref: ${{ steps.pins.outputs.qwenimage }}
+          path: .ci-src/qwenimage
+          submodules: recursive
+          persist-credentials: false
+      - name: Configure real upstream C++ sources (Vulkan enabled, no SDK/model downloads)
+        run: python scripts/ci_native.py configure --component ${{ matrix.component }}
+      - name: Compile and link Release executable
+        run: python scripts/ci_native.py build --component ${{ matrix.component }}
+      - name: Run compiled binary startup checks (no model inference)
+        run: python scripts/ci_native.py smoke --component ${{ matrix.component }}
+      - name: Package verified executable, dependency pins and license notices
+        run: python scripts/ci_native.py package --component ${{ matrix.component }}
+      - name: Upload successfully built executable
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: native-${{ matrix.component }}-${{ matrix.os }}
+          path: dist/ci/*.tar.gz
+          retention-days: 14
+          if-no-files-found: error
+      - name: Summarize current job only
+        if: always()
+        run: python scripts/ci_native.py summary --component ${{ matrix.component }}
+      - name: Upload build logs even on failure
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: native-logs-${{ matrix.component }}-${{ matrix.os }}
+          path: |
+            reports/ci/${{ matrix.component }}/
+            build/ci-${{ matrix.component }}/CMakeCache.txt
+            build/ci-${{ matrix.component }}/CMakeFiles/CMakeConfigureLog.yaml
+            build/ci-${{ matrix.component }}/Testing/Temporary/
+          retention-days: 14
+          if-no-files-found: warn
