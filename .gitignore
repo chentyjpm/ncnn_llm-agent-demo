@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+build/
+bin/
+models/
+workspace/
+demo_workspace*/
+configs/local.json
+reports/runs/*
+!reports/runs/.gitkeep
+
