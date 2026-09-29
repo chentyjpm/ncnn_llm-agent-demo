@@ -83,3 +83,11 @@ if(BUILD_TESTING)
     add_test(NAME bridge_version COMMAND ncnn_agent_bridge --version)
     set_tests_properties(bridge_version PROPERTIES PASS_REGULAR_EXPRESSION "ncnn_agent_bridge 0.1.0" TIMEOUT 30)
 endif()
+
+# Version-matched hardware probe distributed beside the text engine.
+add_executable(ncnn_device_probe device_probe.cpp)
+target_link_libraries(ncnn_device_probe PRIVATE ${NCNN_TARGET})
+if(MSVC)
+    target_compile_options(ncnn_device_probe PRIVATE /utf-8 /EHsc)
+endif()
+add_dependencies(ncnn_agent_bridge ncnn_device_probe)

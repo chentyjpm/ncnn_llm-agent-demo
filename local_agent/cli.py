@@ -12,6 +12,7 @@ from .execution import CommandRunner, PythonRunner
 from .images import ImageRunner
 from .mcp import MCPClient
 from .paths import Workspace, PolicyError
+from .device import describe
 from .tools import make_registry
 
 PROJECT = Path(__file__).resolve().parents[1]
@@ -56,6 +57,9 @@ def make_runtime(c: dict, args):
     commands = CommandRunner(ws, c.get("commands", {}), enabled=args.allow_commands)
     images = ImageRunner(ws, c.get("image", {}))
     registry = make_registry(ws, py, commands, images)
+    if c.get("documents", {}).get("enabled", False):
+        from .documents import register_documents
+        register_documents(registry, ws)
     clients = []
     try:
         for s in c.get("mcp_servers", []):
@@ -77,7 +81,7 @@ def doctor(c: dict) -> dict:
         cmd = section.get("command", [])
         return bool(cmd and (shutil.which(cmd[0]) or Path(cmd[0]).is_file()))
     llm, img = c.get("llm", {}), c.get("image", {})
-    return {"python": platform.python_version(), "platform": platform.platform(),
+    return {"devices": {"llm": describe(llm, "llm"), "image": describe(img, "image")}, "python": platform.python_version(), "platform": platform.platform(),
             "orchestrator": "stdlib Python; native inference is separate",
             "llm_backend": llm.get("backend"), "llm_executable_found": executable(llm),
             "llm_model_json_found": bool(llm.get("model") and Path(llm["model"]).joinpath("model.json").is_file()),
@@ -85,7 +89,7 @@ def doctor(c: dict) -> dict:
             "image_model_directory_found": bool(img.get("model") and Path(img["model"]).is_dir()),
             "docker_executable_found": bool(shutil.which("docker")),
             "gpu_device_nodes_linux": [str(p) for p in list(Path("/dev").glob("nvidia*")) + list(Path("/dev/dri").glob("renderD*"))],
-            "gpu_note": "Empty Linux device nodes do not diagnose Windows/macOS GPU availability. No Vulkan inference probe was performed.",
+            "gpu_note": "devices contains per-engine Vulkan compute preflight, not full-model or performance validation.",
             "python_mode": c.get("python", {}).get("mode", "disabled"),
             "mcp_enabled": [s["name"] for s in c.get("mcp_servers", []) if s.get("enabled")],
             "weights_bundled": False}

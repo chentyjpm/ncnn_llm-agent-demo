@@ -1,59 +1,102 @@
-# Local Agent · 本地 AI 工作台
+# Local Agent · 本地 AI 与文档工作台
 
-一个以 **ncnn 原生推理为后端、Python 为编排层、H5 为操作界面**的本地 Agent 原型。可以在浏览器里聊天，上传和查看文件，让模型提出工具调用，再由你确认执行。
+将 **ncnn 文本引擎、Qwen Image 引擎、Python 应用运行时和 H5 文档工作台**组合成一个本机应用。安装版不要求用户安装 Python/ncnn SDK、不要求填写两个引擎的路径，也不需要云端 API Key。
 
-界面采用熟悉的“侧边会话列表 + 主聊天区 + 底部输入框”布局，但本项目**不是 OpenAI ChatGPT 客户端，也不需要 OpenAI API Key**。HTML、CSS、JavaScript 均由本机提供，不加载 CDN、外部字体或远程模型 API。启用的第三方 MCP 服务、Python 或固定系统命令仍可能访问网络，不能将“本地界面”理解为这些工具天然断网。
+**两个引擎默认都是 Vulkan 优先：`device: "auto"`。** 应用分别执行与引擎版本匹配的 Vulkan 计算预检；可用则选择硬件设备，不可用则使用 CPU，并保留选择原因。不是看到电脑“有显卡”就假定可加速，也不会把软件 Vulkan 当作物理 GPU。完整策略见 [Vulkan 与回退](docs/VULKAN.md)。
 
-> **先区分四件事：页面能打开、工具能执行、模型能推理、模型能可靠完成任务。** 它们分别测试，不能相互代替。本仓库已建立跨平台原生构建和真实 Qwen2.5-0.5B CPU 验证流程；H5 的浏览器、HTTP 和真实模型连接验证也单独保留证据。Qwen Image 实际生成、GPU 性能和 Docker 隔离没有因这些测试自动获得通过结论。
+> 安装包、无模型测试、真实模型推理、物理 GPU 性能是不同的验收层。请以同一提交的 GitHub Actions 结果和产物为准。源码 ZIP 不等于安装包；小型 Vulkan 预检不等于整个 Qwen Image 已完成生图测试。
 
-## 导航
+## 1. 普通用户：安装后直接使用
 
-[启动 H5](#1-启动-h5-界面) · [配置真实模型](#2-连接真实模型) · [界面使用](#3-怎样使用界面) · [整体架构](#4-整体架构) · [Agent 逻辑](#5-agent-究竟怎样运行) · [项目目录](#6-项目结构逐层说明) · [工具权限](#7-工具权限与安全边界) · [测试与 CI](#8-测试与持续集成) · [常见问题](#9-常见问题)
+在 Actions 中选择成功完成的 **Application installers**，下载对应系统的 `LocalAgent-installer-*` 产物。四种构建目标为 Windows x64、Ubuntu x64、macOS Apple Silicon 和 macOS Intel。
 
-## 1. 启动 H5 界面
+Windows 使用 `LocalAgent-windows-x64-setup.exe`，也提供便携目录 ZIP。macOS 使用 DMG 中的应用。Linux 解压后启动 `LocalAgent`，可使用包内 `install.sh` 创建当前用户安装。代码没有商业签名证书或 Apple 公证，不能把构建成功当成签名/商店发布验收。
 
-需要 Python 3.10 或更新版本。推荐在完整仓库的根目录运行；Linux/WSL 的命令可能需要将 `python` 换成 `python3`。
+启动之后：
 
-```bash
-git clone https://github.com/chentyjpm/ncnn_llm-agent-demo.git
-cd ncnn_llm-agent-demo
-python -m local_agent serve --open
+```text
+双击 Local Agent
+    → 自动启动本机服务并打开 H5 页面
+    → 安装与模型 → 查看文本模型下载量 → 明确确认
+    → 自动下载、校验、转换、启用
+    → 聊天 / Agent / 文档工作台
 ```
 
-打开 `http://127.0.0.1:8765`。已有本机配置时：
+两个引擎随程序分发，**模型权重按需下载**。不使用生图就不必下载图像模型。模型安装前也可以读取和导出文档；聊天不可用时会明确提示，不用固定回复冒充模型。
+
+安装版内置 Word、Excel、PPT 处理库和模型转换器。macOS 同时打包 MoltenVK；Windows/Linux 使用机器已有的显卡驱动，缺少适用驱动就自动选 CPU。应用不安装驱动、不改系统服务。
+
+用户数据独立于程序安装目录：
+
+| 系统 | 数据根目录 |
+|---|---|
+| Windows | `%LOCALAPPDATA%/LocalAgent` |
+| macOS | `~/Library/Application Support/LocalAgent` |
+| Linux | `$XDG_DATA_HOME/local-agent`，默认 `~/.local/share/local-agent` |
+
+根目录内的 `models/` 是权重，`state/` 是会话和审计，`workspace/web/<会话ID>/` 是用户文件。升级程序不需要重新填写路径；卸载不主动删除这些数据。详细安装、限制和构建方法见 [安装说明](docs/INSTALLATION.md)。
+
+## 2. H5 界面如何使用
+
+界面提供会话侧栏、主聊天区、底部输入框、工作文件面板、文档工作台和模型中心。HTML/CSS/JavaScript 均由本机服务提供，没有 CDN、远程字体或前端构建步骤。
+
+### 对话与 Agent
+
+**对话**适合提问、解释代码、整理提纲、总结附件正文：直接取得模型的文本回答，不提供工具。模型显示的代码不会自动执行。
+
+**Agent**模式才提供工具定义，要求模型输出完整 JSON 动作，由程序验证、确认和执行。文件读取/列举与 `documents.read` 属于只读操作；文件写入、文档创建、Python、外部 MCP、系统命令和生图需要逐次确认。网页无法开启管理员未授权的能力。
+
+Enter 发送，Shift + Enter 换行；中文输入法组合输入不会误发送。支持深浅主题、历史搜索、新建、重命名、删除和 Markdown 对话导出。刷新页面可恢复记录；删除会话仅删除会话 JSON，保留工作文件和原始审计日志。
+
+目前返回的是完整一轮模型输出，**不是逐 token streaming**。界面通过带游标的长轮询接收模型开始、工具开始、审批、结果、完成等真实事件，不用打字动画伪装流式生成。
+
+### 文档优先的处理流程
+
+```text
+上传 docx / xlsx / pptx / md
+    → 安全提取正文与表格
+    → 普通对话总结，或 Agent 分页读取
+    → 文档工作台中审阅/编辑 Markdown 草稿
+    → 保存为新的 Word / Excel / PowerPoint / Markdown
+```
+
+| 类型 | 读取 | 导出 |
+|---|---|---|
+| Word `.docx` | 正文、标题、表格，保留基本顺序 | 标题层级、段落、简单列表和表格 |
+| Excel `.xlsx` | 工作表、单元格值和公式文本 | 第一个 Markdown 表格或 CSV，表头、筛选、冻结行和基础列宽 |
+| PowerPoint `.pptx` | 按页提取文字和表格，包括分组中的文字 | 按大纲生成可编辑文字型幻灯片，长正文分页 |
+| Markdown `.md` | UTF-8 文本与分页读取 | 保存原文本、基础安全预览，也作为 Office 导出的中间格式 |
+
+工作台支持载入最近一次回答、Word 报告/Excel 表格/PPT 大纲模板、编辑/预览切换。点击“保存为新文档”直接执行专用文档接口，**不要求模型写 Python，也不要求允许任意宿主代码执行**。
+
+这不是在线 Office 编辑器或无损格式转换器。不会执行宏、重算 Excel 公式、保持任意复杂排版，也不识别扫描件、图片中的文字、PPT 动画或备注。旧 `.doc/.xls/.ppt` 和带宏格式不支持。原文件不覆盖，导出到当前会话的 `exports/`，采用随机前缀新名称。详见 [文档工具](docs/DOCUMENTS.md)。
+
+### 附件、上下文和大小限制
+
+单文件上传最多 8 MiB，每条消息最多 10 个附件；网页下载最多 16 MiB。Office 正文提取会检查压缩包成员、XML、宏/嵌入对象和展开大小。读取结果最多 200,000 字符，通过 `offset`/`next_offset` 分页，每次最多 16,000 字符。
+
+普通对话会加入 Office 提取文本的第一页，标为不可信数据；文本附件每份最多 12,000 字符，总附件上下文不超过 16,000。Agent 模式传入相对路径，可调用 `documents.read` 分页。传统 `files.read` 仍有 1 MiB 文本限制。
+
+H5 最多带入最近 6 个完整成功问答对，历史总量限制 24,000 字符。不是无限上下文、自动 RAG 或文档全量理解保证。图片可预览和保存，但没有因此自动连接 VLM/OCR。
+
+### 停止和错误
+
+一次只运行一个任务，避免模型和文件修改并发抢占资源。正在运行时不接受第二个任务或上传。点击停止会请求合作取消，尝试终止文本桥接器；已经开始的其他工具可能要等结束或超时。**停止不回滚已完成的写入或外部操作。** 服务重启将未完成任务标为中断，不自动重放。
+
+“运行设置”展示两个引擎的预检设备/选择原因，及最近任务的实际后端设备记录。就绪检查主要确认程序和模型配置存在，不等于已经校验所有权重或完成推理。
+
+## 3. 开发者：源码启动和配置
+
+安装版用户不需要执行本节。源码运行需要 Python 3.10+，在完整仓库根目录执行：
 
 ```bash
+python -m pip install -r requirements-office.txt
 python -m local_agent serve --config configs/local.json --open
 ```
 
-**第一次不配置模型也能打开界面**，查看布局、运行设置和会话管理；发送按钮会禁用并提示模型未就绪。不会自动下载权重，不会用固定回复冒充模型。配置好真实可执行文件和模型目录后，重启服务即可。
+不配置模型也能用 `python -m local_agent serve --open` 打开页面。默认只监听 `127.0.0.1:8765`，端口可通过 `--port` 修改。`--workspace` 覆盖工作根目录，`--data-dir` 指定会话/审计目录。不能直接双击 HTML 代替本地服务。
 
-前端无需 Node.js、npm、Vue、React 或打包步骤；应用运行时只使用 Python 标准库。`--open` 仅打开本机浏览器。也可以手动打开终端给出的地址。
-
-| 启动参数 | 含义 |
-|---|---|
-| `--config configs/local.json` | 读取真实模型和工具配置，不传则读取保守的示例配置 |
-| `--port 8765` | 更换端口；端口冲突时使用另一个本机端口 |
-| `--data-dir web-data` | 存放会话记录和审计日志，默认相对当前命令目录 |
-| `--workspace workspace` | 覆盖工作根目录；H5 在其 `web/<会话 ID>/` 下为每段对话建独立目录 |
-| `--open` | 启动后打开本机浏览器 |
-| `--trust-mcp` / `--allow-commands` / `--allow-unsafe-host-python` | 管理员在启动时明确授权相应能力，详见第 7 节 |
-
-关闭服务：在运行终端按 `Ctrl+C`。页面不是独立的 `file://` 静态网页，必须由这个本地服务提供 API。默认且只监听 **127.0.0.1**，没有开放公网或局域网监听开关。响应式布局适配窄屏，但不等于手机在同一 Wi-Fi 下能直接连接本机回环地址。
-
-## 2. 连接真实模型
-
-### 2.1 三样东西缺一不可
-
-1. **完整的本仓库**：包括 Python 代码、网页资源、配置和示例。
-2. **可执行程序**：`ncnn_agent_bridge`（推荐）或上游 `llm_ncnn_run`。Windows 使用对应 `.exe`。
-3. **匹配的 ncnn 模型目录**：包括 `model.json`、实际 `.param/.bin` 权重和分词器数据。不是随便一个 Hugging Face 目录，更不是 `.gguf`。
-
-`ncnn` 是推理引擎，不是模型；`Qwen` 是模型；`Agent` 是决定怎样把模型和工具串起来的程序；`H5` 只是你操作它们的界面。
-
-### 2.2 一份可直接修改的 CPU 配置
-
-创建 `configs/local.json`，填入你本机的真实路径。下面是完整最小配置，不含外部 MCP、Python 或系统命令授权：
+最小自动加速配置：
 
 ```json
 {
@@ -63,325 +106,208 @@ python -m local_agent serve --config configs/local.json --open
     "backend": "ncnn_bridge",
     "command": ["bin/ncnn_agent_bridge"],
     "model": "models/ncnn-qwen05",
+    "device": "auto",
     "threads": 4,
-    "vulkan": false,
-    "gpu": 0,
-    "timeout": 180,
+    "timeout": 300,
     "max_new_tokens": 512
   },
+  "image": {
+    "enabled": false,
+    "command": ["bin/qwenimage-ncnn-vulkan"],
+    "model": "models/qwenimage21",
+    "device": "auto",
+    "timeout": 5400
+  },
+  "documents": {"enabled": true},
   "python": {"mode": "disabled"},
   "commands": {},
-  "mcp_servers": [],
-  "image": {"enabled": false}
+  "mcp_servers": []
 }
 ```
 
-Windows 示例：`command` 改为 `["D:/AI/bin/ncnn_agent_bridge.exe"]`，`model` 改为 `D:/AI/models/ncnn-qwen05`。JSON 中使用正斜杠最省事。配置中的模型、程序和 workspace 相对项目根目录；命令行 `--config`、`--data-dir` 和覆盖项 `--workspace` 相对当前工作目录。
+Windows 使用实际 `.exe`；JSON 路径推荐正斜杠。每个引擎旁需要与其版本匹配的 `ncnn_device_probe`。没有匹配探测程序时 auto 安全选 CPU，并报告 `matching_probe_missing`；不要把另一版 SDK 的探测程序随意复制过去。
 
-先检查再启动：
+`device=auto` 优先 Vulkan，`device=cpu` 强制 CPU且不探测，`device=vulkan` 是严格请求、不可用时报错。旧配置中明确的 `vulkan:false` 或 `gpu:-1` 仍尊重为 CPU；迁移到新默认只需改为 `device:auto`。不填写 GPU 编号会自动选择，有编号偏好时不可用不会偷换别的显卡。
+
+安装版 `python packaging/launch.py` 对应的自动启动器不读取这份 JSON，自动定位资源和用户目录。源码使用它之前需要准备打包资源，源代码本身不包含引擎二进制。
+
+诊断与无 UI 运行：
 
 ```bash
 python -m local_agent doctor --config configs/local.json
-python -m local_agent serve --config configs/local.json --open
+python -m local_agent run --config configs/local.json --task "列出当前工作区文件"
 ```
 
-`doctor` 和界面“模型就绪”目前检查**程序和模型配置文件是否存在**，不是完整权重健康检查；损坏的权重、ABI 不匹配或内存不足仍会在实际推理时明确报错。
+`ncnn_cli` 兼容上游 `llm_ncnn_run`，每轮重新加载，且不支持桥接器的输出 token 上限；优先使用常驻 `ncnn_bridge`。原生构建见 [NATIVE_SETUP.md](docs/NATIVE_SETUP.md)，其中旧 CPU 示例是显式 CPU 使用方法，不改变新应用的 auto 默认。
 
-### 2.3 从哪里获取桥接器和 Qwen 0.5B
-
-本仓库 Actions 的 `Native C++ build` 可产生对应系统的 `native-bridge-…` artifact；这些是构建/启动检查产物，不是附带权重的完整安装包。选择与你系统和架构匹配的产物，将程序放到配置的 `bin/` 路径。也可按 [原生接入说明](docs/NATIVE_SETUP.md) 自行构建。
-
-已经有 `llm_ncnn_run` 时，把 `backend` 设为 `ncnn_cli`，`command` 指向它即可。这种兼容方式每个动作重新启动程序并加载模型，速度可能明显较慢，也不支持本界面的输出 token 上限控制。
-
-本项目的真实 CPU 测试使用**官方 Qwen2.5-0.5B-Instruct**。权重下载与专用导出方法：
-
-```bash
-# numpy 仅用于这一转换过程，不是网页或 Agent 编排的运行依赖
-python -m pip install numpy==1.26.4
-python scripts/qwen05_export.py download --source models/official-qwen05
-python scripts/qwen05_export.py export --source models/official-qwen05 --output models/ncnn-qwen05
-```
-
-下载实际大模型会消耗流量和磁盘。导出器固定源快照和权重 SHA-256，仅支持这个模型的结构，不是通用模型转换器。转换后的权重和原始文件合计需要数 GB 空间；不要提交到 Git。细节见 [Qwen 0.5B CPU 验证](docs/QWEN05_CPU.md)。
-
-**0.5B 可以用于短问答和明确引导的小任务，但通用 Agent 可靠性有限。** 已有测试曾发现它输出混合的 tool/final JSON 和绝对路径；安全校验将其拒绝。补充清楚的动作格式示例后，简单的文件写入/读取流程通过。这不是任意编程或复杂业务流程都能成功的保证。
-
-## 3. 怎样使用界面
-
-### 3.1 普通对话与 Agent 模式
-
-输入框左下方有两个模式：
-
-| 模式 | 适合做什么 | 实际执行路径 |
-|---|---|---|
-| **对话** | 问答、解释代码、构思提纲、阅读较短的文本附件 | 网页 → 本机 HTTP 服务 → ncnn 模型 → 直接显示文本；不提供工具 |
-| **Agent** | 读写文件、生成结果文件、连接已授权的 MCP 或其他工具 | 网页 → Agent 循环 → 完整 JSON 动作校验 → 用户确认 → 工具 → 再调用模型 |
-
-想“写一段 Python 给我看看”，用普通对话即可；想“把脚本保存并实际执行”，需要 Agent 模式，以及明确开启的对应权限。普通对话中的代码块只是文本，点击复制也不会执行。
-
-输入框支持 Enter 发送、Shift + Enter 换行，并避开中文输入法组合输入时的误发送。`Ctrl/⌘ + K` 清空当前视图进入新对话。欢迎页建议卡片只填入提示词，不自动运行。
-
-### 3.2 工具执行过程与确认
-
-界面显示“等待模型”“工具执行中”“已完成/失败”等事件。工具名称、输入参数和结果可以展开查看。写入文件、补丁修改、Python、系统命令、外部 MCP 和生图调用**都需要逐次确认**；只读的文件列举和读取无需确认。一次授权只放行当前请求，不会永久放行整个工具。
-
-确认最多等待 5 分钟；拒绝、停止或超时都不执行该次工具。网页不能修改程序路径、扩大工作区或开启管理员未授权的能力。
-
-目前后端返回完整的一轮模型输出，**不是逐 token 输出**。前端使用带游标的长轮询接收真实任务事件；不会把整段回复拆成打字动画冒充模型流式生成。大型工具运行期间，页面仍可查询进度或请求停止。
-
-### 3.3 会话、文件与附件
-
-左侧支持搜索、新建、切换、重命名和确认删除会话。刷新网页或重启服务后，历史记录仍保留。发送新消息时，后端最多带入最近 **6 个完整且成功的问答对**，并限制历史文本总量在 24,000 字符以内；不是无限上下文或向量知识库。
-
-输入框的加号用于上传文件。服务器创建随机前缀文件名，避免无意覆盖。每个文件最多 8 MiB，每条消息最多附带 10 个文件。
-
-- **对话模式**：小于等于 48,000 字节、可读的 UTF-8 附件会作为“不可信文件数据”传给模型，每份最多 12,000 字符，总附件上下文不超过 16,000 字符。
-- **Agent 模式**：传入工作区相对路径，由模型请求文件工具读取。现有 `files.read` 的文本上限为 1 MiB。
-- **图片/PDF/Word 等二进制文件**：可以保存、下载；图片可在文件面板预览，但不等于已经接入 VLM、OCR 或文档解析。当前文本桥接器不会自动理解图片，也不会自动抽取 PDF/Word 内容。
-
-右上角“工作文件”提供目录浏览、文本/图片预览、下载和再次附加到消息。HTML、SVG 等内容不会作为活动页面嵌入，文件下载强制使用附件形式。网页单次下载上限 16 MiB，更大的生成文件请从本机工作目录取得。
-
-**删除会话只删除会话记录，保留工作文件和审计日志**，界面删除前会提示。它们可由你在本机检查后手动整理。当前没有全局磁盘配额或自动保留期清理。
-
-### 3.4 停止、失败与恢复
-
-点击方形“停止”按钮会请求取消任务。Agent 在推理前后、工具执行前后检查取消标志；对于已启动的原生桥接器，服务会尝试终止其进程。正在执行的 Python、图像或第三方工具可能仍需等当前操作结束或达到超时，因此不是保证即时强杀所有子进程。
-
-**取消不回滚此前已经完成的文件写入或其他工具副作用。** 服务重启会将未完成的消息标记为中断，不会偷偷重放写操作。出现错误可复制诊断、检查终端/审计日志，再重新发送；“重试”先把用户消息放回输入框，由你确认发送。
-
-一次只允许运行一个任务，避免多个模型或文件修改并发争抢内存。正在执行时可以浏览其他会话，但不能开始第二项任务或上传新文件。
-
-## 4. 整体架构
+## 4. 整体架构和分工
 
 ```text
-浏览器：H5 / CSS / 原生 JavaScript
-  │ 同源 HTTP API（会话、文件、任务事件、确认、取消）
-  ▼
-local_agent.web：127.0.0.1 本地服务
-  ├─ 会话 JSON 持久化、独立工作区、单任务控制
-  ├─ 普通对话 ──────────────────────────────┐
-  └─ Agent 模式                            │
-       ▼                                   │
-    Agent.run                              │
-       ├─ system prompt + 工具 schema      │
-       ├─ 模型输出 → JSON 动作校验          │
-       └─ 工具结果 → 下一轮推理             │
-                  │                        │
-                  ▼                        ▼
-          NcnnBridgeBackend / NcnnCLIBackend
-                  │ 子进程 / JSON-RPC stdio 或交互 CLI
-                  ▼
-          C++ ncnn_agent_bridge / llm_ncnn_run
-                  │
-                  ▼
-          ncnn + 真实权重（CPU 或可选 Vulkan）
-
-工具分支：
-Registry → H5 单次确认 → files / Python / 固定命令 / MCP / Qwen Image
-              │                                      │
-              └─ 事件与原始日志                独立生图进程
-                       ▼
-            网页工具记录 + 本机输出文件
+浏览器 H5 / 原生 JS
+    │ 同源 HTTP：会话 / 文件 / 文档 / 审批 / 任务事件
+    ▼
+WebApp（本机、单用户、独立会话工作区）
+    ├─ 普通对话 ──────────────┐
+    ├─ 文档工作台 → DocumentTools → 新文件
+    └─ Agent.run             │
+          │                  │
+          ▼                  ▼
+     Backend：ncnn_bridge / ncnn_cli
+          │ 独立版本 Vulkan 计算预检 → Vulkan 或 CPU
+          ▼
+     C++ 桥接器 → ncnn → 实际权重
+          │
+          ▼
+     完整 JSON 动作 → Registry → 授权与参数检查
+          ├─ files
+          ├─ documents
+          ├─ Python / 固定命令（默认关闭）
+          ├─ MCP 客户端 → 外部 MCP Server（默认关闭）
+          └─ ImageRunner → 独立预检 → Qwen Image 进程
+          │
+          └─ 真实工具结果 → 下一轮模型 → 最终答复
 ```
 
-**为什么分进程？** 文本模型与生图的加载、内存峰值、ncnn 版本和资源生命周期不同。先用进程接口组合，比强行把两个上游仓库合并成一个库更容易定位问题。浏览器不负责模型计算，也不直接执行 Shell。
+**H5 不做模型计算，也不直接执行 Shell。** Python 管理任务、会话、工具和 HTTP，C++/ncnn 做推理。项目不是纯 C++，不是在浏览器内用 WebGPU 推理，也不是 OpenAI ChatGPT 的代理。
 
-**为什么仍有 Python？** 推理在 C++/ncnn 内，Python 管理会话、JSON、工具、MCP 与 HTTP。项目不是“全 C++”，也不是“在浏览器里用 WebGPU 跑模型”。保留标准库编排，可以减少应用安装依赖；测试与模型转换使用的额外包单独安装。
+两种引擎分进程是为了隔离构建依赖、内存峰值和资源生命周期，避免强行合并两个上游 ncnn 工程。文本任务中可复用权重；不同网页消息目前会重新启动后端，不是多会话常驻模型服务。生图前主动释放文本模型，之后需要总结再重新加载。
 
-## 5. Agent 究竟怎样运行
+## 5. Agent 的运行逻辑
 
-### 第一步：收集当前可用工具
+**1．装配能力。** `make_runtime()` 按配置建立工作区、注册工具，并启动明确授权的 MCP。工具包含名称、说明、schema 和执行函数；模型不拥有任意系统调用能力。
 
-`make_registry()` 始终提供工作区文件工具。只有在配置和启动授权允许时，才加入 Python、固定系统命令、外部 MCP、生图等工具。每个工具包含名称、说明、参数 schema 和 Python 调用函数。关闭的工具不会成为可调用能力。
-
-### 第二步：把工具定义和任务交给模型
-
-`system_prompt()` 要求模型一次只返回一个 JSON 对象。H5 还传入已完成的聊天历史；新附件在对话模式下是文本数据，在 Agent 模式下主要是文件路径。
-
-模型需要二选一：
+**2．构造输入。** 系统提示给出工具定义与动作协议，再加入已完成历史、本次用户任务和不可信附件数据。一次只能输出一个完整对象：
 
 ```json
-{"tool":"files.write","arguments":{"path":"summary.md","content":"# 结果\n..."}}
+{"tool":"documents.read","arguments":{"path":"uploads/example.docx","offset":0,"limit":12000}}
 ```
 
-或者完成任务：
+完成时：
 
 ```json
-{"final":"已生成 summary.md，内容如下……"}
+{"final":"已经处理完毕，结果保存在 exports 中。"}
 ```
 
-### 第三步：完整解析，而不是见到字符串就执行
+**3．解析和限制。** `parse_action()` 拒绝重复 JSON 键、非有限数字、混合 tool/final、未知顶层字段和不完整动作，不执行部分 token。格式错误反馈模型修正，累计三次停止；同一工具动作连续重复超过两次停止；默认最多 12 轮，还有上下文字符预算。字符上限不是精确 token 上限。
 
-`parse_action()` 会处理完整 JSON、已闭合的代码围栏/思考段，并拒绝重复 JSON 键、非有限数字、未知顶层字段或同时包含 tool/final 的动作。不会从部分 token 中猜一个命令执行，也不会自动执行自然语言里的代码。
+**4．确认和执行。** H5 的 `ConfirmedRegistry` 对副作用工具提出一次性确认。用户批准后才由 Registry 校验工具/参数并调用；拒绝或 5 分钟超时阻止当前操作。无权工具不会因用户消息包含“允许”而被开启。
 
-格式错误会作为错误消息返回模型请求修正。累计三次格式错误停止；同一工具动作连续重复超过两次停止；默认最多 12 轮；还有上下文字符上限。字符预算不是精确的模型 token 窗口，模型较小时仍应缩短任务。
+**5．反馈真实结果。** 工具成功/错误以 `TOOL_RESULT (untrusted data)` 回传。模型可请求下一页、调整参数、继续另一工具，或输出最终答案。大结果限制传输长度；原始审计可包含更多敏感内容。
 
-### 第四步：确认和执行
+**6．结束与保存。** 保存回答、工具 trace、设备选择和 JSONL 审计，释放模型进程。取消与异常也释放资源，但不回滚已有副作用。模型说“完成”并不是事实保证，业务关键结果仍需检查。
 
-命令行入口按启动授权执行；**H5 会额外对有副作用的调用逐次请求确认**。确认通过后，Registry 校验工具是否注册、参数是否符合内置 schema，再调用实际函数。
+MCP 流程为 `initialize → initialized → tools/list → allowlist → tools/call`。模型只输出工具请求，MCP 协议由 Python 客户端处理。目前是 stdio tools 子集，不是完整 HTTP/OAuth MCP SDK。第三方 MCP 是宿主程序，工作区防护无法约束其内部任意文件/网络访问。
 
-`files.write` 只写当前工作区；`python.run` 由 PythonRunner 执行；`system.run` 只选择管理员配置的固定 argv；MCP 由客户端调用服务器的 `tools/call`；`images.generate` 执行 Qwen Image 程序。
-
-这些动作由宿主程序做，**不是模型自己获得了操作系统权限**。模型只是生成请求，程序决定是否接受和如何执行。
-
-### 第五步：把真实结果送回模型
-
-工具返回内容包含成功与否、结果或错误。Agent 将其标记为 `TOOL_RESULT (untrusted data)`，加入下一轮对话。模型可以继续请求读取结果、修正参数、调用另一个工具或输出最终答案。过大的工具返回会截断，完整原始记录仍可能保留在本机审计文件中。
-
-### 第六步：释放模型与保存会话
-
-一个任务中的桥接器可保持权重常驻；整个请求结束后释放。**目前不同网页消息之间会重新启动后端，不是跨会话共享的长期模型服务。** CLI 兼容后端更简单，每个动作都冷启动。
-
-遇到生图动作，Agent 先释放文本模型进程，再运行图像程序，降低同时常驻的内存压力；之后需要文本总结时再加载 LLM。
-
-### MCP 放在哪里？
-
-```text
-MCP Server → initialize → tools/list → allowlist 筛选 → Registry
-模型 JSON 动作 → Registry → MCP Client → tools/call → Server
-结果 → Agent → 模型的下一轮输入
-```
-
-模型不需要自己实现 MCP 协议。当前支持 stdio tools 子集，不是远程 HTTP/OAuth 或完整 MCP SDK。第三方服务器本身是有宿主权限的独立程序，客户端的 workspace 检查不能约束它的内部行为。
-
-## 6. 项目结构逐层说明
+## 6. 文件与模块结构
 
 ```text
 local_agent/
-  __main__.py            python -m local_agent 入口
-  cli.py                 doctor/run/tools/tool/demo/serve 参数和配置装配
-  web.py                 本地 HTTP 服务、会话、文件 API、任务、审批与取消
+  cli.py                 源码命令入口、配置和运行时装配
+  desktop.py             安装版自动定位、单实例、浏览器启动和自测
+  model_hub.py           固定来源、明确同意、下载校验、转换和原子激活
+  device.py              每引擎 Vulkan 优先选择、缓存、超时和回退原因
+  web.py                 回环 HTTP、会话、任务、审批、取消和文件/文档 API
   webui/
-    index.html           页面结构、会话侧栏、聊天区、文件与设置面板
-    style.css            深浅主题、桌面与窄屏响应式布局
-    app.js               API 调用、消息渲染、任务事件、上传下载与交互
-  agent.py               Agent 循环、JSON 动作解析、历史输入、取消与审计
-  backends.py            原生常驻桥接器/交互 CLI 适配；明确标记的测试后端
-  tools.py               工具注册与参数校验，模型工具名映射到实际函数
-  paths.py               单写者工作区路径防护、文本读写和精确 patch
-  execution.py           Python disabled/docker/unsafe-host 与固定命令
-  process.py             argv 子进程执行、环境过滤、输出/时间限制
-  rpc.py                 有界、换行分隔的 JSON-RPC stdio 传输
-  mcp.py                 MCP 生命周期、工具发现和工具调用
-  images.py              Qwen Image CLI 参数与输出路径适配
+    index.html           页面结构和文档/模型对话框
+    style.css            主题与桌面/窄屏布局
+    app.js               聊天、任务事件、文件和安全文本渲染
+    workbench.js         Office 草稿、导出、模型中心和设备显示
+  agent.py               动作解析、Agent 循环、历史、限制和审计
+  backends.py            常驻桥接器/交互 CLI；明确标记的测试后端
+  tools.py               工具注册与 schema 校验
+  documents.py           有界 Office/XML 读取与新文档导出
+  paths.py               工作区相对路径、文本读写和精确 patch
+  execution.py           显式 Python 模式与管理员固定 argv 命令
+  process.py             子进程、环境过滤、输出和超时限制
+  rpc.py / mcp.py        stdio JSON-RPC 和 MCP 生命周期
+  images.py              Qwen Image 参数、独立设备选择与结果
 native/
-  ncnn_agent_bridge.cpp  原生模型推理桥；JSON-RPC infer/ping
-  CMakeLists.txt         已安装 SDK 或锁定源码依赖两种构建方式
-  cli_options*.h/.cpp    命令行参数解析及回归
-  exception_unwind_test.cpp  MSVC 异常展开/析构回归
-model-tests/native/      真模型 FP32 logits 与增量 KV 数值对照程序
-configs/                 默认保守配置和示例；local.json 为本机私有配置
-examples/                可信示例 MCP 服务、明确标注的固定演示动作
+  ncnn_agent_bridge.cpp  文本推理 JSON-RPC 桥
+  device_probe.cpp       实际 Vulkan ReLU 探测，两引擎分别编译
+  image/CMakeLists.txt   Qwen Image 与其同版本 probe 的构建包装
+  CMakeLists.txt         文本引擎依赖、桥接器和 probe 构建
+  *test.cpp              参数解析与异常展开原生回归
+packaging/
+  launch.py              PyInstaller 入口
+  windows.iss            Windows 当前用户安装/快捷方式/卸载
+  install-linux.sh       Linux 用户目录安装，不修改系统服务
 scripts/
-  run_tests.py           运行工具/HTTP/CI 辅助测试并生成实际结果
-  ci_native.py           锁定依赖、编译、原生测试、哈希和打包验证
-  native_regression.py   ELF/PE/Mach-O 实际程序的无模型错误路径测试
-  qwen05_export.py       固定官方 0.5B 快照下载和专用 ncnn 导出
-  qwen05_reference.py    Transformers CPU 参考，不是推理兜底
-  qwen05_cpu_test.py     真正的 ncnn 文本推理与引导式工具任务验收
-  web_real_smoke.py      真 ncnn 模型通过 H5 HTTP API 的连续问答验收
-  browser_web.py         Chromium 桌面/窄屏交互测试，明确使用模型 fixture
-  smoke_real.py          已配置本机模型/可选生图的验收入口
-  fetch_upstream.py      按锁文件取得上游源码，不隐式安装模型
-tests/                  unittest、明确的测试替身与测试样本
-.github/workflows/       跨平台工具、原生构建、0.5B 真模型与 H5 浏览器 CI
-ci/dependencies.json     原生依赖固定提交
-upstream-lock.json       两个业务上游的固定提交
-web-data/                运行时生成：sessions/*.json、runs/*.jsonl（不入 Git）
-workspace/web/<id>/       运行时生成：当前网页会话上传与输出文件（不入 Git）
-docs/                    接入、安全、CI 和真模型说明
-reports/                 历史测试记录；新的 CI 结果按运行保存为 artifact
+  ci_native.py           依赖锁定、构建、CLI/probe/归档校验
+  probe_regression.py    真实 Vulkan 指令和无 ICD 报告验证
+  package_desktop.py     封装两引擎、文档库和解释器，生成安装产物
+  test_installed_app.py  清洁 PATH 下冻结程序 HTTP/Office/模型验收
+  qwen05_*.py            固定官方 0.5B 导出、参考与真实推理
+  web_real_smoke.py      真实模型 HTTP 历史与 auto→CPU 回退验收
+  browser_web.py         Chromium 聊天交互，模型明确为 fixture
+  browser_documents.py  无需模型的真实文档与模型中心浏览器验收
+  run_tests.py           unittest 日志和结构化结果
+model-tests/native/     ncnn FP32 与独立参考的数值比较
+configs/                源码用户示例，不是安装版必填配置
+ci/dependencies.json    原生依赖固定提交
+upstream-lock.json      业务上游固定提交
+.github/workflows/      4 平台工具/原生、真实模型、H5 和安装包 CI
+docs/                   使用、架构、设备、安全和测试细节
 ```
 
-上游职责：[`futz12/ncnn_llm`](https://github.com/futz12/ncnn_llm) 提供文本推理运行时；[`nihui/qwenimage-ncnn-vulkan`](https://github.com/nihui/qwenimage-ncnn-vulkan) 提供图像生成/编辑程序。本项目负责它们之间的编排与交互，不重新训练权重，也不把上游全部能力自动暴露到 H5。
+上游分工：`futz12/ncnn_llm` 提供文本模型运行时；`nihui/qwenimage-ncnn-vulkan` 提供生图/编辑；本仓库提供编排与交互。未自动开放它们所有潜在的 VLM/OCR/ASR/RAG 功能。
 
-`MANIFEST.sha256` 是早期交付包的历史清单，不代表后续每个 Git 提交的完整内容；当前完整性以 Git 提交 SHA 和 CI 产物哈希为准。`reports/TEST_REPORT.md` 保留初次交付的历史状态，不应用其“尚未编译”描述覆盖后来已有的原生 CI 证据。
+早期 `reports/TEST_REPORT.md` 和 `MANIFEST.sha256` 保留历史交付记录，不是后续 Git 提交的实时成功证明。当前完整性以提交 SHA、同次 CI 和分发哈希为准。
 
-## 7. 工具权限与安全边界
+## 7. 权限与数据边界
 
-### Python
+Python、固定系统命令、外部 MCP 和图像模型默认关闭；文档专用工具不依赖它们。源码管理员可按 [SECURITY.md](docs/SECURITY.md) 配置，并用 `--trust-mcp`、`--allow-commands` 等明确授权。`unsafe-host` 不是沙箱；冻结安装版不会把自身 exe 假装成 `python.exe` 去执行用户脚本。
 
-默认关闭。将配置改为 `"python":{"mode":"docker"}` 可使用本机事先准备好的 Docker 镜像；工具运行时禁止自动拉取，并设置断网、只读根文件系统等限制。**容器隔离仍需实机验证，不等价于虚拟机安全保证。**
+Docker 模式需要用户另行准备可信容器环境/镜像，失败不降级到宿主执行。MCP 工具 allowlist、workspace 检查和用户确认是不同层的保护，不构成恶意代码隔离证明。
 
-`unsafe-host` 必须同时在配置选择并在启动时传 `--allow-unsafe-host-python`，会执行有宿主权限的代码，不适合不可信内容。H5 即使显示确认按钮，也不能把宿主 Python 变成沙箱。
+服务只监听 127.0.0.1，检查 Host/Origin/Fetch-Site、随机 API token、请求大小和同源 CSP。Markdown/Office 内容只作为数据处理，前端不执行任意 HTML。不能直接改成公网监听就安全上线。
 
-### 固定命令与 MCP
+会话日志包含用户正文、模型原文、工具参数和结果，可能敏感。升级/卸载不自动删除；不要提交真实日志。没有全局磁盘配额、多用户认证、TLS、原子 handle 级目录隔离或 Windows Job Objects。路径安全仍要求可信单写者环境。
 
-系统命令由配置中 `commands` 定义 argv 数组，启动时加 `--allow-commands`；模型不能自由填 Shell 文本。构建项目等固定命令依然可能执行项目脚本，使用前必须审查。
+## 8. 构建与 CI 验证
 
-MCP 要同时配置 `enabled: true`、明确 `allowed_tools`，并使用 `--trust-mcp` 启动。示例：
+普通用户直接使用成功产出的安装程序。维护者运行 **Application installers** 一条工作流即可完成：4 个系统/架构上各编译两个引擎与 probe → 同提交/同 run 哈希校验 → 打包 Python/H5/Office → 冻结程序自测 → 实际 HTTP/Office 验收 → 生成安装程序。Windows 还执行实际安装后检查和卸载；Linux 安装程序验收显式下载、转换、启用真实 0.5B 并通过 HTTP 问答。
 
-```json
-{
-  "name": "math",
-  "enabled": true,
-  "command": ["@python", "-u", "@project/examples/mcp_server.py"],
-  "allowed_tools": ["summarize_numbers"],
-  "timeout": 30
-}
-```
+这是一套统一构建入口，不是一个跨系统通用二进制。签名/公证、实体显卡矩阵与完整生图不因其他测试通过而自动合格。
 
-工具名变为 `mcp__math__summarize_numbers`。外部服务器进程在任务装配阶段启动，调用工具时再逐次确认；启动授权意味着你已信任这个程序。
+| 工作流 | 真实执行范围 |
+|---|---|
+| Cross-platform tool tests | 4 平台 Python/HTTP/文件/Office；模型和 GPU 能力使用标记 fixture |
+| Native C++ build | 8 个引擎任务，真实 C++ 编译、CLI/CTest、设备 probe、归档复测 |
+| Real Qwen 0.5B CPU | 固定官方权重、参考数值对照、实际问答/文件工具/HTTP、无 Vulkan 时 auto→CPU |
+| H5 browser acceptance | 实际 Chromium：聊天 fixture 流程；无需模型的真实文档导出/读取和安装界面 |
+| Application installers | 8 引擎任务 + 4 安装程序任务，冻结程序启动、Office、Windows 安装/卸载、Linux 真实模型 |
 
-### 图像生成
+Linux 原生 CI 安装 Mesa 软件 Vulkan，以 `--include-software` 明确测试真正的 Vulkan 指令。自动模式仍排除该软件实现；不存在的 ICD 路径验证真实无驱动状态。**软件实现不是物理 GPU 加速或性能证据。**
 
-H5 不包含模型权重。需要另行配置 `image.command`、`image.model`、`image.enabled`。文本 CPU 使用 `llm.vulkan=false`；Qwen Image CPU 使用 `image.gpu=-1`。生图模型远大于 0.5B 文本模型，CPU 内存与耗时需要另外验收。
-
-`images.generate` 支持 prompt、output、width、height、steps、seed、references；由 Agent 发起并确认后执行。当前没有独立的生图参数编辑器、LoRA/ControlNet 图形面板或自动视觉复审。
-
-### H5 自身
-
-采用回环监听、Host/Origin 检查、每次服务启动的随机 API token、同源请求和 CSP。浏览器只展示安全构造的文本/基础 Markdown，不执行模型 HTML 或自动加载外部图片。会话和工作文件不放在公共静态目录中。
-
-这仍是 **单用户、本机原型**：不是多租户产品，没有账号体系、TLS 或生产网关，也未实现 OS 级路径竞争隔离、磁盘配额、Windows Job Objects 等完整安全能力。`http.server` 官方亦不建议直接用于生产公网服务。不要以管理员身份运行，不要暴露公网，不要让不同实例同时写同一个 data-dir。详见 [安全说明](docs/SECURITY.md) 与 [H5 API](docs/WEB_UI.md)。
-
-## 8. 测试与持续集成
-
-### 本地无模型测试
+本地测试：
 
 ```bash
+python -m pip install -r requirements-office.txt
 python scripts/run_tests.py --output-dir reports/ci/tools
-python -m unittest tests.test_web -v
+python -m unittest tests.test_device tests.test_desktop -v
 ```
 
-HTTP 测试会启动真实本地服务器，执行真实文件读写、上传下载、审批、取消、会话持久化和权限拒绝；**推理回复使用明确标注的测试替身**，不算真实模型验收。
-
-### 浏览器测试
+浏览器测试依赖仅用于开发：
 
 ```bash
-# 以下依赖仅用于测试，不是应用运行的必需安装
 python -m pip install playwright==1.57.0
 python -m playwright install chromium
 python scripts/browser_web.py --output reports/web-browser
+python scripts/browser_documents.py --output reports/web-documents
 ```
 
-测试实际 Chromium 与本地 HTTP 交互：欢迎页、主题、设置、发送、历史、附件、工具审批、文件下载、重命名、导出、刷新恢复、停止、搜索、删除、窄屏布局和 HTML 注入防护。输出截图和机器可读报告。窄屏是浏览器视口模拟，不等于所有真实手机、Safari 或 Firefox 已验证。
-
-### CI 分层
-
-| 工作流 | 范围 | 不能据此声称 |
-|---|---|---|
-| `Cross-platform tool tests` | Windows、Ubuntu、macOS ARM/Intel 的工具与 HTTP 标准库测试 | 已执行真实模型 |
-| `Native C++ build` | 4 平台 × bridge/image，编译、链接、CTest、CLI 与归档复测 | 已完成 GPU 或生图 |
-| `Real Qwen 0.5B CPU` | 官方权重哈希、专用转换、独立参考对照、真实 CPU 问答/工具和 H5 HTTP 连续问答 | 所有模型、所有平台推理都可靠 |
-| `H5 browser acceptance` | Chromium 真实网页交互、桌面/窄屏截图；模型是标注的 fixture | 这些截图是模型能力证明 |
-
-所有结果以**同一提交**对应的 Actions 日志和 artifact 为准。运行中、失败、跳过不能记为成功；没有用 `continue-on-error` 隐藏失败。CI 产物通常保留 14 天，不包含权重和用户业务资料。
+真实模型需要真实引擎和匹配权重。0.5B 只适合短问答与明确引导任务，已有记录显示通用提示下会出现错误动作；不能由一个简单文件任务推断通用 Agent 已可靠。
 
 ## 9. 常见问题
 
-**页面打不开？** 检查终端服务是否仍在运行，使用显示的 `http://127.0.0.1:端口`，不要双击 HTML，也不要输入 HTTPS。浏览器策略或防火墙可能限制本机访问。
+**显示 CPU 而不是 Vulkan？** 查看运行设置中的原因。没有硬件设备、驱动不可用、匹配 probe 缺失或预检失败会在 auto 下回退。纯软件 Vulkan 不作为默认加速设备；源码旧配置明确强制 CPU 的仍然生效。
 
-**“模型未就绪”？** 查看 `llm.command`、`llm.model/model.json` 是否真实存在。配置改动后重启。不要把程序名称或模型目录写成不匹配的示例路径。
+**为什么显卡预检成功，模型还是失败？** 小型 ReLU 不证明模型所有算子、显存和驱动长期稳定性。权重损坏、OOM、运行中设备丢失等错误不会被吞掉或无条件重复工具操作。
 
-**界面显示就绪但推理失败？** 就绪不是完整加载验收。检查实际错误、依赖 ABI、权重完整性、内存、线程和模型格式。不存在自动云端回退。
+**安装后聊天不可用？** 在安装与模型中确认下载文本模型；引擎已经内置但权重按需安装。联网失败有错误提示，没有未知来源兜底。
 
-**想看长文章却只返回一半？** 在运行设置提高输出 token 上限，或将任务拆小。只有 `ncnn_bridge` 支持这个配置，0.5B 模型的能力和上下文也有限。
+**Word/PPT 排版为什么与原稿不完全相同？** 当前是正文提取、Markdown 编辑、新文件导出，不是原版式在线编辑。需要完整排版保持时应在原 Office 软件里处理。
 
-**Agent 卡在确认？** 展开当前消息的授权卡，审查参数后选择允许或拒绝。刷新后会重新读取当前任务事件，仍可处理未过期请求。
+**为什么 Excel 公式没有结果？** 读取保留公式文本，导出将类似公式的文本按字面保存，不执行工作簿代码，也不带公式计算引擎。
 
-**Agent 格式错误？** 这是模型没有遵循动作协议，不是前端替它补一个危险调用。用更短的任务、明确的相对路径和格式示例；更复杂的任务需要能力更强且兼容的模型。
-
-**上传了 Word/PDF，为什么不能直接总结？** 当前没有文档解析器。先转为 UTF-8 文本，或在明确授权的工具环境中增加解析能力。不能把文件上传成功当作内容已经理解。
-
-**能在另一台电脑或手机访问吗？** 当前服务器只监听本机。要做远程服务需要单独设计身份认证、TLS、网络边界和工具隔离；不能仅靠改成 `0.0.0.0` 就安全上线。
+**在手机上能用吗？** 布局适配窄屏，但回环地址只能当前机器访问。远程访问要另外设计认证、TLS 和工具隔离。

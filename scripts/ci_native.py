@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""CI-only native builds. Real sources/binaries; no weights, fake model or GPU test.
+"""CI native builds and device preflight. No model weights or model inference.
 
-Dependencies are checked out by GitHub Actions, NOT downloaded by this script.
-Local configure/build uses the same commands when .ci-src/ contains those checkouts.
+Dependencies are checked out by Actions, not implicitly downloaded here.
+Each engine includes a probe built against its matching ncnn dependency.
 """
 from __future__ import annotations
 import argparse
@@ -20,12 +20,10 @@ import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-REPOSITORIES = {
-    'ncnn_llm': 'futz12/ncnn_llm', 'qwenimage': 'nihui/qwenimage-ncnn-vulkan',
-    'ncnn': 'Tencent/ncnn', 'json': 'nlohmann/json',
-}
+REPOSITORIES = {'ncnn_llm': 'futz12/ncnn_llm', 'qwenimage': 'nihui/qwenimage-ncnn-vulkan',
+                'ncnn': 'Tencent/ncnn', 'json': 'nlohmann/json'}
 TARGETS = {'bridge': 'ncnn_agent_bridge', 'image': 'qwenimage-ncnn-vulkan'}
-SCOPE = 'Real C++ compilation/linking and model-free startup checks; NO model inference, image generation, GPU execution or Docker isolation test.'
+SCOPE = 'Real C++ compilation/linking, CLI and Vulkan ReLU preflight. Software Vulkan explicitly identified; no full-model/image/GPU performance or Docker isolation claim.'
 
 
 def read_pins(root: Path = ROOT) -> dict:
@@ -45,20 +43,20 @@ def read_pins(root: Path = ROOT) -> dict:
 
 def configure_command(component: str, system: str, root: Path = ROOT) -> list[str]:
     deps = root / '.ci-src'
-    source = root / 'native' if component == 'bridge' else deps / 'qwenimage/src'
+    source = root / 'native' if component == 'bridge' else root / 'native/image'
     cmd = ['cmake', '-S', str(source), '-B', str(root / f'build/ci-{component}'),
            '-DCMAKE_BUILD_TYPE=Release', '-DNCNN_VULKAN=ON', '-DNCNN_SIMPLEVK=ON',
            '-DNCNN_OPENMP=OFF', '-DNCNN_SHARED_LIB=OFF', '-DBUILD_SHARED_LIBS=OFF',
            '-DCMAKE_POLICY_VERSION_MINIMUM=3.5']
     if system == 'Windows':
-        # Initialize additional flags without replacing CMake's /EHsc defaults.
         cmd += ['-A', 'x64', '-DCMAKE_CXX_FLAGS_INIT=/utf-8 /MP2',
                 '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded$<$<CONFIG:Debug>:Debug>']
     if component == 'bridge':
-        cmd += [f'-DNCNN_LLM_SOURCE_DIR={deps / "ncnn_llm"}',
-                f'-DAGENT_NCNN_SOURCE_DIR={deps / "ncnn"}',
+        cmd += [f'-DNCNN_LLM_SOURCE_DIR={deps / "ncnn_llm"}', f'-DAGENT_NCNN_SOURCE_DIR={deps / "ncnn"}',
                 f'-DAGENT_JSON_SOURCE_DIR={deps / "json"}', '-DBUILD_TESTING=ON']
-    elif component != 'image':
+    elif component == 'image':
+        cmd += [f'-DQWENIMAGE_SOURCE_DIR={deps / "qwenimage"}']
+    else:
         raise ValueError('Unknown native component')
     return cmd
 
@@ -67,7 +65,6 @@ def find_binary(component: str, root: Path = ROOT, system: str | None = None) ->
     system = system or platform.system()
     name = TARGETS[component] + ('.exe' if system == 'Windows' else '')
     build = root / f'build/ci-{component}'
-    # Support both CMake single-config and Visual Studio multi-config generators.
     found = [p for p in (build / name, build / 'Release' / name) if p.is_file() and p.stat().st_size > 0]
     if len(found) != 1:
         raise RuntimeError(f'Expected exactly one real Release binary, found {found}')
@@ -82,15 +79,12 @@ def run_logged(argv: list[str], log: Path, *, codes: tuple[int, ...] = (0,),
     with log.open('wb') as stream:
         stream.write(('ARGV: ' + json.dumps(argv) + '\n').encode('utf-8'))
         stream.flush()
-        proc = subprocess.run(argv, cwd=ROOT, stdin=subprocess.DEVNULL,
-                              stdout=stream, stderr=subprocess.STDOUT,
+        proc = subprocess.run(argv, cwd=ROOT, stdin=subprocess.DEVNULL, stdout=stream, stderr=subprocess.STDOUT,
                               timeout=timeout, check=False, shell=False)
     output = log.read_text(encoding='utf-8', errors='replace')
-    # Keep Actions console readable; the artifact contains the complete log.
     print(output[-24000:], flush=True)
     if proc.returncode not in codes:
         raise RuntimeError(f'{log.name}: unexpected exit code {proc.returncode}; expected {codes}')
-    # Only program output, not the ARGV header, can satisfy the smoke assertion.
     program_output = output.partition('\n')[2]
     if contains and contains not in program_output:
         raise RuntimeError(f'{log.name}: expected diagnostic was not emitted: {contains}')
@@ -98,7 +92,6 @@ def run_logged(argv: list[str], log: Path, *, codes: tuple[int, ...] = (0,),
 
 
 def validate_submodules(output: str) -> list[str]:
-    """A successful git command does not imply initialized, pinned submodules."""
     lines = [line for line in output.splitlines() if line.strip()]
     for line in lines:
         if not re.fullmatch(r' [0-9a-f]{40} .+', line):
@@ -109,15 +102,15 @@ def validate_submodules(output: str) -> list[str]:
 def load_state(path: Path, component: str, stage: str, env: dict | None = None) -> dict:
     env = os.environ if env is None else env
     identity = {'component': component, 'commit': env.get('GITHUB_SHA', 'local-checkout'),
-                'run_id': env.get('GITHUB_RUN_ID', 'local'),
-                'run_attempt': env.get('GITHUB_RUN_ATTEMPT', 'local')}
+                'run_id': env.get('GITHUB_RUN_ID', 'local'), 'run_attempt': env.get('GITHUB_RUN_ATTEMPT', 'local')}
     previous = json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
     if stage != 'refs' and previous and all(previous.get(k) == v for k, v in identity.items()):
         if not isinstance(previous.get('stages'), dict):
             raise RuntimeError('Malformed CI stage state')
         return previous
     return {**identity, 'platform': platform.platform(), 'machine': platform.machine(),
-            'scope': SCOPE, 'model_inference': 'not_run', 'gpu_execution': 'not_run',
+            'scope': SCOPE, 'model_inference': 'not_run',
+            'gpu_execution': 'see vulkan-probe.json for device-specific preflight',
             'stages': {}, 'old_evidence_discarded': bool(previous)}
 
 
@@ -152,8 +145,7 @@ def verify_sources(component: str, pins: dict, evidence: Path) -> dict:
     result = {}
     for name in names:
         directory = ROOT / '.ci-src' / name
-        got = subprocess.check_output(['git', '-C', str(directory), 'rev-parse', 'HEAD'],
-                                      text=True, timeout=30).strip()
+        got = subprocess.check_output(['git', '-C', str(directory), 'rev-parse', 'HEAD'], text=True, timeout=30).strip()
         if got != pins[name]['commit']:
             raise RuntimeError(f'Dependency SHA mismatch for {name}: {got}')
         result[name] = {'repository': REPOSITORIES[name], 'commit': got}
@@ -162,13 +154,11 @@ def verify_sources(component: str, pins: dict, evidence: Path) -> dict:
         status_text = (evidence / f'submodules-{name}.log').read_text(encoding='utf-8').partition('\n')[2]
         result[name]['submodules_verified'] = len(validate_submodules(status_text))
         dirty = subprocess.check_output(['git', '-C', str(directory), 'status', '--porcelain',
-                                         '--untracked-files=no', '--ignore-submodules=none'],
-                                        text=True, timeout=60).strip()
+                                         '--untracked-files=no', '--ignore-submodules=none'], text=True, timeout=60).strip()
         if dirty:
             raise RuntimeError(f'Modified dependency checkout: {name}: {dirty}')
     if component == 'image':
-        got = subprocess.check_output(['git', '-C', str(ROOT / '.ci-src/qwenimage/src/ncnn'),
-                                       'rev-parse', 'HEAD'], text=True, timeout=30).strip()
+        got = subprocess.check_output(['git', '-C', str(ROOT / '.ci-src/qwenimage/src/ncnn'), 'rev-parse', 'HEAD'], text=True, timeout=30).strip()
         if got != pins['ncnn']['commit']:
             raise RuntimeError('Qwen Image embedded ncnn does not match CI dependency lock')
         result['ncnn'] = {'repository': REPOSITORIES['ncnn'], 'commit': got}
@@ -212,32 +202,36 @@ def main() -> int:
             run_logged(['cmake', '--version'], evidence / 'cmake-version.log', timeout=30)
             run_logged(configure_command(component, platform.system()), evidence / 'configure.log', timeout=600)
         elif stage == 'build':
-            run_logged(['cmake', '--build', str(build), '--config', 'Release', '--parallel', '2',
-                        '--target'] + (['bridge_cli_tests', 'bridge_exception_tests'] if component == 'bridge' else [])
-                       + [TARGETS[component]],
+            run_logged(['cmake', '--build', str(build), '--config', 'Release', '--parallel', '2', '--target'] +
+                       (['bridge_cli_tests', 'bridge_exception_tests'] if component == 'bridge' else []) + [TARGETS[component]],
                        evidence / 'build.log')
             state['binary'] = str(find_binary(component))
             state['built_binary_sha256'] = hashlib.sha256(Path(state['binary']).read_bytes()).hexdigest()
+            probe = Path(state['binary']).with_name('ncnn_device_probe' + ('.exe' if os.name == 'nt' else ''))
+            state['probe_sha256'] = hashlib.sha256(probe.read_bytes()).hexdigest()
         elif stage == 'smoke':
             binary = str(find_binary(component))
             checked_digest(Path(binary), state)
             if component == 'bridge':
-                run_logged(['ctest', '--test-dir', str(build), '-C', 'Release', '--output-on-failure',
-                            '--no-tests=error'], evidence / 'ctest.log', timeout=120)
+                run_logged(['ctest', '--test-dir', str(build), '-C', 'Release', '--output-on-failure', '--no-tests=error'],
+                           evidence / 'ctest.log', timeout=120)
                 missing = ROOT / 'build/ci-missing-model'
                 if missing.exists():
                     raise RuntimeError('Missing-model test directory must not exist')
-                run_logged([binary, '--model', str(missing)], evidence / 'missing-model.log',
-                           codes=(2,), contains='--model must point to a converted ncnn model directory', timeout=30)
+                run_logged([binary, '--model', str(missing)], evidence / 'missing-model.log', codes=(2,),
+                           contains='--model must point to a converted ncnn model directory', timeout=30)
             else:
-                run_logged([binary, '-h'], evidence / 'help.log',
-                           contains='Usage: qwenimage-ncnn-vulkan', timeout=30)
-            run_logged([sys.executable, str(ROOT / 'scripts/native_regression.py'),
-                        '--component', component, '--binary', binary,
-                        '--output', str(evidence / 'native-test-results.json')],
+                run_logged([binary, '-h'], evidence / 'help.log', contains='Usage: qwenimage-ncnn-vulkan', timeout=30)
+            run_logged([sys.executable, str(ROOT / 'scripts/native_regression.py'), '--component', component,
+                        '--binary', binary, '--output', str(evidence / 'native-test-results.json')],
                        evidence / 'native-regression.log', timeout=300)
+            probe = Path(binary).with_name('ncnn_device_probe' + ('.exe' if os.name == 'nt' else ''))
+            if hashlib.sha256(probe.read_bytes()).hexdigest() != state['probe_sha256']:
+                raise RuntimeError('Probe changed after build')
+            run_logged([sys.executable, str(ROOT / 'scripts/probe_regression.py'), '--binary', str(probe),
+                        '--output', str(evidence / 'vulkan-probe.json')], evidence / 'vulkan-probe.log', timeout=180)
             state['smoke_binary_sha256'] = checked_digest(Path(binary), state)
-            state['startup_checks'] = 'passed; no model was loaded'
+            state['startup_checks'] = 'passed; see vulkan-probe.json; no model weights loaded'
         elif stage == 'package':
             for required in ('configure', 'build', 'smoke'):
                 if state['stages'].get(required, {}).get('status') != 'passed':
@@ -246,18 +240,20 @@ def main() -> int:
             state['binary_sha256'] = checked_digest(binary, state, require_smoke=True)
             out = ROOT / 'dist/ci'
             out.mkdir(parents=True, exist_ok=True)
-            # A fresh staging directory prevents stale files entering a new artifact.
             package_dir = Path(tempfile.mkdtemp(prefix=component + '-payload-', dir=out))
             shutil.copy2(binary, package_dir / binary.name)
+            probe = binary.with_name('ncnn_device_probe' + ('.exe' if os.name == 'nt' else ''))
+            if hashlib.sha256(probe.read_bytes()).hexdigest() != state['probe_sha256']:
+                raise RuntimeError('Probe changed after smoke')
+            shutil.copy2(probe, package_dir / probe.name)
             metadata = json.loads(json.dumps(state))
             metadata['stages'].pop('package', None)
             metadata['package_note'] = 'Validated payload snapshot; final archive outcome is in the CI status.json.'
             (package_dir / 'BUILD_INFO.json').write_text(json.dumps(metadata, indent=2) + '\n', encoding='utf-8')
             (package_dir / 'README.txt').write_text(SCOPE + '\nCI binary; no weights bundled. OpenMP disabled.\n'
-                'Not a portable release or a performance benchmark; system/GPU drivers may still be required.\n', encoding='utf-8')
+                'Not a performance benchmark; system/GPU drivers may still be required.\n', encoding='utf-8')
             shutil.copy2(ROOT / 'THIRD_PARTY.md', package_dir / 'THIRD_PARTY.md')
             shutil.copy2(ROOT / 'LICENSE', package_dir / 'LICENSE')
-            # Preserve upstream/submodule license notices with distributed static binaries.
             for source in (ROOT / '.ci-src').rglob('*'):
                 if '.git' in source.parts or not source.is_file():
                     continue
@@ -269,7 +265,6 @@ def main() -> int:
             temporary_archive = archive.with_name(archive.name + '.tmp')
             with tarfile.open(temporary_archive, 'w:gz') as tar:
                 tar.add(package_dir, arcname=component)
-            # Retest the archived bytes, not the build-directory executable.
             with tempfile.TemporaryDirectory(prefix='archive-smoke-') as tmp:
                 restored = Path(tmp) / binary.name
                 with tarfile.open(temporary_archive, 'r:gz') as tar:
@@ -279,10 +274,20 @@ def main() -> int:
                     with tar.extractfile(member) as src:
                         restored.write_bytes(src.read())
                     restored.chmod(member.mode & 0o755)
+                    probe_member = tar.getmember(f'{component}/{probe.name}')
+                    if not probe_member.isfile():
+                        raise RuntimeError('Archive probe is not a regular file')
+                    restored_probe = Path(tmp) / probe.name
+                    with tar.extractfile(probe_member) as src:
+                        restored_probe.write_bytes(src.read())
+                    restored_probe.chmod(probe_member.mode & 0o755)
+                if hashlib.sha256(restored_probe.read_bytes()).hexdigest() != state['probe_sha256']:
+                    raise RuntimeError('Archive probe checksum mismatch')
+                run_logged([sys.executable, str(ROOT / 'scripts/probe_regression.py'), '--binary', str(restored_probe),
+                            '--output', str(evidence / 'packaged-vulkan-probe.json')], evidence / 'packaged-vulkan-probe.log', timeout=180)
                 checked_digest(restored, state, require_smoke=True)
-                run_logged([sys.executable, str(ROOT / 'scripts/native_regression.py'),
-                            '--component', component, '--binary', str(restored),
-                            '--output', str(evidence / 'packaged-native-test-results.json')],
+                run_logged([sys.executable, str(ROOT / 'scripts/native_regression.py'), '--component', component,
+                            '--binary', str(restored), '--output', str(evidence / 'packaged-native-test-results.json')],
                            evidence / 'packaged-regression.log', timeout=300)
             os.replace(temporary_archive, archive)
             shutil.rmtree(package_dir)

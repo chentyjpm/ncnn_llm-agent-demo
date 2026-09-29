@@ -8,6 +8,7 @@
   <title>Local Agent · 本地工作台</title>
   <link rel="stylesheet" href="/style.css">
   <script src="/app.js" defer></script>
+  <script src="/workbench.js" defer></script>
 </head>
 <body>
 <svg class="icon-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
@@ -50,8 +51,8 @@
   </aside>
   <main class="main">
     <header class="topbar">
-      <div class="topbar-start"><button id="toggle-sidebar" class="icon-button" aria-label="切换侧栏"><svg class="icon"><use href="#i-panel"/></svg></button><button id="model-button" class="model-button"><span id="model-name">正在连接本地服务</span><span id="device-badge" class="badge">CPU</span></button></div>
-      <div class="topbar-end"><span id="connection-status" class="connection-status">连接中</span><button id="files-button" class="soft-button"><svg class="icon"><use href="#i-folder"/></svg><span>工作文件</span></button><button id="export-chat" class="icon-button" aria-label="导出对话" title="导出为 Markdown"><svg class="icon"><use href="#i-down"/></svg></button></div>
+      <div class="topbar-start"><button id="toggle-sidebar" class="icon-button" aria-label="切换侧栏"><svg class="icon"><use href="#i-panel"/></svg></button><button id="model-button" class="model-button"><span id="model-name">正在连接本地服务</span><span id="device-badge" class="badge">AUTO</span></button></div>
+      <div class="topbar-end"><span id="connection-status" class="connection-status">连接中</span><button id="documents-button" class="soft-button"><svg class="icon"><use href="#i-file"/></svg><span>文档工作台</span></button><button id="setup-button" class="soft-button">安装与模型</button><button id="files-button" class="soft-button"><svg class="icon"><use href="#i-folder"/></svg><span>工作文件</span></button><button id="export-chat" class="icon-button" aria-label="导出对话" title="导出为 Markdown"><svg class="icon"><use href="#i-down"/></svg></button></div>
     </header>
     <div id="notice" class="notice" role="status" hidden></div>
     <div id="scroll-area" class="scroll-area">
@@ -80,10 +81,26 @@
       <p class="composer-footnote">本地模型也可能出错，请核实重要信息。<span>Enter 发送 · Shift + Enter 换行</span></p>
     </footer>
   </main>
-  <aside id="file-panel" class="file-panel" aria-label="工作文件" hidden><div class="panel-heading"><div><h2>工作文件</h2><p>仅当前对话的独立工作区</p></div><button id="close-files" class="icon-button" aria-label="关闭文件面板"><svg class="icon"><use href="#i-close"/></svg></button></div><button id="parent-folder" class="soft-button" hidden>← 返回上一级</button><div id="folder-path" class="folder-path">/</div><div id="file-list" class="file-list"></div><div class="panel-note">文本可预览，其他文件可下载。图片附件不会自动变成视觉模型输入。</div><pre id="file-preview" class="file-preview" hidden></pre><img id="image-preview" class="image-preview" alt="工作区图片预览" hidden></aside>
+  <aside id="file-panel" class="file-panel" aria-label="工作文件" hidden><div class="panel-heading"><div><h2>工作文件</h2><p>仅当前对话的独立工作区</p></div><button id="close-files" class="icon-button" aria-label="关闭文件面板"><svg class="icon"><use href="#i-close"/></svg></button></div><button id="parent-folder" class="soft-button" hidden>← 返回上一级</button><div id="folder-path" class="folder-path">/</div><div id="file-list" class="file-list"></div><div class="panel-note">Office 可提取文本，图片可预览。图片附件不会自动变成视觉模型输入。</div><pre id="file-preview" class="file-preview" hidden></pre><img id="image-preview" class="image-preview" alt="工作区图片预览" hidden></aside>
 </div>
-<dialog id="settings-dialog"><div class="dialog-header"><div><h2>运行设置</h2><p>连接真实的本地模型，不经过云端代理</p></div><button id="close-settings" class="icon-button" aria-label="关闭设置"><svg class="icon"><use href="#i-close"/></svg></button></div><div id="runtime-details" class="runtime-details"></div><label class="setting-row">单次输出 token 上限<select id="token-limit"><option value="128">128 · 更快响应</option><option value="512" selected>512 · 日常使用</option><option value="1024">1024 · 较长回答</option><option value="2048">2048 · 长文与代码</option></select></label><p class="setting-note">只影响后续请求；ncnn_cli 后端不支持此参数。模型路径和工具权限在启动配置中设置，网页不能提升权限。</p><div class="setup-code"><strong>启动示例</strong><pre>python -m local_agent serve --config configs/local.json --open</pre><p>CPU 文本推理：llm.vulkan = false<br>CPU 生图：image.gpu = -1</p></div></dialog>
+<dialog id="settings-dialog"><div class="dialog-header"><div><h2>运行设置</h2><p>连接真实的本地模型，不经过云端代理</p></div><button id="close-settings" class="icon-button" aria-label="关闭设置"><svg class="icon"><use href="#i-close"/></svg></button></div><div id="runtime-details" class="runtime-details"></div><label class="setting-row">单次输出 token 上限<select id="token-limit"><option value="128">128 · 更快响应</option><option value="512" selected>512 · 日常使用</option><option value="1024">1024 · 较长回答</option><option value="2048">2048 · 长文与代码</option></select></label><p class="setting-note">只影响后续请求；ncnn_cli 后端不支持此参数。模型路径和工具权限在启动配置中设置，网页不能提升权限。</p><div class="setup-code"><strong>源码启动示例</strong><pre>python -m local_agent serve --config configs/local.json --open</pre><p>默认：两个引擎均 device = auto<br>Vulkan 预检通过优先加速；否则回退 CPU</p></div></dialog>
 <dialog id="rename-dialog"><form id="rename-form"><h2>重命名对话</h2><label for="rename-input">对话名称</label><input id="rename-input" maxlength="80" required><div class="dialog-actions"><button type="button" id="cancel-rename" class="soft-button">取消</button><button class="primary-button">保存</button></div></form></dialog>
 <dialog id="delete-dialog"><h2>删除这段对话？</h2><p>对话记录将被删除。工作文件和审计日志保留在本机，不会一并删除。</p><div class="dialog-actions"><button id="cancel-delete" class="soft-button">取消</button><button id="confirm-delete" class="danger-button">删除对话</button></div></dialog>
+<dialog id="document-dialog" class="document-dialog">
+  <div class="dialog-header"><div><h2>文档工作台</h2><p>读入 Office 文本，编辑草稿，导出为新文件。无需调用模型也能使用。</p></div><button id="close-document" class="icon-button" aria-label="关闭文档工作台">×</button></div>
+  <div class="document-toolbar"><button id="doc-last-answer" type="button" class="soft-button">载入最近回答</button><select id="doc-template" aria-label="文档模板"><option value="">插入模板…</option><option value="report">Word 报告</option><option value="table">Excel 表格</option><option value="slides">PPT 大纲</option></select><button id="doc-preview-toggle" type="button" class="soft-button">预览 / 编辑</button></div>
+  <label class="document-label" for="doc-title">文件标题</label><input id="doc-title" class="document-title" value="我的文档" maxlength="100">
+  <label class="document-label" for="doc-editor">Markdown / 文本草稿（Excel 使用第一个 Markdown 表格，或 CSV）</label>
+  <textarea id="doc-editor" class="document-editor" maxlength="200000" placeholder="# 报告标题&#10;&#10;在这里整理内容。也可从工作文件面板打开 docx、xlsx、pptx。"></textarea>
+  <div id="doc-render" class="message-content document-render" hidden></div>
+  <p id="doc-note" class="setting-note">基础结构导出，不覆盖原文件，不执行宏或 Excel 公式。不是 Word/PPT 的原版式编辑器。</p>
+  <div class="dialog-actions"><select id="doc-format" aria-label="导出格式"><option value="docx">Word .docx</option><option value="xlsx">Excel .xlsx</option><option value="pptx">PowerPoint .pptx</option><option value="md">Markdown .md</option></select><button id="doc-export" class="primary-button">保存为新文档</button></div>
+</dialog>
+<dialog id="setup-dialog">
+  <div class="dialog-header"><div><h2>安装与模型</h2><p>引擎随应用安装，模型下载后自动接入。</p></div><button id="close-setup" class="icon-button" aria-label="关闭模型中心">×</button></div>
+  <div id="engine-status" class="setting-note"></div><div id="model-cards"></div><div id="model-progress" class="setting-note" role="status"></div>
+  <div class="dialog-actions"><button id="cancel-model" class="soft-button" hidden>取消模型下载</button><button id="quit-desktop" class="soft-button" hidden>退出本地服务</button></div>
+  <p class="setting-note">默认优先 Vulkan，不可用时回退 CPU。生图模型体积很大，先查看下载量再确认；引擎能启动不代表生图已通过实机测试。</p>
+</dialog>
 <div id="toast" class="toast" role="status" hidden></div>
 </body></html>

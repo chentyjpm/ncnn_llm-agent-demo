@@ -1,34 +1,25 @@
-name: Native C++ build
+name: Application installers
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/native-build.yml'
+      - 'packaging/**'
+      - 'local_agent/**'
+      - 'requirements-desktop.txt'
+      - 'requirements-office.txt'
       - 'native/**'
-      - 'ci/**'
       - 'scripts/ci_native.py'
-      - 'scripts/native_regression.py'
       - 'scripts/probe_regression.py'
-      - 'local_agent/device.py'
-      - 'tests/test_ci*.py'
-      - 'upstream-lock.json'
-  pull_request:
-    branches: [main]
-    paths:
-      - '.github/workflows/native-build.yml'
-      - 'native/**'
       - 'ci/**'
-      - 'scripts/ci_native.py'
-      - 'scripts/native_regression.py'
-      - 'scripts/probe_regression.py'
-      - 'local_agent/device.py'
-      - 'tests/test_ci*.py'
-      - 'upstream-lock.json'
-  workflow_dispatch:
+      - 'scripts/package_desktop.py'
+      - 'scripts/test_installed_app.py'
+      - 'tests/test_desktop.py'
+      - '.github/workflows/installers.yml'
 permissions:
   contents: read
 concurrency:
-  group: native-${{ github.ref }}
+  group: installers-${{ github.ref }}
   cancel-in-progress: true
 env:
   PYTHONUTF8: '1'
@@ -36,7 +27,7 @@ env:
   CMAKE_BUILD_PARALLEL_LEVEL: '2'
 jobs:
   native:
-    name: C++ / ${{ matrix.component }} / ${{ matrix.os }}
+    name: Engine / ${{ matrix.component }} / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     strategy:
@@ -63,7 +54,7 @@ jobs:
           ref: ${{ steps.pins.outputs.ncnn_llm }}
           path: .ci-src/ncnn_llm
           persist-credentials: false
-      - name: Checkout ncnn and Vulkan compiler dependencies
+      - name: Checkout ncnn and Vulkan dependencies
         if: matrix.component == 'bridge'
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
@@ -89,7 +80,7 @@ jobs:
           path: .ci-src/qwenimage
           submodules: recursive
           persist-credentials: false
-      - name: Configure actual upstream source and matching device probe
+      - name: Configure actual source and Vulkan probes
         run: python scripts/ci_native.py configure --component ${{ matrix.component }}
       - name: Compile and link Release executable
         run: python scripts/ci_native.py build --component ${{ matrix.component }}
@@ -98,27 +89,27 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y libvulkan1 mesa-vulkan-drivers
-      - name: Native CLI and actual Vulkan compute preflight
+      - name: Actual CLI tests and Vulkan compute preflight
         run: python scripts/ci_native.py smoke --component ${{ matrix.component }}
         env:
           LOCAL_AGENT_TEST_SOFTWARE_VK: ${{ runner.os == 'Linux' && '1' || '0' }}
-      - name: Package and retest engine and device probe
+      - name: Package and retest executable and probe
         run: python scripts/ci_native.py package --component ${{ matrix.component }}
-      - name: Upload successfully built executable
+      - name: Upload verified native package
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
-          name: native-${{ matrix.component }}-${{ matrix.os }}
+          name: app-engine-${{ matrix.component }}-${{ matrix.os }}
           path: dist/ci/*.tar.gz
           retention-days: 14
           if-no-files-found: error
-      - name: Summarize current job only
+      - name: Summarize current job
         if: always()
         run: python scripts/ci_native.py summary --component ${{ matrix.component }}
-      - name: Upload build logs even on failure
+      - name: Preserve logs even on failure
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
-          name: native-logs-${{ matrix.component }}-${{ matrix.os }}
+          name: app-engine-logs-${{ matrix.component }}-${{ matrix.os }}
           path: |
             reports/ci/${{ matrix.component }}/
             build/ci-${{ matrix.component }}/CMakeCache.txt
@@ -126,3 +117,51 @@ jobs:
             build/ci-${{ matrix.component }}/Testing/Temporary/
           retention-days: 14
           if-no-files-found: warn
+  application:
+    name: Installable app / ${{ matrix.os }}
+    needs: native
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-15, macos-15-intel]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.11'
+      - name: Build dependencies only (end users do not run pip)
+        run: python -m pip install -r requirements-desktop.txt
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: app-engine-bridge-${{ matrix.os }}
+          path: build/native-inputs/bridge
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: app-engine-image-${{ matrix.os }}
+          path: build/native-inputs/image
+      - name: Prepare bundled macOS Vulkan runtime
+        if: runner.os == 'macOS'
+        run: brew install molten-vk
+      - name: Run all tests with complete Office runtime
+        run: python scripts/run_tests.py --output-dir reports/desktop/unit
+      - name: Freeze, test with clean PATH, build and check installer
+        run: python scripts/package_desktop.py --archives build/native-inputs
+      - name: Upload installer only after application acceptance
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: LocalAgent-installer-${{ matrix.os }}
+          path: dist/installers/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Preserve acceptance evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: installer-evidence-${{ matrix.os }}
+          path: reports/desktop/
+          if-no-files-found: warn
+          retention-days: 14

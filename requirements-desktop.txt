@@ -1,0 +1,5 @@
+# Build with Python 3.11; end users do NOT run pip.
+-r requirements-office.txt
+pyinstaller==6.16.0
+numpy==1.26.4
+certifi==2025.8.3

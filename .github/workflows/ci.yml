@@ -1,23 +1,18 @@
 name: Cross-platform tool tests
-
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
-
 permissions:
   contents: read
-
 concurrency:
   group: tools-${{ github.ref }}
   cancel-in-progress: true
-
 env:
   PYTHONUTF8: '1'
   PYTHONIOENCODING: utf-8
-
 jobs:
   tools:
     name: Tools / ${{ matrix.os }} / Python 3.13
@@ -28,15 +23,17 @@ jobs:
       matrix:
         os: [ubuntu-24.04, windows-2022, macos-15, macos-15-intel]
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           persist-credentials: false
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: '3.13'
+      - name: Install Office test dependencies
+        run: python -m pip install -r requirements-office.txt
       - name: Compile Python source to bytecode (not C++ compilation)
         run: python -m compileall -q local_agent examples scripts tests
-      - name: Real filesystem, Python subprocess and MCP tests; mock model adapters
+      - name: Real filesystem, Python, Office and HTTP tests; model/device fixtures labelled
         run: python scripts/run_tests.py --output-dir reports/ci/tools
       - name: Check CLI without model weights
         run: python -m local_agent doctor
@@ -52,14 +49,14 @@ jobs:
               text = (f"## Tool tests: {r['platform']} / Python {r['python']}\n"
                       f"Run: {r['tests_run']}; passed: {r['passed']}; failures: {r['failures']}; "
                       f"errors: {r['errors']}; skipped: {r['skipped']}.\n\n"
-                      "Models/images are explicit test fixtures. This is NOT model inference or native compilation.\n")
+                      "Models and device capabilities are explicit test fixtures. NOT model inference or native GPU execution.\n")
           else:
               text = '## Tool tests\nNo test report produced; inspect preceding steps.\n'
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as f:
               f.write(text)
       - name: Upload test evidence even on failure
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: tool-tests-${{ matrix.os }}-py313
           path: |

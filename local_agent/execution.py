@@ -42,6 +42,8 @@ class PythonRunner:
         if self.mode == "disabled":
             raise PolicyError("Python execution is disabled")
         if self.mode == "unsafe-host":
+            if getattr(sys, "frozen", False):
+                raise PolicyError("Desktop does not expose its executable as a Python interpreter; use document tools or a separately configured trusted runtime")
             result = run_process([sys.executable, "-I", "-X", "utf8", "-"],
                                  cwd=self.workspace.root, timeout=self.timeout, input_text=code)
             result["isolation"] = "NONE: host execution; cwd and -I are not a sandbox"
@@ -55,7 +57,6 @@ class PythonRunner:
             result["isolation"] = "docker-hardened (not a VM; workspace disk quota is not enforced)"
             return result
         finally:
-            # Killing the docker CLI alone does not reliably stop its container.
             run_process(["docker", "rm", "-f", name], cwd=self.workspace.root,
                         timeout=10, max_output=4096)
 
@@ -71,5 +72,4 @@ class CommandRunner:
         argv = self.commands[name]
         if not isinstance(argv, list) or not argv or not all(isinstance(v, str) for v in argv):
             raise PolicyError("Configured command must be an argv array")
-        # No model-supplied args, shell expansion, PATH mutation or executable paths.
         return run_process(argv, cwd=self.workspace.root, timeout=60)

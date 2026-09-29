@@ -1,8 +1,9 @@
-"""Adapter to the VERIFIED upstream CLI; no diffusion code is reimplemented."""
+"""Qwen Image CLI adapter with per-engine Vulkan-first preflight."""
 from __future__ import annotations
 from pathlib import Path
 from .paths import PolicyError, Workspace
 from .process import run_process
+from .device import select, engine_env
 
 class ImageRunner:
     def __init__(self, workspace: Workspace, config: dict):
@@ -35,9 +36,10 @@ class ImageRunner:
         model = Path(self.config.get("model", ""))
         if not prefix or not isinstance(prefix, list) or not model.is_dir():
             raise PolicyError("Configure an executable argv array and an existing model directory")
+        self.device_selection = select(self.config, "image")
         argv = list(prefix) + ["-m", str(model.resolve()), "-p", prompt, "-o", str(out),
                               "-s", f"{width},{height}", "-l", str(steps), "-r", str(seed),
-                              "-g", str(int(self.config.get("gpu", -1)))]
+                              "-g", str(self.device_selection["gpu"])]
         for ref in references:
             p = self.workspace.path(ref)
             if not p.is_file():
@@ -50,9 +52,9 @@ class ImageRunner:
         out = self.workspace.path(arguments["output"])
         out.parent.mkdir(parents=True, exist_ok=True)
         result = run_process(argv, cwd=self.workspace.root,
-                             timeout=float(self.config.get("timeout", 1800)))
+                             timeout=float(self.config.get("timeout", 1800)), env=engine_env(self.config["command"]))
         valid = out.is_file() and out.stat().st_size > 0
-        result.update({"path": arguments["output"], "file_created": valid})
+        result.update({"path": arguments["output"], "file_created": valid, "device_selection": self.device_selection})
         if result["returncode"] == 0 and not valid:
             result["error"] = "Backend exited successfully but did not create an output file"
         return result

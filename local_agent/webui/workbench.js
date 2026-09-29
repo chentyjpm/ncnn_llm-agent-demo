@@ -1,0 +1,31 @@
+'use strict';
+// Shares app.js's authenticated API and safe DOM helpers. No CDN/editor runtime.
+let setupTimer=null;
+const documentTemplates={
+ report:'# 项目报告\n\n## 背景与目标\n\n请输入项目背景。\n\n## 主要发现\n\n- 发现一\n- 发现二\n\n## 下一步\n\n请补充负责人和计划时间。',
+ table:'| 项目 | 数量 | 备注 |\n| --- | --- | --- |\n| 示例 A | 10 | 待核对 |\n| 示例 B | 20 | 待核对 |',
+ slides:'# 项目汇报\n\n介绍项目目标和范围。\n\n## 当前进展\n\n- 已完成的事项\n- 正在推进的事项\n\n## 下一步计划\n\n- 重点工作\n- 时间安排'
+};
+function documentDialog(content,title){if(content!==undefined)$('doc-editor').value=content;if(title)$('doc-title').value=title;$('doc-editor').hidden=false;$('doc-render').hidden=true;if(!$('document-dialog').open)$('document-dialog').showModal();}
+async function openOffice(path){if(!state.session)return;let content='',offset=0,record;do{record=await api(`/api/sessions/${state.session.id}/document?path=${encodeURIComponent(path)}&offset=${offset}`);content+=record.content;offset=record.next_offset;}while(offset!==null&&content.length<200000);$('doc-note').textContent=record.note+' 编辑后导出为新文件，原文件保持不变。';documentDialog(content,path.split('/').pop().replace(/\.[^.]+$/,''));}
+const originalPreview=preview;
+preview=async function(path){if(/\.(docx|xlsx|pptx)$/i.test(path))return openOffice(path);return originalPreview(path);};
+$('documents-button').onclick=()=>documentDialog();$('close-document').onclick=()=>$('document-dialog').close();
+$('doc-last-answer').onclick=()=>{const m=[...(state.session?.messages||[])].reverse().find(m=>m.role==='assistant'&&m.state==='completed');if(!m)return toast('当前没有已完成的回答');documentDialog(m.content);};
+$('doc-template').onchange=()=>{const key=$('doc-template').value;if(!key)return;if($('doc-editor').value.trim()&&!confirm('用模板替换当前草稿？')){$('doc-template').value='';return;}documentDialog(documentTemplates[key]);$('doc-format').value=key==='table'?'xlsx':key==='slides'?'pptx':'docx';$('doc-template').value='';};
+$('doc-preview-toggle').onclick=()=>{const show=$('doc-render').hidden;$('doc-render').replaceChildren(markdown($('doc-editor').value));$('doc-render').hidden=!show;$('doc-editor').hidden=show;};
+$('doc-export').onclick=safe(async()=>{if(state.run)return toast('请先完成或停止正在运行的任务');const content=$('doc-editor').value;if(!content.trim())return toast('请先填写文档内容');const s=await ensureSession();$('doc-export').disabled=true;try{const made=await api(`/api/sessions/${s.id}/export`,'POST',{format:$('doc-format').value,title:$('doc-title').value||'Document',content,confirm:true});saveBlob(await getFile(made.path),made.path.split('/').pop());toast('新文档已生成；原文件没有被覆盖');if(!$('file-panel').hidden)await showFiles();}finally{$('doc-export').disabled=false;}});
+function amount(bytes){return (bytes/1024**3).toFixed(2)+' GiB';}
+async function updateSetup(){const data=await api('/api/setup');$('model-cards').replaceChildren();$('quit-desktop').hidden=!data.managed;if(!data.managed){$('engine-status').textContent='当前为源码启动方式。桌面安装包会内置两个引擎、Python 与文档库；无需手工填写路径。';return;}$('engine-status').textContent=`文本引擎：${data.engines.llm?'已内置':'缺失'} · 图像引擎：${data.engines.image?'已内置':'缺失'}。数据保存在 ${data.home}`;
+ const busy=['downloading','converting'].includes(data.job.status);
+ for(const model of data.models){const card=el('section','model-card');card.append(el('h3','',model.name+(model.active?' · 已启用':model.installed?' · 已安装':'')),el('p','',model.description));const action=button(model.installed?'启用此模型':'查看下载量',null,safe(async()=>{if(model.installed){await api('/api/setup/activate','POST',{id:model.id});await refreshRuntime();return updateSetup();}action.disabled=true;try{const q=await api('/api/setup/prepare','POST',{id:model.id});const yes=confirm(`${model.name}\n\n下载：${amount(q.download_bytes)}\n建议至少预留：${amount(q.disk_required_bytes)}\n来源：${q.repository}\n快照：${q.revision}\n\n确认下载并自动接入？`);if(yes){await api('/api/setup/install','POST',{ticket:q.ticket,accept_download:true});await updateSetup();}}finally{action.disabled=false;}}),'primary-button');action.disabled=busy||model.active;card.append(action);$('model-cards').append(card);}
+ $('cancel-model').hidden=!busy;let status=data.job.status==='downloading'?`正在下载 ${data.job.file}：${amount(data.job.downloaded||0)} / ${amount(data.job.total||0)}`:data.job.status==='converting'?'权重校验完成，正在准备模型；完成前不会启用。':data.job.status==='completed'?'模型已安装并启用，可以直接开始对话。':data.job.status==='failed'?'安装失败：'+data.job.error:data.job.status==='cancelled'?'已取消。完整且已验证的下载文件会在重试时复用。':'请选择需要的模型。';$('model-progress').textContent=status;
+ if(data.job.status==='completed')await refreshRuntime();clearTimeout(setupTimer);if($('setup-dialog').open&&busy)setupTimer=setTimeout(()=>updateSetup().catch(e=>toast(e.message)),1500);
+}
+async function refreshRuntime(){state.runtime=await api('/api/runtime');$('model-name').textContent=state.runtime.model;$('device-badge').textContent=state.runtime.device;$('connection-status').textContent=state.runtime.ready?'本机服务已连接':'模型未配置';notice(state.runtime.ready?'':'应用已安装。点击「安装与模型」下载并启用文本模型，无需修改配置。');controls();}
+$('setup-button').onclick=safe(async()=>{$('setup-dialog').showModal();await updateSetup();});$('close-setup').onclick=()=>{$('setup-dialog').close();clearTimeout(setupTimer);};$('cancel-model').onclick=safe(async()=>{await api('/api/setup/cancel','POST',{});await updateSetup();});$('quit-desktop').onclick=safe(async()=>{if(!confirm('退出本地服务？聊天记录和文件会保留。'))return;await api('/api/setup/shutdown','POST',{confirm:true});$('setup-dialog').close();notice('本地服务已退出。再次打开 LocalAgent 即可恢复。');state.runtime.ready=false;controls();});
+// Distinguish preflight from the last completed task's actual runtime choice.
+const originalSettings=showSettings;
+showSettings=function(){originalSettings();const r=state.runtime||{};const root=$('runtime-details');const last=[...(state.session?.messages||[])].reverse().find(m=>m.device_selection)?.device_selection;
+for(const [label,value] of [['默认策略','Vulkan 优先；不可用回退 CPU'],['文本预检',r.devices?.llm?.name||'未检测'],['文本选择原因',r.devices?.llm?.reason||'未检测'],['生图预检',r.devices?.image?.name||'未检测'],['生图选择原因',r.devices?.image?.reason||'未检测'],['最近任务设备',last?last.name+' · '+last.reason:'尚无真实任务记录']]){const row=el('div','runtime-row');row.append(el('span','',label),el('strong','',value));root.append(row);}};
+$('settings-button').onclick=showSettings;$('model-button').onclick=showSettings;

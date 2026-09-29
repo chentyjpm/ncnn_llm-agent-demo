@@ -10,13 +10,11 @@ demo_workspace*/
 configs/local.json
 reports/runs/*
 !reports/runs/.gitkeep
-
-# Cross-platform CI outputs
 .ci-src/
 dist/
 reports/ci/
-
-# H5 local history, logs and verification artifacts
 web-data/
 reports/web-*/
 source-checkout.zip
+*.spec
+reports/desktop/

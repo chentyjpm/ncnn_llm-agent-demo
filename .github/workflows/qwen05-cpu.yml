@@ -58,31 +58,36 @@ jobs:
           ref: ${{ steps.pins.outputs.json }}
           path: .ci-src/json
           persist-credentials: false
-      - name: Install CPU-only conversion/reference test dependencies
+      - name: CPU-only conversion/reference and Office test dependencies
         run: |
           python -m pip install torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
-          python -m pip install numpy==1.26.4 transformers==4.57.3 huggingface-hub==0.36.0 safetensors==0.6.2
-      - name: Run tool and new exporter regression tests
+          python -m pip install numpy==1.26.4 transformers==4.57.3 huggingface-hub==0.36.0 safetensors==0.6.2 -r requirements-office.txt
+      - name: Run tool and exporter regressions
         run: python scripts/run_tests.py --output-dir reports/qwen05/unit
-      - name: Download exact official 0.5B weights and verify SHA-256
+      - name: Download exact official 0.5B and verify SHA-256
         run: python scripts/qwen05_export.py download --source models/official-qwen05
-      - name: Convert actual weights to ncnn (not a dummy model)
+      - name: Convert real weights to ncnn
         run: python scripts/qwen05_export.py export --source models/official-qwen05 --output models/ncnn-qwen05
-      - name: Generate independent official CPU reference vectors
+      - name: Independent official CPU reference vectors
         run: python scripts/qwen05_reference.py --source models/official-qwen05 --output reports/qwen05/reference.json
-      - name: Configure pinned ncnn source and test bridge
+      - name: Configure locked ncnn source and bridge
         run: |
           python scripts/ci_native.py configure --component bridge
           cmake -S model-tests/native -B build/qwen05 -DCMAKE_BUILD_TYPE=Release -DNCNN_LLM_SOURCE_DIR="$PWD/.ci-src/ncnn_llm" -DAGENT_NCNN_SOURCE_DIR="$PWD/.ci-src/ncnn" -DAGENT_JSON_SOURCE_DIR="$PWD/.ci-src/json" -DNCNN_VULKAN=ON -DNCNN_SIMPLEVK=ON -DNCNN_OPENMP=ON -DNCNN_SHARED_LIB=OFF -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=ON -DCMAKE_POLICY_VERSION_MINIMUM=3.5
-      - name: Compile real C++ bridge and numerical verifier
+      - name: Compile actual C++ bridge, probe and numerical verifier
         run: cmake --build build/qwen05 --parallel 4
-      - name: Compare ncnn prefill and KV decoding against CPU reference
+      - name: Compare ncnn prefill/KV against reference
         run: build/qwen05/qwen05_logits models/ncnn-qwen05 reports/qwen05/reference.json reports/qwen05/numerical.json
-      - name: Run actual CPU text generation and file-tool workflow
+      - name: Actual CPU generation and file-tool workflow
         run: python scripts/qwen05_cpu_test.py --binary build/qwen05/bridge/ncnn_agent_bridge --model models/ncnn-qwen05 --output reports/qwen05/inference
-      - name: Real Qwen CPU through H5 HTTP with conversation history
+      - name: Actual CPU through H5 HTTP with history
         run: python scripts/web_real_smoke.py --binary build/qwen05/bridge/ncnn_agent_bridge --model models/ncnn-qwen05 --output reports/qwen05/web-http
-      - name: Upload current-run evidence only (no model weights)
+      - name: Auto mode with missing Vulkan driver must complete real CPU inference
+        run: python scripts/web_real_smoke.py --binary build/qwen05/bridge/ncnn_agent_bridge --model models/ncnn-qwen05 --device auto --output reports/qwen05/auto-cpu-fallback
+        env:
+          VK_DRIVER_FILES: /nonexistent/local-agent-vulkan.json
+          VK_ICD_FILENAMES: /nonexistent/local-agent-vulkan.json
+      - name: Preserve current-run evidence (no weights)
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:

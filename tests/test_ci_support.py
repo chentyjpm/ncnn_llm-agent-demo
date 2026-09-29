@@ -1,4 +1,4 @@
-"""CI helper regression tests; these do NOT substitute for native compilation."""
+"""CI helper regressions, not a substitute for native compilation."""
 from pathlib import Path
 import sys
 import tempfile
@@ -23,8 +23,6 @@ class CISupportTests(unittest.TestCase):
         self.assertIn('-DNCNN_VULKAN=ON', cmd)
 
     def test_windows_does_not_overwrite_default_exception_flags(self):
-        # Regression: replacing CMAKE_CXX_FLAGS removed /EHsc and made malformed
-        # model.json crash on Windows instead of reaching the error handler.
         for component in ('bridge', 'image'):
             with self.subTest(component=component):
                 cmd = configure_command(component, 'Windows', self.root)
@@ -39,44 +37,36 @@ class CISupportTests(unittest.TestCase):
 
     def test_image_configures_real_upstream_source(self):
         cmd = configure_command('image', 'Linux', self.root / 'with spaces')
-        self.assertEqual(cmd[cmd.index('-S') + 1], str(self.root / 'with spaces/.ci-src/qwenimage/src'))
+        self.assertEqual(cmd[cmd.index('-S') + 1], str(self.root / 'with spaces/native/image'))
+        self.assertIn('-DQWENIMAGE_SOURCE_DIR=' + str(self.root / 'with spaces/.ci-src/qwenimage'), cmd)
         self.assertIn('-DNCNN_SIMPLEVK=ON', cmd)
 
     def test_unknown_component_rejected(self):
-        with self.assertRaises(ValueError):
-            configure_command('invalid', 'Linux', self.root)
+        with self.assertRaises(ValueError): configure_command('invalid', 'Linux', self.root)
 
     def test_find_binary_handles_visual_studio_release_directory(self):
         binary = self.root / 'build/ci-bridge/Release/ncnn_agent_bridge.exe'
-        binary.parent.mkdir(parents=True)
-        binary.write_bytes(b'locator test, not an executable')
+        binary.parent.mkdir(parents=True);binary.write_bytes(b'locator test, not an executable')
         self.assertEqual(find_binary('bridge', self.root, 'Windows'), binary.resolve())
 
     def test_missing_or_empty_binary_rejected(self):
-        with self.assertRaises(RuntimeError):
-            find_binary('image', self.root, 'Linux')
+        with self.assertRaises(RuntimeError): find_binary('image', self.root, 'Linux')
         binary = self.root / 'build/ci-image/qwenimage-ncnn-vulkan'
-        binary.parent.mkdir(parents=True)
-        binary.touch()
-        with self.assertRaises(RuntimeError):
-            find_binary('image', self.root, 'Linux')
+        binary.parent.mkdir(parents=True);binary.touch()
+        with self.assertRaises(RuntimeError): find_binary('image', self.root, 'Linux')
 
     def test_failed_command_is_not_reported_as_passed(self):
         with self.assertRaisesRegex(RuntimeError, 'exit code'):
             run_logged([sys.executable, '-c', 'raise SystemExit(7)'], self.root / 'failed.log')
 
     def test_smoke_diagnostic_cannot_be_satisfied_by_command_echo(self):
-        # The required word exists in ARGV only, not in actual program output.
         with self.assertRaisesRegex(RuntimeError, 'not emitted'):
-            run_logged([sys.executable, '-c', 'pass # UNIQUE_DIAGNOSTIC'],
-                       self.root / 'no-output.log', contains='UNIQUE_DIAGNOSTIC')
+            run_logged([sys.executable, '-c', 'pass # UNIQUE_DIAGNOSTIC'],self.root / 'no-output.log', contains='UNIQUE_DIAGNOSTIC')
 
     def test_real_subprocess_output_is_logged_and_checked(self):
-        result = run_logged([sys.executable, '-c', "print('helper executed')"],
-                            self.root / 'ok.log', contains='helper executed')
+        result = run_logged([sys.executable, '-c', "print('helper executed')"],self.root / 'ok.log', contains='helper executed')
         self.assertEqual(result['returncode'], 0)
         self.assertTrue((self.root / 'ok.log').is_file())
 
 
-if __name__ == '__main__':
-    unittest.main()
+if __name__ == '__main__': unittest.main()
