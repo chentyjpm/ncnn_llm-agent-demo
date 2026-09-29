@@ -12,6 +12,7 @@
 #include <nlohmann/json.hpp>
 #include "ncnn_llm_gpt.h"
 #include "utils/prompt.h"
+#include "cli_options.h"
 #ifdef _WIN32
 #include <fcntl.h>
 #include <io.h>
@@ -59,8 +60,8 @@ int main(int argc, char** argv) {
             const std::string a = argv[i];
             if (a == "--vulkan") vulkan = true;
             else if (a == "--model" && i + 1 < argc) model_path = argv[++i];
-            else if (a == "--threads" && i + 1 < argc) threads = std::stoi(argv[++i]);
-            else if (a == "--vulkan-device" && i + 1 < argc) device = std::stoi(argv[++i]);
+            else if (a == "--threads" && i + 1 < argc) threads = parse_cli_integer(argv[++i], "--threads", 1, 128);
+            else if (a == "--vulkan-device" && i + 1 < argc) device = parse_cli_integer(argv[++i], "--vulkan-device", 0, std::numeric_limits<int>::max());
             else throw std::runtime_error("Unsupported/incomplete bridge argument: " + a);
         }
         if (model_path.empty() || !std::filesystem::is_regular_file(std::filesystem::path(model_path) / "model.json"))

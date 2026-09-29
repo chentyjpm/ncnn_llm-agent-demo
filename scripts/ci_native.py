@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -95,6 +96,56 @@ def run_logged(argv: list[str], log: Path, *, codes: tuple[int, ...] = (0,),
     return {'argv': argv, 'returncode': proc.returncode, 'elapsed_seconds': round(time.monotonic() - started, 3)}
 
 
+def validate_submodules(output: str) -> list[str]:
+    """A successful git command does not imply initialized, pinned submodules."""
+    lines = [line for line in output.splitlines() if line.strip()]
+    for line in lines:
+        if not re.fullmatch(r' [0-9a-f]{40} .+', line):
+            raise RuntimeError(f'Uninitialized, mismatched, conflicted or malformed submodule: {line}')
+    return lines
+
+
+def load_state(path: Path, component: str, stage: str, env: dict | None = None) -> dict:
+    env = os.environ if env is None else env
+    identity = {'component': component, 'commit': env.get('GITHUB_SHA', 'local-checkout'),
+                'run_id': env.get('GITHUB_RUN_ID', 'local'),
+                'run_attempt': env.get('GITHUB_RUN_ATTEMPT', 'local')}
+    previous = json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
+    if stage != 'refs' and previous and all(previous.get(k) == v for k, v in identity.items()):
+        if not isinstance(previous.get('stages'), dict):
+            raise RuntimeError('Malformed CI stage state')
+        return previous
+    return {**identity, 'platform': platform.platform(), 'machine': platform.machine(),
+            'scope': SCOPE, 'model_inference': 'not_run', 'gpu_execution': 'not_run',
+            'stages': {}, 'old_evidence_discarded': bool(previous)}
+
+
+def begin_stage(state: dict, stage: str) -> None:
+    order = ('refs', 'configure', 'build', 'smoke', 'package')
+    index = order.index(stage)
+    for later in order[index + 1:]:
+        state['stages'].pop(later, None)
+    if stage in ('configure', 'build'):
+        state.pop('built_binary_sha256', None)
+    if stage in ('configure', 'build', 'smoke'):
+        state.pop('smoke_binary_sha256', None)
+        state.pop('startup_checks', None)
+    for required in {'build': ('configure',), 'smoke': ('configure', 'build'),
+                     'package': ('configure', 'build', 'smoke')}.get(stage, ()):
+        if state['stages'].get(required, {}).get('status') != 'passed':
+            raise RuntimeError(f'Cannot run {stage} without a successful {required} stage in this run')
+    state['stages'][stage] = {'status': 'running'}
+
+
+def checked_digest(binary: Path, state: dict, *, require_smoke: bool = False) -> str:
+    digest = hashlib.sha256(binary.read_bytes()).hexdigest()
+    if digest != state.get('built_binary_sha256'):
+        raise RuntimeError('Binary differs from the executable built in this run')
+    if require_smoke and digest != state.get('smoke_binary_sha256'):
+        raise RuntimeError('Binary differs from the executable tested in this run')
+    return digest
+
+
 def verify_sources(component: str, pins: dict, evidence: Path) -> dict:
     names = ('ncnn_llm', 'ncnn', 'json') if component == 'bridge' else ('qwenimage',)
     result = {}
@@ -107,6 +158,13 @@ def verify_sources(component: str, pins: dict, evidence: Path) -> dict:
         result[name] = {'repository': REPOSITORIES[name], 'commit': got}
         run_logged(['git', '-C', str(directory), 'submodule', 'status', '--recursive'],
                    evidence / f'submodules-{name}.log', timeout=60)
+        status_text = (evidence / f'submodules-{name}.log').read_text(encoding='utf-8').partition('\n')[2]
+        result[name]['submodules_verified'] = len(validate_submodules(status_text))
+        dirty = subprocess.check_output(['git', '-C', str(directory), 'status', '--porcelain',
+                                         '--untracked-files=no', '--ignore-submodules=none'],
+                                        text=True, timeout=60).strip()
+        if dirty:
+            raise RuntimeError(f'Modified dependency checkout: {name}: {dirty}')
     if component == 'image':
         got = subprocess.check_output(['git', '-C', str(ROOT / '.ci-src/qwenimage/src/ncnn'),
                                        'rev-parse', 'HEAD'], text=True, timeout=30).strip()
@@ -125,11 +183,7 @@ def main() -> int:
     evidence = ROOT / 'reports/ci' / component
     evidence.mkdir(parents=True, exist_ok=True)
     state_file = evidence / 'status.json'
-    state = json.loads(state_file.read_text(encoding='utf-8')) if state_file.exists() else {
-        'component': component, 'platform': platform.platform(), 'machine': platform.machine(),
-        'commit': os.environ.get('GITHUB_SHA', 'local-checkout'), 'scope': SCOPE,
-        'model_inference': 'not_run', 'gpu_execution': 'not_run', 'stages': {},
-    }
+    state = load_state(state_file, component, stage)
     build = ROOT / f'build/ci-{component}'
     if stage == 'summary':
         lines = [f'## Native {component}: {state["platform"]}', '', SCOPE, '']
@@ -142,9 +196,9 @@ def main() -> int:
                 f.write(text)
         print(text)
         return 0
-    state['stages'][stage] = {'status': 'running'}
-    state_file.write_text(json.dumps(state, indent=2) + '\n', encoding='utf-8')
     try:
+        begin_stage(state, stage)
+        state_file.write_text(json.dumps(state, indent=2) + '\n', encoding='utf-8')
         pins = read_pins()
         if stage == 'refs':
             if os.environ.get('GITHUB_OUTPUT'):
@@ -158,10 +212,13 @@ def main() -> int:
             run_logged(configure_command(component, platform.system()), evidence / 'configure.log', timeout=600)
         elif stage == 'build':
             run_logged(['cmake', '--build', str(build), '--config', 'Release', '--parallel', '2',
-                        '--target', TARGETS[component]], evidence / 'build.log')
+                        '--target', TARGETS[component]] + (['bridge_cli_tests'] if component == 'bridge' else []),
+                       evidence / 'build.log')
             state['binary'] = str(find_binary(component))
+            state['built_binary_sha256'] = hashlib.sha256(Path(state['binary']).read_bytes()).hexdigest()
         elif stage == 'smoke':
             binary = str(find_binary(component))
+            checked_digest(Path(binary), state)
             if component == 'bridge':
                 run_logged(['ctest', '--test-dir', str(build), '-C', 'Release', '--output-on-failure',
                             '--no-tests=error'], evidence / 'ctest.log', timeout=120)
@@ -173,19 +230,27 @@ def main() -> int:
             else:
                 run_logged([binary, '-h'], evidence / 'help.log',
                            contains='Usage: qwenimage-ncnn-vulkan', timeout=30)
+            run_logged([sys.executable, str(ROOT / 'scripts/native_regression.py'),
+                        '--component', component, '--binary', binary,
+                        '--output', str(evidence / 'native-test-results.json')],
+                       evidence / 'native-regression.log', timeout=300)
+            state['smoke_binary_sha256'] = checked_digest(Path(binary), state)
             state['startup_checks'] = 'passed; no model was loaded'
         elif stage == 'package':
             for required in ('configure', 'build', 'smoke'):
                 if state['stages'].get(required, {}).get('status') != 'passed':
                     raise RuntimeError(f'Cannot package without a successful {required} stage')
             binary = find_binary(component)
-            state['binary_sha256'] = hashlib.sha256(binary.read_bytes()).hexdigest()
+            state['binary_sha256'] = checked_digest(binary, state, require_smoke=True)
             out = ROOT / 'dist/ci'
             out.mkdir(parents=True, exist_ok=True)
-            package_dir = out / component
-            package_dir.mkdir(exist_ok=True)
+            # A fresh staging directory prevents stale files entering a new artifact.
+            package_dir = Path(tempfile.mkdtemp(prefix=component + '-payload-', dir=out))
             shutil.copy2(binary, package_dir / binary.name)
-            (package_dir / 'BUILD_INFO.json').write_text(json.dumps(state, indent=2) + '\n', encoding='utf-8')
+            metadata = json.loads(json.dumps(state))
+            metadata['stages'].pop('package', None)
+            metadata['package_note'] = 'Validated payload snapshot; final archive outcome is in the CI status.json.'
+            (package_dir / 'BUILD_INFO.json').write_text(json.dumps(metadata, indent=2) + '\n', encoding='utf-8')
             (package_dir / 'README.txt').write_text(SCOPE + '\nCI binary; no weights bundled. OpenMP disabled.\n'
                 'Not a portable release or a performance benchmark; system/GPU drivers may still be required.\n', encoding='utf-8')
             shutil.copy2(ROOT / 'THIRD_PARTY.md', package_dir / 'THIRD_PARTY.md')
@@ -199,9 +264,28 @@ def main() -> int:
                     target.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(source, target)
             archive = out / f'{component}-{platform.system().lower()}-{platform.machine().lower()}.tar.gz'
-            with tarfile.open(archive, 'w:gz') as tar:
+            temporary_archive = archive.with_name(archive.name + '.tmp')
+            with tarfile.open(temporary_archive, 'w:gz') as tar:
                 tar.add(package_dir, arcname=component)
+            # Retest the archived bytes, not the build-directory executable.
+            with tempfile.TemporaryDirectory(prefix='archive-smoke-') as tmp:
+                restored = Path(tmp) / binary.name
+                with tarfile.open(temporary_archive, 'r:gz') as tar:
+                    member = tar.getmember(f'{component}/{binary.name}')
+                    if not member.isfile():
+                        raise RuntimeError('Archive executable is not a regular file')
+                    with tar.extractfile(member) as src:
+                        restored.write_bytes(src.read())
+                    restored.chmod(member.mode & 0o755)
+                checked_digest(restored, state, require_smoke=True)
+                run_logged([sys.executable, str(ROOT / 'scripts/native_regression.py'),
+                            '--component', component, '--binary', str(restored),
+                            '--output', str(evidence / 'packaged-native-test-results.json')],
+                           evidence / 'packaged-regression.log', timeout=300)
+            os.replace(temporary_archive, archive)
+            shutil.rmtree(package_dir)
             state['archive'] = archive.name
+            state['archive_sha256'] = hashlib.sha256(archive.read_bytes()).hexdigest()
         state['stages'][stage] = {'status': 'passed'}
         returncode = 0
     except Exception as exc:

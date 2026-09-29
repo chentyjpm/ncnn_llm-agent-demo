@@ -8,6 +8,8 @@ on:
       - 'native/**'
       - 'ci/**'
       - 'scripts/ci_native.py'
+      - 'scripts/native_regression.py'
+      - 'tests/test_ci*.py'
       - 'upstream-lock.json'
   pull_request:
     branches: [main]
@@ -16,6 +18,8 @@ on:
       - 'native/**'
       - 'ci/**'
       - 'scripts/ci_native.py'
+      - 'scripts/native_regression.py'
+      - 'tests/test_ci*.py'
       - 'upstream-lock.json'
   workflow_dispatch:
 
