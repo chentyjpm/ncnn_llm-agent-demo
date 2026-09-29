@@ -63,7 +63,7 @@ def self_test(output: Path):
     from .paths import Workspace
     from .process import run_process
     from .model_hub import digest
-    from .device import select, engine_env
+    from .device import select, engine_env, probe as run_probe
     report = {'frozen': bool(getattr(sys, 'frozen', False)), 'platform': platform.platform(),
               'engines': {}, 'documents': {}, 'model_inference': 'not_run', 'ok': False}
     try:
@@ -85,10 +85,18 @@ def self_test(output: Path):
                 probe = p.with_name('ncnn_device_probe.exe' if os.name == 'nt' else 'ncnn_device_probe')
                 if digest(probe) != info['engines'][kind]['probe_sha256']:
                     raise RuntimeError('Bundled probe checksum mismatch')
-                selection = select({'command': [str(p)], 'device': 'auto'}, kind)
-                if selection['reason'] in ('probe_unavailable', 'matching_probe_missing'):
-                    raise RuntimeError('Bundled Vulkan probe failed: ' + selection['reason'])
-                report['engines'][kind] = {'passed': passed, 'sha256': sha, 'result': result, 'device_selection': selection}
+                # Preserve the actual probe report BEFORE declaring failure. A
+                # windowed frozen app has no stderr console; an abbreviated
+                # reason alone otherwise hides dyld/driver/protocol failures.
+                capabilities = run_probe([str(p)])
+                selection = select({'command': [str(p)], 'device': 'auto'}, kind, report=capabilities)
+                probe_ok = selection['reason'] not in ('probe_unavailable', 'matching_probe_missing')
+                report['engines'][kind] = {'passed': passed and probe_ok, 'sha256': sha,
+                    'result': result, 'probe_report': capabilities, 'device_selection': selection,
+                    'executable': str(p.resolve()), 'probe_path': str(probe.resolve()),
+                    'driver_environment': engine_env([str(p)])}
+                if not probe_ok:
+                    report.setdefault('failures', []).append(kind + ': ' + selection['reason'] + ': ' + capabilities.get('detail', ''))
             docs = DocumentTools(Workspace(root / 'documents'))
             for fmt in ('md', 'docx', 'xlsx', 'pptx'):
                 made = docs.create(fmt, '# Test\n\nHello local documents\n\n| Name | Value |\n| --- | --- |\n| CHECK | 42 |', 'Bundle verification')
