@@ -54,6 +54,10 @@ def exercise(dashboard,output,stem):
                 from PIL import ImageGrab
                 x,y=root.winfo_rootx(),root.winfo_rooty()
                 ImageGrab.grab(bbox=(x,y,x+root.winfo_width(),y+root.winfo_height())).save(output/f'{stem}-{index}.png')
+                if dashboard.scrollbar.winfo_manager():
+                    dashboard.viewport.yview_moveto(1);root.update()
+                    ImageGrab.grab(bbox=(x,y,x+root.winfo_width(),y+root.winfo_height())).save(output/f'{stem}-{index}-panel.png')
+                    dashboard.viewport.yview_moveto(0);root.update()
             except OSError as exc:
                 records.append({'screenshot_unavailable':str(exc)})
         records.append({'panel':index,'geometry':current})

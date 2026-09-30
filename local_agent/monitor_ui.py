@@ -29,7 +29,11 @@ class Dashboard:
         p = self.t.p
         self.root.title('Local Agent · 后台管理')
         sw,sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
-        self.root.geometry(f'{min(p(1240),sw-50)}x{min(p(870),sh-90)}')
+        width,height=min(p(1240),sw-50),min(p(870),sh-90)
+        # Explicit initial placement keeps the capped window above the taskbar
+        # on a 1024x768 runner as well as on larger end-user desktops.
+        x,y=max(8,(sw-width)//2),max(8,(sh-height-60)//2)
+        self.root.geometry(f'{width}x{height}+{x}+{y}')
         self.root.minsize(min(p(880),sw-50), min(p(650),sh-90))
         self.root.configure(bg=C['bg'])
         self.root.protocol('WM_DELETE_WINDOW', self.on_close)
@@ -247,7 +251,7 @@ class Dashboard:
         p=self.t.p
         width=max(1,self.viewport.winfo_width())
         self.viewport.itemconfigure(self.window,width=width)
-        columns=4 if width/self.t.scale>=970 else 2
+        columns=4 if width/self.t.scale>=940 else 2
         if columns!=self._card_columns:
             self._card_columns=columns
             for i in range(4):self.card_grid.columnconfigure(i,weight=1 if i<columns else 0,uniform='cards' if i<columns else '')
