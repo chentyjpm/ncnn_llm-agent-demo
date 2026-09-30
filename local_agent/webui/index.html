@@ -76,7 +76,17 @@
         <div id="attachments" class="attachments"></div>
         <label for="message-input" class="sr-only">消息</label>
         <textarea id="message-input" placeholder="发消息，或交给 Agent 处理文件…" rows="2" maxlength="12000"></textarea>
-        <div class="composer-toolbar"><div class="composer-tools"><button id="upload-button" type="button" class="icon-button" aria-label="上传文件" title="上传文件，单个文件不超过 8 MiB"><svg class="icon"><use href="#i-plus"/></svg></button><input id="file-input" type="file" hidden multiple><div class="mode-switch" aria-label="运行模式"><button id="mode-chat" type="button" class="mode-button active" aria-pressed="true"><svg class="icon"><use href="#i-chat"/></svg>对话</button><button id="mode-agent" type="button" class="mode-button" aria-pressed="false"><svg class="icon"><use href="#i-spark"/></svg>Agent</button></div></div><div class="composer-actions"><span id="mode-hint">直接回答，不调用工具</span><button id="send-button" type="submit" class="send-button" aria-label="发送消息" disabled><svg class="icon"><use href="#i-arrow"/></svg></button><button id="stop-button" type="button" class="send-button stop" aria-label="停止任务" hidden><span></span></button></div></div>
+        <div id="image-options" class="image-options" hidden>
+          <div class="image-mode-note" id="image-mode-note">Qwen Image 独立生图 · 不需要文字模型 · 提交后仍需逐次确认</div>
+          <div class="image-parameters">
+            <label>宽度<select id="image-width"><option>256</option><option selected>512</option><option>768</option><option>1024</option></select></label>
+            <label>高度<select id="image-height"><option>256</option><option selected>512</option><option>768</option><option>1024</option></select></label>
+            <label>步数<input id="image-steps" type="number" min="1" max="100" value="40"></label>
+            <label>种子<input id="image-seed" type="number" min="0" max="2147483647" placeholder="随机"></label>
+          </div>
+          <small>参考图通过附件上传。少步数仅适合诊断；4 步不等于加载了加速 LoRA。</small>
+        </div>
+        <div class="composer-toolbar"><div class="composer-tools"><button id="upload-button" type="button" class="icon-button" aria-label="上传文件" title="上传文件，单个文件不超过 8 MiB"><svg class="icon"><use href="#i-plus"/></svg></button><input id="file-input" type="file" hidden multiple><div class="mode-switch" aria-label="运行模式"><button id="mode-chat" type="button" class="mode-button active" aria-pressed="true"><svg class="icon"><use href="#i-chat"/></svg>对话</button><button id="mode-agent" type="button" class="mode-button" aria-pressed="false"><svg class="icon"><use href="#i-spark"/></svg>Agent</button><button id="mode-image" type="button" class="mode-button" aria-pressed="false"><svg class="icon"><use href="#i-spark"/></svg>生图</button></div></div><div class="composer-actions"><span id="mode-hint">直接回答，不调用工具</span><button id="send-button" type="submit" class="send-button" aria-label="发送消息" disabled><svg class="icon"><use href="#i-arrow"/></svg></button><button id="stop-button" type="button" class="send-button stop" aria-label="停止任务" hidden><span></span></button></div></div>
       </form>
       <p class="composer-footnote">本地模型也可能出错，请核实重要信息。<span>Enter 发送 · Shift + Enter 换行</span></p>
     </footer>
@@ -100,9 +110,11 @@
   <div class="dialog-header"><div><h2>安装与模型</h2><p>引擎随应用安装，模型下载后自动接入。</p></div><button id="close-setup" class="icon-button" aria-label="关闭模型中心">×</button></div>
   <div id="engine-status" class="setting-note"></div>
   <div id="source-controls" class="source-controls">
-    <label>下载来源<select id="model-source" aria-label="模型下载来源"><option value="modelscope">ModelScope 魔搭</option><option value="huggingface">Hugging Face</option></select></label>
-    <label>模型类型<select id="model-filter" aria-label="模型类型"><option value="all">全部模型</option><option value="llm">文本 / 代码</option><option value="image">图像生成</option></select></label>
+    <label>下载来源<select id="model-source" aria-label="模型下载来源"><option value="modelscope">ModelScope 魔搭</option><option value="huggingface">Hugging Face</option><option value="sdu">ncnn 上游镜像（SDU）</option></select></label>
+    <label>模型类型<select id="model-filter" aria-label="模型类型"><option value="all">全部模型</option><option value="llm">文本 / 代码</option><option value="image">图像生成</option><option value="code">代码模型</option><option value="light">轻量模型</option><option value="native">ncnn 原生格式</option><option value="installed">已安装</option><option value="pending">待接入能力</option></select></label>
   </div>
+  <div class="catalog-search"><input id="model-search" type="search" aria-label="搜索模型" placeholder="搜索 Qwen / MiniCPM / Youtu / 代码…"><span id="model-count"></span></div>
+  <div id="active-models" class="active-models"></div>
   <p class="setting-note">“准备下载”先查询所选来源的文件大小，确认后才开始下载。切换来源不会自动替换模型或发起下载。</p>
   <div id="model-progress-box" class="model-progress-box" hidden>
     <strong id="model-progress" role="status" aria-live="polite"></strong>

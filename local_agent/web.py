@@ -25,6 +25,9 @@ from .backends import NcnnBridgeBackend, NcnnCLIBackend
 from .cli import doctor, make_runtime
 from .paths import Workspace, PolicyError
 from .process import kill_tree
+from .image_tasks import route_request, image_ready, plan_image, image_artifacts
+from .images import ImageRunner
+from .tools import make_registry, Registry
 
 ASSETS = Path(__file__).with_name('webui')
 MAX_UPLOAD = 8 * 1024 * 1024
@@ -118,6 +121,7 @@ class Run:
     condition: threading.Condition = field(default_factory=threading.Condition)
     approval: dict | None = None
     backend: object = None
+    image_plan: dict | None = None
 
     def emit(self, kind: str, **data):
         with self.condition:
@@ -208,6 +212,10 @@ class WebApp:
         result['managed_install'] = self.model_hub is not None
         if self.model_hub is not None:
             result['ready'] = result['ready'] and 'llm' in self.model_hub.active()
+        result['image_ready'] = image_ready(self.config.get('image', {}))
+        if self.model_hub is not None:
+            result['image_ready'] = result['image_ready'] and 'image' in self.model_hub.active()
+        result['image_model'] = Path(self.config.get('image', {}).get('model', '')).name or '未配置'
         result['features'] = {'python': self.config.get('python', {}).get('mode', 'disabled'),
                               'commands': bool(self.flags.allow_commands), 'mcp': bool(self.flags.trust_mcp),
                               'images': bool(self.config.get('image', {}).get('enabled'))}
@@ -225,9 +233,9 @@ class WebApp:
 
     def submit(self, sid: str, payload: dict) -> dict:
         question = text(payload.get('message'), 12000, 'message')
-        mode = payload.get('mode', 'chat')
-        if mode not in ('chat', 'agent'):
-            raise WebError('mode must be chat or agent')
+        mode, image_prompt = route_request(question, payload.get('mode', 'chat'))
+        if mode != 'image' and payload.get('image_options'):
+            raise WebError('生图参数只能在生图模式使用')
         tokens = payload.get('max_new_tokens', 512)
         if type(tokens) is not int or not 32 <= tokens <= 4096:
             raise WebError('max_new_tokens must be 32..4096')
@@ -242,9 +250,13 @@ class WebApp:
                 raise WebError('另一个任务正在运行，请先完成或停止它。', 409)
             if len(s['messages']) >= 100:
                 raise WebError('本对话已达 50 轮，请新建对话。', 409)
-            if not self.info()['ready']:
+            runtime = self.info()
+            if mode == 'image' and not runtime['image_ready']:
+                raise WebError('生图模型未就绪。请在“安装与模型”中安装并启用 Qwen Image；不需要先安装文字模型。', 503)
+            if mode != 'image' and not runtime['ready']:
                 raise WebError('模型未就绪。请在安装与模型中安装文字模型；源码模式请检查 llm.command 和 llm.model。不会使用假模型兜底。', 503)
             ws = self.ws(sid)
+            image_plan = plan_image(ws, image_prompt, payload.get('image_options'), attachments) if mode == 'image' else None
             context = ''
             for attachment in attachments:
                 p = ws.path(attachment)
@@ -289,7 +301,7 @@ class WebApp:
             for old in list(self.runs)[:-31]:
                 if self.runs[old].status in TERMINAL:
                     del self.runs[old]
-            run = Run(rid, sid, mid, mode)
+            run = Run(rid, sid, mid, mode, image_plan=image_plan)
             self.runs[rid], self.active = run, rid
             threading.Thread(target=self._work, args=(run, question + context, history, tokens), daemon=True).start()
             return {'run_id': rid, 'session': s}
@@ -302,16 +314,34 @@ class WebApp:
             if run.stop.is_set():
                 raise OperationCancelled('Stopped')
             cfg = copy.deepcopy(self.config)
-            cfg['llm']['max_new_tokens'] = tokens
+            cfg.setdefault('llm', {})['max_new_tokens'] = tokens
             classes = {'ncnn_bridge': NcnnBridgeBackend, 'ncnn_cli': NcnnCLIBackend}
-            if self.factory:
-                backend = self.factory(cfg['llm'])
-            else:
-                backend = classes[cfg['llm']['backend']](cfg['llm'], Path(__file__).resolve().parents[1])
-            run.backend = backend
+            if run.mode != 'image':
+                if self.factory:
+                    backend = self.factory(cfg['llm'])
+                else:
+                    backend = classes[cfg['llm']['backend']](cfg['llm'], Path(__file__).resolve().parents[1])
+                run.backend = backend
             if run.stop.is_set():
                 raise OperationCancelled('Stopped before inference')
-            if run.mode == 'chat':
+            if run.mode == 'image':
+                # Explicit deterministic route: never call a fake/planning text model.
+                ws = self.ws(run.session_id)
+                image = ImageRunner(ws, cfg['image'])
+                run.backend = image
+                registry = Registry()
+                registry.add(make_registry(ws, image_runner=image).tools['images.generate'])
+                audit.add('start', backend='QWEN_IMAGE_DIRECT', task=task, routing='explicit_image_mode')
+                audit.add('tool_start', step=1, tool='images.generate', arguments=run.image_plan)
+                result = ConfirmedRegistry(registry, run).call('images.generate', run.image_plan)
+                audit.add('tool_result', step=1, tool='images.generate', arguments=run.image_plan, result=result)
+                if not result['ok']:
+                    raise RuntimeError(result.get('error') or str(result.get('result', {}).get('error') or 'Qwen Image 执行失败，请展开工具记录'))
+                cards = image_artifacts(ws, audit.events)
+                if not cards:
+                    raise RuntimeError('工具未返回可验证的图片文件')
+                content, state = '图片已生成：' + cards[0]['path'], 'completed'
+            elif run.mode == 'chat':
                 audit.add('model_start', step=1)
                 messages = [{'role': 'system', 'content': 'You are a helpful local assistant. Answer in the user\'s language. '
                             'You have no tools in this chat mode. Do not claim to execute code or modify files. '
@@ -343,10 +373,15 @@ class WebApp:
                         resource.close()
                 except Exception as exc:
                     state, content = 'failed', f'Cleanup failed: {type(exc).__name__}: {exc}'
+            try:
+                artifacts = image_artifacts(self.ws(run.session_id), audit.events)
+            except Exception as exc:
+                artifacts = []
+                state, content = 'failed', f'图片文件验证失败：{exc}'
             with self.lock:
                 s = self.sessions.get(run.session_id)
                 message = next(m for m in s['messages'] if m['id'] == run.message_id)
-                message.update(device_selection=getattr(backend, 'device_selection', None), content=content[:131072], state=state,
+                message.update(artifacts=artifacts, device_selection=getattr(run.backend, 'device_selection', None), content=content[:131072], state=state,
                     trace=copy.deepcopy(run.events), elapsed_seconds=round(time.time() - message['time'], 2))
                 s['active_run'] = None
                 self.sessions.save(s)

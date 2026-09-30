@@ -11,8 +11,8 @@ function toast(message){$('toast').textContent=message;$('toast').hidden=false;c
 function notice(message){$('notice').textContent=message;$('notice').hidden=!message;}
 async function api(path,method='GET',data){const r=await fetch(path,{method,headers:{'X-Agent-Token':state.token,...(data!==undefined?{'Content-Type':'application/json'}:{})},body:data!==undefined?JSON.stringify(data):undefined});let body;try{body=await r.json();}catch{throw Error('服务返回了无法识别的数据，请检查终端日志。');}if(!r.ok)throw Error(body.error||`请求失败 (${r.status})`);return body;}
 function safe(fn){return (...args)=>Promise.resolve().then(()=>fn(...args)).catch(e=>toast(e.message));}
-function setMode(mode){state.mode=mode;for(const v of ['chat','agent']){$('mode-'+v).classList.toggle('active',v===mode);$('mode-'+v).setAttribute('aria-pressed',String(v===mode));}$('mode-hint').textContent=mode==='chat'?'直接回答，不调用工具':'写入与执行前需要确认';}
-function controls(){const busy=!!state.run||!!state.sending;$('send-button').hidden=!!state.run;$('stop-button').hidden=!state.run;$('send-button').disabled=busy||!state.runtime?.ready||!$('message-input').value.trim()||state.uploading;$('upload-button').disabled=busy||state.uploading;$('mode-chat').disabled=busy;$('mode-agent').disabled=busy;}
+function setMode(mode){if(!['chat','agent','image'].includes(mode))return;state.mode=mode;for(const v of ['chat','agent','image']){$('mode-'+v).classList.toggle('active',v===mode);$('mode-'+v).setAttribute('aria-pressed',String(v===mode));}$('mode-hint').textContent=mode==='chat'?'直接回答，不调用工具':mode==='image'?'Qwen Image · 确认后生成':'写入与执行前需要确认';controls();}
+function controls(){const busy=!!state.run||!!state.sending;const image=state.mode==='image'||/^\s*\/image(?:\s|$)/.test($('message-input').value);const ready=image?state.runtime?.image_ready:state.runtime?.ready;$('send-button').hidden=!!state.run;$('stop-button').hidden=!state.run;$('send-button').disabled=busy||!ready||!$('message-input').value.trim()||state.uploading;$('upload-button').disabled=busy||state.uploading;for(const m of ['chat','agent','image'])$('mode-'+m).disabled=busy;$('image-options').hidden=!image;for(const id of ['image-width','image-height','image-steps','image-seed'])$(id).disabled=busy;$('image-mode-note').textContent=state.runtime?.image_ready?'Qwen Image 独立生图 · 不需要文字模型 · 提交后仍需逐次确认':'请在“安装与模型”中安装并启用 Qwen Image。当前不能生图，不会使用假图片兜底。';}
 function closeSidebar() {document.body.classList.remove('sidebar-open');$('mobile-scrim').hidden=true;}
 function toggleSidebar(){if(innerWidth<=800){const open=document.body.classList.toggle('sidebar-open');$('mobile-scrim').hidden=!open;}else document.body.classList.toggle('sidebar-collapsed');}
 function setTheme(theme){document.documentElement.dataset.theme=theme;storage.set('local-agent-theme',theme);}
@@ -46,14 +46,14 @@ function traceView(events){const root=el('div','trace');root.append(el('div','tr
 function approvalView(){const a=state.approval;const card=el('div','approval-card');card.append(el('strong','','需要你确认 · '+a.tool),el('p','','请核对下面的参数。仅允许这一次调用；拒绝或超时将阻止执行。'),el('pre','',JSON.stringify(a.arguments,null,2)));const actions=el('div','approval-actions');const decide=allow=>safe(async()=>{await api(`/api/runs/${state.run}/approve`,'POST',{approval_id:a.id,allow});state.approval=null;renderMessages();});actions.append(button('拒绝',null,decide(false),'soft-button'),button('允许这一次',null,decide(true),'primary-button'));card.append(actions);return card;}
 function renderMessages(){const scroll=$('scroll-area');const near=scroll.scrollHeight-scroll.scrollTop-scroll.clientHeight<130;const opened=[...$('messages').querySelectorAll('details[open]')].map(x=>x.dataset.step);const list=$('messages');list.replaceChildren();const messages=state.session?.messages||[];$('welcome').hidden=messages.length>0;
   for(const m of messages){const article=el('article','message '+m.role);article.dataset.messageId=m.id;const content=el('div','message-content');if(m.role==='user'){content.textContent=m.content;article.append(content);if(m.attachments?.length){const links=el('div','attachments');for(const p of m.attachments)links.append(button(p.split('/').pop(),'file',safe(()=>openFilesAt(p)),'attachment-chip'));article.append(links);}}
-    else {const label=el('div','message-label');label.append(icon('spark'),el('span','','Local Agent'));if(m.mode==='agent')label.append(el('span','badge','AGENT'));article.append(label);
+    else {const label=el('div','message-label');label.append(icon('spark'),el('span','','Local Agent'));if(m.mode==='agent'||m.mode==='image')label.append(el('span','badge',m.mode==='image'?'QWEN IMAGE':'AGENT'));article.append(label);
       const running=state.run&&state.runSession===state.session.id&&m.run_id===state.run;
       const traces=running?state.traces:m.trace||[];
       if(traces.some(e=>e.event==='tool_start'||e.event==='format_error'))article.append(traceView(traces));
       if(running&&state.approval)article.append(approvalView());
-      if((running||m.state==='running')&&!m.content){const pending=el('div','pending-text');pending.append(el('span','spinner'),el('span','',state.approval?'等待你的确认':state.stopping?'正在停止，等待当前操作结束…':'正在处理 · 模型完成本轮后显示回答'));content.append(pending);}
+      if((running||m.state==='running')&&!m.content){const pending=el('div','pending-text');pending.append(el('span','spinner'),el('span','',state.approval?'等待你的确认':state.stopping?'正在停止，等待当前操作结束…':m.mode==='image'?'Qwen Image 正在处理 · 请等待真实生成结果':'正在处理 · 模型完成本轮后显示回答'));content.append(pending);}
       else {if(m.state==='failed'||m.state==='cancelled')content.classList.add('error-text');content.append(markdown(m.content));}
-      article.append(content);if(m.content){const actions=el('div','message-actions');actions.append(button('复制回答','copy',safe(async()=>{await navigator.clipboard.writeText(m.content);toast('回答已复制');})));if(m.state==='failed'){actions.append(button('重试最后一条消息',null,()=>{const last=[...messages].reverse().find(x=>x.role==='user');if(last){$('message-input').value=last.content;controls();$('message-input').focus();}},'soft-button'));}actions.append(el('span','',m.elapsed_seconds?`${m.elapsed_seconds} 秒`:'本地回复'));article.append(actions);}
+      article.append(content);if(m.artifacts?.length){const gallery=el('div','generated-images');for(const item of m.artifacts)if(item.kind==='image'&&item.source_tool==='images.generate')gallery.append(imageCard(item,state.session.id));article.append(gallery);}if(m.content){const actions=el('div','message-actions');actions.append(button('复制回答','copy',safe(async()=>{await navigator.clipboard.writeText(m.content);toast('回答已复制');})));if(m.state==='failed'){actions.append(button('重试最后一条消息',null,()=>{const last=[...messages].reverse().find(x=>x.role==='user');if(last){$('message-input').value=last.content;controls();$('message-input').focus();}},'soft-button'));}actions.append(el('span','',m.elapsed_seconds?`${m.elapsed_seconds} 秒`:'本地回复'));article.append(actions);}
     }list.append(article);
   }
   for(const d of list.querySelectorAll('details'))if(opened.includes(d.dataset.step))d.open=true;
@@ -61,8 +61,8 @@ function renderMessages(){const scroll=$('scroll-area');const near=scroll.scroll
 }
 async function send(){
   if(state.run||state.sending)return toast('请先完成或停止当前任务。');
-  const message=$('message-input').value.trim();if(!message)return;if(!state.runtime?.ready)return toast('请先配置本地模型。');
-  const payload={message,mode:state.mode,max_new_tokens:Number($('token-limit').value),attachments:state.attachments.map(x=>x.path)};
+  const message=$('message-input').value.trim();if(!message)return;const image=state.mode==='image'||/^\s*\/image(?:\s|$)/.test(message);if(!(image?state.runtime?.image_ready:state.runtime?.ready))return toast(image?'请先安装并启用 Qwen Image。':'请先配置本地模型。');
+  const payload={message,mode:state.mode,max_new_tokens:Number($('token-limit').value),attachments:state.attachments.map(x=>x.path),...(image?{image_options:{width:Number($('image-width').value),height:Number($('image-height').value),steps:Number($('image-steps').value),...($('image-seed').value.trim()?{seed:Number($('image-seed').value)}:{})}}:{})};
   state.sending=true;controls();
   try{const s=await ensureSession();const submitted=await api(`/api/sessions/${s.id}/messages`,'POST',payload);
     if(state.session?.id===s.id){state.session=submitted.session;state.attachments=[];$('message-input').value='';$('message-input').rows=2;renderAttachments();renderMessages();}
@@ -85,7 +85,24 @@ async function watchRun(rid,sid){if(state.run)return;state.run=rid;state.runSess
 function renderAttachments(){const root=$('attachments');root.replaceChildren();for(const item of state.attachments){const chip=el('div','attachment-chip');chip.append(icon('file'),el('span','',item.name),button('移除附件','close',()=>{state.attachments=state.attachments.filter(x=>x!==item);renderAttachments();}));root.append(chip);}}
 async function upload(files){state.uploading=true;controls();try{const s=await ensureSession();for(const file of files){if(state.attachments.length>=10)throw Error('最多附加 10 个文件。');if(!file.size||file.size>8*1024*1024)throw Error('单个文件必须为 1 字节至 8 MiB。');const bytes=new Uint8Array(await file.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));const result=await api(`/api/sessions/${s.id}/upload`,'POST',{name:file.name,data:btoa(binary)});state.attachments.push(result);renderAttachments();}toast('文件已上传到当前对话工作区');if(!$('file-panel').hidden)await showFiles();}finally{state.uploading=false;$('file-input').value='';controls();}}
 function formatBytes(n){return n===null?'文件夹':n>=1048576?(n/1048576).toFixed(1)+' MB':n>=1024?(n/1024).toFixed(1)+' KB':n+' B';}
-async function getFile(path){const r=await fetch(`/api/sessions/${state.session.id}/download?path=${encodeURIComponent(path)}`,{headers:{'X-Agent-Token':state.token}});if(!r.ok){const e=await r.json();throw Error(e.error);}return r.blob();}
+async function getSessionFile(sid,path){const r=await fetch(`/api/sessions/${sid}/download?path=${encodeURIComponent(path)}`,{headers:{'X-Agent-Token':state.token}});if(!r.ok){const e=await r.json();throw Error(e.error);}return r.blob();}
+async function getFile(path){return getSessionFile(state.session.id,path);}
+const imageURLs=new Map();
+function imageCard(item,sid){
+ const card=el('figure','generated-image'),img=el('img');img.alt='Qwen Image 生成结果';img.loading='lazy';
+ const caption=el('figcaption');caption.append(el('strong','','Qwen Image'),el('span','',`${item.width} × ${item.height} · ${formatBytes(item.bytes)}`));
+ caption.append(button('下载图片','down',safe(async()=>saveBlob(await getSessionFile(sid,item.path),item.path.split('/').pop()))),button('查看文件','folder',safe(()=>{if(state.session?.id===sid)return openFilesAt(item.path);})));
+ card.append(img,caption);const key=sid+':'+item.path;
+ if(!imageURLs.has(key))imageURLs.set(key,getSessionFile(sid,item.path).then(blob=>{
+  if(!['image/png','image/jpeg','image/webp'].includes(item.mime))throw Error('不支持的图片预览格式');
+  return URL.createObjectURL(new Blob([blob],{type:item.mime}));
+ }).catch(e=>{imageURLs.delete(key);throw e;}));
+ imageURLs.get(key).then(url=>{if(img.isConnected)img.src=url;}).catch(e=>{if(card.isConnected)caption.append(el('span','error-text',e.message));});
+ // Keep the small local preview cache bounded; no auth tokens enter URLs/storage.
+ if(imageURLs.size>32){const [k,p]=imageURLs.entries().next().value;imageURLs.delete(k);p.then(u=>URL.revokeObjectURL(u)).catch(()=>{});}
+ return card;
+}
+window.addEventListener('beforeunload',()=>{for(const p of imageURLs.values())p.then(u=>URL.revokeObjectURL(u)).catch(()=>{});});
 function saveBlob(blob,name){const u=URL.createObjectURL(blob),a=el('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),3000);}
 async function preview(path){const blob=await getFile(path);$('file-preview').hidden=true;$('image-preview').hidden=true;if(state.previewURL)URL.revokeObjectURL(state.previewURL);
   const head=new Uint8Array(await blob.slice(0,12).arrayBuffer());let mime='';if(head[0]===137&&head[1]===80&&head[2]===78&&head[3]===71)mime='image/png';else if(head[0]===255&&head[1]===216&&head[2]===255)mime='image/jpeg';else if(String.fromCharCode(...head.slice(0,4))==='RIFF'&&String.fromCharCode(...head.slice(8,12))==='WEBP')mime='image/webp';
@@ -103,7 +120,7 @@ function showSettings(){const r=state.runtime||{};const root=$('runtime-details'
 async function boot(){try{const r=await api('/api/bootstrap');state.token=r.token;state.runtime=r.runtime;$('model-name').textContent=state.runtime.model;$('device-badge').textContent=state.runtime.device;$('connection-status').textContent=state.runtime.ready?'本机服务已连接':'模型未配置';if(state.runtime.test_fixture)notice('UI 自动化测试模式：这里的回复来自明确标记的测试后端，不是真实模型。');else if(!state.runtime.ready)notice('界面已就绪，模型尚未配置。打开「运行设置」查看启动方式。');await refreshSessions();const last=storage.get('local-agent-session');if(last&&state.sessions.some(s=>s.id===last))await loadSession(last);const active=state.sessions.find(s=>s.active_run);if(active&&!state.run)watchRun(active.active_run,active.id);}catch(e){notice('无法连接本地服务：'+e.message);$('connection-status').textContent='服务未连接';}controls();}
 $('new-chat').onclick=safe(newChat);$('toggle-sidebar').onclick=toggleSidebar;$('close-sidebar').onclick=closeSidebar;$('mobile-scrim').onclick=closeSidebar;$('session-search').oninput=renderSessions;
 $('theme-button').onclick=()=>setTheme(document.documentElement.dataset.theme==='dark'?'light':'dark');$('settings-button').onclick=showSettings;$('model-button').onclick=showSettings;$('close-settings').onclick=()=>$('settings-dialog').close();
-$('mode-chat').onclick=()=>setMode('chat');$('mode-agent').onclick=()=>setMode('agent');
+$('mode-chat').onclick=()=>setMode('chat');$('mode-agent').onclick=()=>setMode('agent');$('mode-image').onclick=()=>setMode('image');
 $('message-input').oninput=()=>{$('message-input').rows=Math.min(7,Math.max(2,$('message-input').value.split('\n').length));controls();};
 $('message-input').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();safe(send)();}});$('composer').onsubmit=e=>{e.preventDefault();safe(send)();};
 $('stop-button').onclick=safe(async()=>{await api(`/api/runs/${state.run}/cancel`,'POST',{});state.stopping=true;$('stop-button').disabled=true;renderMessages();});

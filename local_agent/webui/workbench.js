@@ -16,18 +16,32 @@ $('doc-template').onchange=()=>{const key=$('doc-template').value;if(!key)return
 $('doc-preview-toggle').onclick=()=>{const show=$('doc-render').hidden;$('doc-render').replaceChildren(markdown($('doc-editor').value));$('doc-render').hidden=!show;$('doc-editor').hidden=show;};
 $('doc-export').onclick=safe(async()=>{if(state.run)return toast('请先完成或停止正在运行的任务');const content=$('doc-editor').value;if(!content.trim())return toast('请先填写文档内容');const s=await ensureSession();$('doc-export').disabled=true;try{const made=await api(`/api/sessions/${s.id}/export`,'POST',{format:$('doc-format').value,title:$('doc-title').value||'Document',content,confirm:true});saveBlob(await getFile(made.path),made.path.split('/').pop());toast('新文档已生成；原文件没有被覆盖');if(!$('file-panel').hidden)await showFiles();}finally{$('doc-export').disabled=false;}});
 // Model center: all changing UI labels reflect a request phase or real server bytes.
-const setup = {data:null, provider:storage.get('model-provider')||'modelscope', filter:'all', quote:null, query:null, error:'', seq:0, completed:null, controller:null};
-if(!['modelscope','huggingface'].includes(setup.provider))setup.provider='modelscope';
+const setup = {data:null, provider:storage.get('model-provider')||'modelscope', filter:'all', search:'', quote:null, query:null, error:'', seq:0, completed:null, controller:null};
+if(!['modelscope','huggingface','sdu'].includes(setup.provider))setup.provider='modelscope';
 const installBusy = job => ['downloading','verifying','converting','activating'].includes(job?.status);
 function amount(bytes){if(!Number.isFinite(bytes))return '待查询';for(const [unit,n] of [['GiB',1024**3],['MiB',1024**2],['KiB',1024]])if(bytes>=n)return (bytes/n).toFixed(2)+' '+unit;return bytes+' B';}
 function duration(seconds){if(!Number.isFinite(seconds))return '正在估算';return seconds<60?Math.max(1,Math.ceil(seconds))+' 秒':seconds<3600?Math.ceil(seconds/60)+' 分钟':(seconds/3600).toFixed(1)+' 小时';}
-function providerName(key){return key==='modelscope'?'ModelScope 魔搭':'Hugging Face';}
+function providerName(key){return {modelscope:'ModelScope 魔搭',huggingface:'Hugging Face',sdu:'ncnn 上游镜像（SDU）'}[key]||key;}
 async function setupRequest(path,data,timeout=30000){
  const controller=new AbortController();setup.controller=controller;const timer=setTimeout(()=>controller.abort(),timeout);
  try{const r=await fetch(path,{method:data===undefined?'GET':'POST',headers:{'X-Agent-Token':state.token,...(data===undefined?{}:{'Content-Type':'application/json'})},body:data===undefined?undefined:JSON.stringify(data),signal:controller.signal});
  let b;try{b=await r.json();}catch{throw Error('服务返回了无效响应，请重试。');}if(!r.ok)throw Error(b.error||'请求失败');return b;
  }catch(e){if(e.name==='AbortError')throw Error(path.endsWith('/prepare')?'连接查询超时或已取消。尚未开始下载；可重试或手动切换下载源。':'操作响应超时。已提交的安装可能仍在运行，请查看任务状态，不要重复提交。');throw e;}
  finally{clearTimeout(timer);if(setup.controller===controller)setup.controller=null;}
+}
+function filteredModels(models){const q=setup.search.trim().toLowerCase();return models.filter(m=>{
+ const f=setup.filter;
+ const matches=f==='all'||f===m.kind||f===m.category||(f==='light'&&m.light)||(f==='native'&&m.install_kind==='ncnn')||(f==='installed'&&m.installed)||(f==='pending'&&m.installable===false);
+ return matches&&(!q||[m.name,m.family,m.description,m.precision,...(m.capabilities||[])].join(' ').toLowerCase().includes(q));
+});}
+function activeModels(data,busy){const key=JSON.stringify([data.models.map(m=>[m.id,m.installed,m.active]),busy]);if(setup.activeKey===key)return;setup.activeKey=key;
+ const area=$('active-models');area.replaceChildren();
+ for(const [kind,label] of [['llm','当前文字模型'],['image','当前生图模型']]){const row=el('label','setting-row');row.append(el('span','',label));const select=el('select');select.setAttribute('aria-label',label);select.id='active-'+kind;
+  const current=data.models.find(m=>m.kind===kind&&m.active);const empty=el('option','',current?'选择已安装模型':'尚未安装／启用');empty.value='';select.append(empty);
+  for(const m of data.models.filter(m=>m.kind===kind&&m.installed&&m.installable!==false)){const o=el('option','',m.name);o.value=m.id;select.append(o);}
+  select.value=current?.id||'';select.disabled=busy||select.options.length<2;
+  select.onchange=safe(async()=>{if(!select.value)return;select.disabled=true;try{await api('/api/setup/activate','POST',{id:select.value});await updateSetup();await refreshRuntime();}catch(e){setup.activeKey=null;renderSetup();throw e;}});row.append(select);area.append(row);
+ }
 }
 function renderSetup(){
  const data=setup.data;if(!data)return;
@@ -39,20 +53,25 @@ function renderSetup(){
  const job=data.job||{status:'idle'},busy=installBusy(job),querying=!!setup.query;
  $('model-source').value=setup.provider;$('model-source').disabled=busy||!!setup.starting;
  $('model-filter').value=setup.filter;
- const cardsKey=JSON.stringify([data.models,setup.provider,setup.filter,setup.quote,setup.query,!!setup.starting,busy,job.model]);
+ const visible=filteredModels(data.models);$('model-count').textContent=`${visible.length} / ${data.models.length} 项`;
+ activeModels(data,busy||querying||!!setup.starting);
+ const cardsKey=JSON.stringify([data.models,setup.provider,setup.filter,setup.search,setup.quote,setup.query,!!setup.starting,busy,job.model]);
  if(setup.cardsKey!==cardsKey){setup.cardsKey=cardsKey;$('model-cards').replaceChildren();
- for(const model of data.models.filter(m=>setup.filter==='all'||m.kind===setup.filter)){
+ if(!visible.length)$('model-cards').append(el('p','setting-note','没有匹配的模型，请调整分类或搜索词。'));
+ for(const model of visible){
   const card=el('section','model-card');card.dataset.modelId=model.id;
   const header=el('div','model-card-heading');header.append(el('h3','',model.name),el('span','badge',model.active?'已启用':model.installed?'已安装':model.kind==='image'?'生图':'文本'));
   card.append(header,el('p','',model.description));
+  const tags=el('div','model-tags');for(const label of [model.family,model.precision,...(model.capabilities||[]).map(k=>({chat:'对话',documents:'文档','agent-experimental':'Agent · 待任务验证',image:'生图'}[k]||k))].filter(Boolean))tags.append(el('span','badge',label));card.append(tags);
+  if(model.runtime_note)card.append(el('p','setting-note',model.runtime_note));
   const meta=el('div','model-meta');meta.append(el('span','',model.validation||'实跑状态以测试记录为准'),el('span','',model.format||'ncnn'));
   if(model.estimated_download_bytes)meta.append(el('span','','约 '+amount(model.estimated_download_bytes)+' 下载'));
   card.append(meta);
   const supported=!!model.sources?.[setup.provider];
   if(!supported&&!model.installed)card.append(el('p','source-unavailable',model.unavailable_sources?.[setup.provider]||'此来源暂无匹配的 ncnn 模型，需手动选择其他来源。'));
   const activeJob=busy&&job.model===model.id;
-  const action=button(model.active?'当前使用':model.installed?'启用此模型':setup.query===model.id?'正在查询大小…':activeJob?'正在安装…':'准备下载',null,()=>chooseModel(model),'primary-button');
-  action.disabled=model.active||busy||querying||!!setup.starting||(!supported&&!model.installed);card.append(action);
+  const action=button(model.installable===false?'专用接口待接入':model.active?'当前使用':model.installed?'启用此模型':setup.query===model.id?'正在查询大小…':activeJob?'正在安装…':'准备下载',null,()=>chooseModel(model),'primary-button');
+  action.disabled=model.installable===false||model.active||busy||querying||!!setup.starting||(!supported&&!model.installed);card.append(action);
   if(setup.quote?.id===model.id){
    const q=setup.quote,box=el('div','download-confirmation');box.append(el('strong','','确认下载信息'));
    for(const [label,value] of [['下载源',providerName(q.provider)],['需要下载',amount(q.download_bytes)],['安装后预计占用',amount(q.installed_estimate_bytes)],['安装时至少预留',amount(q.disk_required_bytes)],['当前可用磁盘',amount(q.disk_free_bytes)]]){const row=el('div','runtime-row');row.append(el('span','',label),el('strong','',value));box.append(row);}
@@ -115,6 +134,7 @@ $('close-setup').onclick=()=>{$('setup-dialog').close();clearTimeout(setupTimer)
 $('setup-dialog').addEventListener('close',()=>clearTimeout(setupTimer));
 $('model-source').onchange=()=>{setup.seq++;setup.controller?.abort();setup.query=null;setup.quote=null;setup.error='';setup.provider=$('model-source').value;storage.set('model-provider',setup.provider);renderSetup();};
 $('model-filter').onchange=()=>{setup.filter=$('model-filter').value;renderSetup();};
+$('model-search').oninput=()=>{setup.search=$('model-search').value;renderSetup();};
 $('cancel-model').onclick=safe(async()=>{if(setup.query){setup.seq++;setup.controller?.abort();setup.query=null;setup.quote=null;setup.error='';renderSetup();return;}await api('/api/setup/cancel','POST',{});await updateSetup();});
 $('quit-desktop').onclick=safe(async()=>{if(!confirm('退出本地服务？正在进行的安装会中断，聊天记录和文件会保留。'))return;await api('/api/setup/shutdown','POST',{confirm:true});$('setup-dialog').close();notice('本地服务已退出。再次打开 LocalAgent 即可恢复。');state.runtime.ready=false;controls();});
 // Distinguish preflight from the last completed task's actual runtime choice.

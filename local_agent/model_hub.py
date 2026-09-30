@@ -53,6 +53,7 @@ class ModelHub:
             pass
 
     def installed(self, model_id):
+        if model_id not in CATALOG or not CATALOG[model_id].get('installable', True): return False
         folder = self.models / model_id
         try:
             m = json.loads((folder / 'READY.json').read_text(encoding='utf-8'))
@@ -207,6 +208,9 @@ class ModelHub:
                     self._update(stage_done=done, stage_total=total, message=message)
                 export_model(cache,stage,model_key=model_id,progress=progress,cancelled=self.cancelled.is_set)
             else:
+                if CATALOG[model_id].get('install_kind') == 'ncnn':
+                    from .native_models import validate_install
+                    validate_install(cache, model_id)
                 os.replace(cache,stage)
             self._check_stop()
             self._update(status='activating', message='准备完成，正在校验安装文件', stage_done=0, stage_total=None)

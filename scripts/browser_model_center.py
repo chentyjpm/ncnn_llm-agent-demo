@@ -15,6 +15,8 @@ sys.path.insert(0,str(ROOT))
 from local_agent.web import LocalServer,WebApp
 from local_agent.desktop import automatic_config
 from local_agent.model_hub import ModelHub
+from local_agent.model_catalog import CATALOG
+from local_agent.native_catalog import NATIVE_MODELS
 
 
 class DisplayFixture(ModelHub):
@@ -50,14 +52,24 @@ def main():
             with sync_playwright() as pw:
                 browser=pw.chromium.launch(headless=True,executable_path=a.chromium or None)
                 page=browser.new_page(viewport={'width':1200,'height':900},color_scheme='light');page.on('pageerror',lambda e:errors.append(str(e)));page.on('request',lambda r:requests.append(r.url) if not r.url.startswith(base) else None)
-                page.goto(base);page.locator('#setup-button').click();expect(page.locator('.model-card')).to_have_count(4)
+                page.goto(base);page.locator('#setup-button').click();expect(page.locator('.model-card')).to_have_count(len(CATALOG))
                 expect(page.locator('#model-source')).to_have_value('modelscope');assert not hub.calls
-                passed('two explicit sources, four curated models, no automatic download')
+                passed('three explicit sources, curated native catalog, no automatic download')
                 expect(page.locator('[data-model-id="qwenimage21"] button')).to_be_disabled()
                 expect(page.locator('[data-model-id="qwenimage21"]')).to_contain_text('尚未核实')
                 passed('unsupported image source explicitly disabled, no fallback')
                 page.locator('#model-source').select_option('huggingface');expect(page.locator('[data-model-id="qwenimage21"] button')).to_be_enabled()
                 page.locator('#model-source').select_option('modelscope')
+                page.locator('#model-filter').select_option('native');expect(page.locator('.model-card')).to_have_count(len(NATIVE_MODELS))
+                page.locator('#model-source').select_option('sdu')
+                first=next(iter(NATIVE_MODELS));expect(page.locator(f'[data-model-id="{first}"] button')).to_be_enabled()
+                page.locator('#model-search').fill('Youtu');expect(page.locator('.model-card')).to_have_count(2)
+                page.screenshot(path=str(a.output/'native-catalog.png'),full_page=True)
+                passed('native source, family search and installed-model selectors')
+                page.locator('#model-search').fill('');page.locator('#model-filter').select_option('pending')
+                for b in page.locator('.model-card button').all():expect(b).to_be_disabled()
+                passed('specialized non-chat models cannot be activated')
+                page.locator('#model-filter').select_option('all');page.locator('#model-source').select_option('modelscope')
                 page.locator('[data-model-id="qwen05"] button').click();expect(page.locator('#model-progress')).to_contain_text('正在连接 ModelScope')
                 assert page.locator('#model-progress-bar').get_attribute('value') is None
                 expect(page.get_by_role('button',name='确认下载并安装')).to_be_visible();assert hub.calls[-1]==('qwen05','modelscope');assert hub.job['status']=='idle'

@@ -1,1 +1,0 @@
-Restore the exact locally tested native_models.py after the SHA-256 gate detected a missing closing parenthesis during transport. Expected hashes are unchanged. This temporary file is removed with the assembly directory.

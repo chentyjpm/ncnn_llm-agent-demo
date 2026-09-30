@@ -353,3 +353,9 @@ python scripts/run_tests.py --output-dir reports/ci/tools
 当前默认服务面向本机单用户，仅监听回环地址。专用联网工具、Agent 独立浏览器、OCR/VLM 和 RAG 不属于现有内置功能；浏览器测试脚本不等于 Agent 已具备浏览器操作能力。
 
 项目许可见 [LICENSE](../LICENSE)，依赖与上游说明见 [THIRD_PARTY.md](../THIRD_PARTY.md)。
+
+## 多模型与显式生图扩展
+
+`native_catalog.py` 保存经实际字节校验的原生模型清单，`native_models.py` 负责清单、文件引用和安装校验。`model_sources.py` 在显式选择的来源内解析地址，`ModelHub` 按转换模型/原生模型分流，仍共用下载、哈希和原子启用。
+
+`image_tasks.py` 负责顶层 `/image` 和生图模式的参数规划、工具说明、图片解码及结果卡片资格；Agent 模式仍走原有模型动作循环。详见 [多模型与生图](MODELS_AND_IMAGES.md)。
