@@ -58,14 +58,33 @@ static bool compute(int index) {
 }
 #endif
 int main(int argc, char** argv) {
-    const bool software = argc == 2 && std::string(argv[1]) == "--include-software";
-    if (argc > 1 && !software) { std::fputs("Usage: ncnn_device_probe [--include-software]\n", stderr); return 2; }
+    int requested = -1;
+    const bool enumerate = argc == 1 || (argc == 2 && std::string(argv[1]) == "--enumerate");
+    if (!enumerate) {
+        if (argc != 3 || std::string(argv[1]) != "--check-device") {
+            std::fputs("Usage: ncnn_device_probe [--enumerate | --check-device N]\n", stderr); return 2;
+        }
+        const std::string id = argv[2];
+        if (id.empty() || id.size() > 2 || id.find_first_not_of("0123456789") != std::string::npos) {
+            std::fputs("Invalid device index\n", stderr); return 2;
+        }
+        requested = 0;
+        for (char c : id) requested = requested * 10 + (c - '0');
+        if (requested >= 16) { std::fputs("Invalid device index\n", stderr); return 2; }
+    }
     std::ostringstream out;
-    out << "{\"version\":1,\"compiled\":" << (NCNN_VULKAN ? "true" : "false") << ",\"devices\":[";
+    out << "{\"version\":1,\"phase\":" << quoted(enumerate ? "enumerate" : "compute")
+        << ",\"compiled\":" << (NCNN_VULKAN ? "true" : "false") << ",\"devices\":[";
 #if NCNN_VULKAN
     const int init = ncnn::create_gpu_instance();
     const int count = init == 0 ? std::min(16, ncnn::get_gpu_count()) : 0;
+    if (!enumerate && requested >= count) {
+        ncnn::destroy_gpu_instance();
+        std::fputs("Requested device unavailable\n", stderr); return 2;
+    }
+    bool first = true;
     for (int i = 0; i < count; ++i) {
+        if (!enumerate && i != requested) continue;
         const auto& props = ncnn::get_gpu_info(i).physicalDeviceProperties();
         std::string name = props.deviceName, lower = name;
         std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c){ return char(std::tolower(c)); });
@@ -76,14 +95,18 @@ int main(int argc, char** argv) {
             props.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU ? "integrated" :
             props.deviceType == VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU ? "virtual" :
             props.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU ? "cpu" : "other";
-        bool ok = false;
-        // ncnn may export -fno-exceptions; process isolation handles fatal driver errors.
-        if (hardware || software) ok = compute(i);
-        if (i) out << ',';
+        // Enumeration NEVER creates a logical VulkanDevice or claims compute.
+        // The host invokes --check-device in a separate bounded process. Driver
+        // crashes stay observable failures for that one device, not fake passes.
+        const bool ok = !enumerate && compute(i);
+        if (!first) out << ',';
+        first = false;
         out << "{\"id\":" << i << ",\"name\":" << quoted(name) << ",\"type\":" << quoted(type)
             << ",\"hardware\":" << (hardware ? "true" : "false") << ",\"compute_ok\":" << (ok ? "true" : "false") << '}';
     }
     ncnn::destroy_gpu_instance();
+#else
+    if (!enumerate) { std::fputs("Vulkan not compiled\n", stderr); return 2; }
 #endif
     out << "]}";
     std::puts(out.str().c_str());

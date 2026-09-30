@@ -88,7 +88,25 @@ def validate_report(report: dict) -> dict:
     return report
 
 
+def _invoke_probe(path: Path, arguments: list[str], env: dict, timeout: float) -> dict:
+    result = run_process([str(path), *arguments], cwd=path.parent,
+                         timeout=timeout, max_output=65536, env=env)
+    if result['timed_out']:
+        raise RuntimeError('probe_timeout')
+    if result['returncode'] != 0 or result['output_truncated']:
+        raise RuntimeError('probe_process_failed: exit=' + str(result['returncode']) +
+                           '; stderr=' + result.get('stderr', '')[-400:])
+    return validate_report(json.loads(result['stdout']))
+
+
 def probe(command: list[str], *, software: bool = False) -> dict:
+    """Enumerate first; isolate each risky device initialization/dispatch.
+
+    A driver may enumerate successfully then crash inside vkBindImageMemory.
+    That device is unusable, not a successful compute test. Preserve its error
+    and continue with other devices. Missing/broken enumeration remains a
+    probe failure and still fails the frozen application's self-test.
+    """
     executable = engine_path(command)
     if executable is None:
         return {'version': 1, 'compiled': False, 'devices': [], 'reason': 'engine_missing'}
@@ -102,15 +120,32 @@ def probe(command: list[str], *, software: bool = False) -> dict:
         cached = _CACHE.get(key)
         if cached and time.monotonic() - cached[0] < 60:
             return copy.deepcopy(cached[1])
+    deadline = time.monotonic() + 15
     try:
-        result = run_process([str(path)] + (['--include-software'] if software else []),
-                             cwd=path.parent, timeout=15, max_output=65536, env=env)
-        if result['timed_out']:
-            raise RuntimeError('probe_timeout')
-        if result['returncode'] != 0 or result['output_truncated']:
-            raise RuntimeError('probe_process_failed: exit=' + str(result['returncode']) +
-                               '; stderr=' + result.get('stderr', '')[-400:])
-        report = validate_report(json.loads(result['stdout']))
+        report = _invoke_probe(path, ['--enumerate'], env, 15)
+        if report.get('phase') != 'enumerate' or any(d['compute_ok'] for d in report['devices']):
+            raise ValueError('Expected enumeration-only probe response')
+        for item in report['devices']:
+            item['compute_ok'] = False
+            if not item['hardware'] and not software:
+                item['compute_status'] = 'software_excluded'
+                continue
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                item.update(compute_status='budget_exhausted', compute_error='probe_total_timeout')
+                continue
+            try:
+                checked = _invoke_probe(path, ['--check-device', str(item['id'])], env, remaining)
+                if checked.get('phase') != 'compute' or not checked['compiled'] or len(checked['devices']) != 1:
+                    raise ValueError('Expected one device compute response')
+                got = checked['devices'][0]
+                if any(got[k] != item[k] for k in ('id', 'name', 'type', 'hardware')):
+                    raise ValueError('Vulkan device identity changed between enumeration and compute')
+                item['compute_ok'] = got['compute_ok']
+                item['compute_status'] = 'passed' if got['compute_ok'] else 'failed'
+            except (OSError, ValueError, RuntimeError) as exc:
+                item.update(compute_status='failed', compute_error=str(exc)[:500])
+        report['phase'] = 'complete'
     except (OSError, ValueError, RuntimeError) as exc:
         report = {'version': 1, 'compiled': False, 'devices': [], 'reason': 'probe_unavailable',
                   'detail': str(exc)[:500]}
@@ -125,11 +160,12 @@ def select(config: dict, kind: str, *, report: dict | None = None) -> dict:
     """report injection is for policy unit tests; HTTP never accepts it."""
     mode = policy(config, kind)
     choice = {'requested': mode, 'selected': 'cpu', 'gpu': -1, 'name': 'CPU',
-              'reason': 'explicit_cpu', 'hardware': False, 'probe_scope': 'ncnn Vulkan ReLU; not full-model validation'}
+              'reason': 'explicit_cpu', 'hardware': False, 'probe_scope': 'isolated ncnn Vulkan MAX(x, 0); not full-model validation'}
     if mode == 'cpu':
         return choice
     allow_software = mode == 'vulkan' and config.get('allow_software_vulkan') is True
     data = validate_report(report) if report is not None else probe(config.get('command', []), software=allow_software)
+    choice['probe_devices'] = copy.deepcopy(data['devices'])
     candidates = [d for d in data['devices'] if d['compute_ok'] and (d['hardware'] or allow_software)]
     preferred = config.get('gpu', None)
     if preferred is not None and (type(preferred) is not int or preferred < 0):

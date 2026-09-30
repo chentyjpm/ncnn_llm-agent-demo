@@ -114,17 +114,21 @@ class DeviceTests(unittest.TestCase):
             self.assertEqual(device.select(self.config,'image')['reason'],'probe_unavailable')
 
     def test_probe_is_cached_and_bounded_subprocess(self):
-        value={'timed_out':False,'returncode':0,'output_truncated':False,'stdout':json.dumps(report(gpu()))}
-        with patch.object(device,'run_process',return_value=value) as run:
+        value={'timed_out':False,'returncode':0,'output_truncated':False,'stdout':json.dumps(dict(report(gpu(ok=False)),phase='enumerate'))}
+        computed=dict(value,stdout=json.dumps(dict(report(gpu()),phase='compute')))
+        with patch.object(device,'run_process',side_effect=[value,computed]) as run:
             for _ in range(2): device.select(self.config,'llm')
-            self.assertEqual(run.call_count,1);self.assertEqual(run.call_args.kwargs['timeout'],15)
+            self.assertEqual(run.call_count,2)
+            self.assertEqual(run.call_args_list[0].kwargs['timeout'],15)
+            self.assertLessEqual(run.call_args.kwargs['timeout'],15)
             # Windows 8.3 names and macOS /var aliases may resolve differently.
             # Keep checking the exact canonical sibling probe and its cwd.
-            self.assertEqual(run.call_args.args[0],[str(self.probe.resolve())])
+            self.assertEqual(run.call_args_list[0].args[0],[str(self.probe.resolve()),'--enumerate'])
+            self.assertEqual(run.call_args.args[0],[str(self.probe.resolve()),'--check-device','0'])
             self.assertEqual(run.call_args.kwargs['cwd'],self.probe.resolve().parent)
 
     def test_driver_change_invalidates_cache(self):
-        value={'timed_out':False,'returncode':0,'output_truncated':False,'stdout':json.dumps(report())}
+        value={'timed_out':False,'returncode':0,'output_truncated':False,'stdout':json.dumps(dict(report(),phase='enumerate'))}
         with patch.object(device,'run_process',return_value=value) as run:
             device.select(self.config,'llm')
             with patch.dict(os.environ,{'VK_DRIVER_FILES':'changed.json'}): device.select(self.config,'llm')
@@ -177,11 +181,12 @@ class DeviceTests(unittest.TestCase):
         (self.root / 'alias').mkdir()
         command = [str(self.root / 'alias' / '..' / self.engine.name)]
         value = {'timed_out': False, 'returncode': 0, 'output_truncated': False,
-                 'stdout': json.dumps(report(gpu()))}
-        with patch.object(device, 'run_process', return_value=value) as run:
+                 'stdout': json.dumps(dict(report(gpu(ok=False)),phase='enumerate'))}
+        computed=dict(value,stdout=json.dumps(dict(report(gpu()),phase='compute')))
+        with patch.object(device, 'run_process', side_effect=[value,computed]) as run:
             selected = device.select({'command': command, 'device': 'auto'}, 'llm')
         self.assertEqual(selected['selected'], 'vulkan')
-        self.assertEqual(run.call_args.args[0], [str(self.probe.resolve())])
+        self.assertEqual(run.call_args.args[0], [str(self.probe.resolve()), '--check-device', '0'])
         self.assertEqual(run.call_args.kwargs['cwd'], self.probe.resolve().parent)
 
     def test_missing_macos_runtime_does_not_inject_library_search_paths(self):
