@@ -1,0 +1,126 @@
+{
+  "repository": "chentyjpm/ncnn_llm-agent-demo",
+  "images": [
+    {
+      "path": "ui-home-dark.png",
+      "source_commit": "0b03f4351324783df1a37eacb3a86571b8233646",
+      "run_id": 36684429497,
+      "artifact_id": 11083037112,
+      "source_member": "reports/web-browser/desktop-dark.png",
+      "sha256": "7cc3a2fb64564b522fe6335e18f300b80d5e5ed87ef1ab1833351eff85a0cddc",
+      "bytes": 119299,
+      "width": 1440,
+      "height": 960,
+      "scope": "Actual H5 browser capture; explicitly labelled model test fixture."
+    },
+    {
+      "path": "ui-home-light.png",
+      "source_commit": "0b03f4351324783df1a37eacb3a86571b8233646",
+      "run_id": 36684429497,
+      "artifact_id": 11083037112,
+      "source_member": "reports/web-browser/desktop-light.png",
+      "sha256": "edceea00a75422375e6c39c65f43c995a6e7dc24fd7cd868f9d0c6016ae9a7ac",
+      "bytes": 120825,
+      "width": 1440,
+      "height": 960,
+      "scope": "Actual H5 browser capture; explicitly labelled model test fixture."
+    },
+    {
+      "path": "ui-chat-files.png",
+      "source_commit": "0b03f4351324783df1a37eacb3a86571b8233646",
+      "run_id": 36684429497,
+      "artifact_id": 11083037112,
+      "source_member": "reports/web-browser/desktop-chat-files.png",
+      "sha256": "4a292d7fa89b33097b0a5c9357789f836be42ecca229e5becd9de878fb4d93e2",
+      "bytes": 125672,
+      "width": 1440,
+      "height": 960,
+      "scope": "Actual browser and file operations; assistant replies are fixtures, not inference."
+    },
+    {
+      "path": "ui-documents.png",
+      "source_commit": "0b03f4351324783df1a37eacb3a86571b8233646",
+      "run_id": 36684429497,
+      "artifact_id": 11083037112,
+      "source_member": "reports/web-documents/document-workbench.png",
+      "sha256": "c6dc1a8fd3a8d6e47a722be8e05380aefb4863a7a59b8bdcf4144e785513ba6d",
+      "bytes": 104355,
+      "width": 1440,
+      "height": 960,
+      "scope": "Actual document-workbench UI with synthetic test document text."
+    },
+    {
+      "path": "ui-approval.png",
+      "source_commit": "0b03f4351324783df1a37eacb3a86571b8233646",
+      "run_id": 36684429497,
+      "artifact_id": 11083037112,
+      "source_member": "reports/web-browser/tool-approval.png",
+      "sha256": "5bcc0375de2e9ac860c50efcd7acdc328db35ad550f1f57b3d1fa483e21ccddc",
+      "bytes": 111256,
+      "width": 1440,
+      "height": 960,
+      "scope": "Actual browser consent UI; proposed model actions are labelled fixtures."
+    },
+    {
+      "path": "model-center-download.png",
+      "source_commit": "0b03f4351324783df1a37eacb3a86571b8233646",
+      "run_id": 36684429497,
+      "artifact_id": 11083037112,
+      "source_member": "reports/model-center-browser/download-progress.png",
+      "sha256": "6ca66a3cf205a451e3c4c609009bc7d20aeb1f4035eb8ca1867fc34d20d0e0da",
+      "bytes": 129233,
+      "width": 1200,
+      "height": 900,
+      "scope": "Actual model-center UI; progress values are simulated and are not a bandwidth benchmark."
+    },
+    {
+      "path": "model-center-sources.png",
+      "source_commit": "0b03f4351324783df1a37eacb3a86571b8233646",
+      "run_id": 36684429497,
+      "artifact_id": 11083037112,
+      "source_member": "reports/model-center-browser/source-and-confirmation.png",
+      "sha256": "d5be639af424693d8fd5d6f36de046deaf16100a29d7fa548533d4bf29268016",
+      "bytes": 138755,
+      "width": 1200,
+      "height": 900,
+      "scope": "Actual model-center UI with source/consent test metadata."
+    },
+    {
+      "path": "monitor-overview.png",
+      "source_commit": "b611f8d6b4398a18467027f2b49eabb45443a93b",
+      "run_id": 36688044006,
+      "artifact_id": 11085358036,
+      "source_member": "native-monitor.png",
+      "sha256": "0eea712accfedbac2f53292f31dfff37e3cffcddf53b0ebe57e3547f9faa4d1b",
+      "bytes": 42209,
+      "width": 974,
+      "height": 678,
+      "scope": "Actual packaged Windows application and OS telemetry; no model loaded."
+    },
+    {
+      "path": "monitor-gpu.png",
+      "source_commit": "b611f8d6b4398a18467027f2b49eabb45443a93b",
+      "run_id": 36688043974,
+      "artifact_id": 11084017458,
+      "source_member": "layout/layout-100-0-panel.png",
+      "sha256": "b581086780a6c32248a76ab38c74898002dfb9696ab5d9c54cdb5df62aa3e695",
+      "bytes": 41967,
+      "width": 974,
+      "height": 678,
+      "scope": "Actual Windows native UI and OS telemetry during layout tests; not GPU inference."
+    },
+    {
+      "path": "monitor-processes.png",
+      "source_commit": "b611f8d6b4398a18467027f2b49eabb45443a93b",
+      "run_id": 36688043974,
+      "artifact_id": 11084017458,
+      "source_member": "layout/layout-100-1-panel.png",
+      "sha256": "7f639478e35983937c29c1060d424baae73cbe2c4f314ded5ccb1e96cd6a278a",
+      "bytes": 40552,
+      "width": 974,
+      "height": 678,
+      "scope": "Actual Windows native UI and OS telemetry during layout tests; no model loaded."
+    }
+  ],
+  "transform": "None. Original PNG bytes, telemetry and test-fixture labels are preserved."
+}
