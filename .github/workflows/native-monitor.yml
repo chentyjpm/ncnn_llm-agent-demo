@@ -5,13 +5,15 @@ on:
     branches: [main]
     paths:
       - 'local_agent/**'
-      - 'tests/test_monitor.py'
+      - 'tests/test_monitor*.py'
+      - 'scripts/monitor_layout.py'
       - 'requirements-monitor.txt'
       - '.github/workflows/native-monitor.yml'
   pull_request:
     paths:
       - 'local_agent/**'
-      - 'tests/test_monitor.py'
+      - 'tests/test_monitor*.py'
+      - 'scripts/monitor_layout.py'
       - '.github/workflows/native-monitor.yml'
 permissions:
   contents: read
@@ -34,13 +36,19 @@ jobs:
           python-version: '3.11'
       - run: python -m pip install -r requirements-monitor.txt -r requirements-office.txt
       - name: Real OS resource, Windows no-console and protected HTTP tests
-        run: python -m unittest tests.test_monitor -v
+        run: python -m unittest tests.test_monitor tests.test_monitor_presentation -v
       - name: Actual native window (Windows and macOS)
         if: runner.os != 'Linux'
         run: python -m local_agent.monitor_ui --self-test reports/monitor/native.json
       - name: Actual native window (Linux virtual display, not browser)
         if: runner.os == 'Linux'
         run: xvfb-run -a python -m local_agent.monitor_ui --self-test reports/monitor/native.json
+      - name: Equal tab geometry, keyboard, resize and 100/150/200 percent layout
+        if: runner.os != 'Linux'
+        run: python scripts/monitor_layout.py --output reports/monitor/layout
+      - name: Layout checks with real Tk on Linux Xvfb
+        if: runner.os == 'Linux'
+        run: xvfb-run -a -s "-screen 0 1920x1200x24" python scripts/monitor_layout.py --output reports/monitor/layout
       - name: Save native screenshot and actual measurement evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
