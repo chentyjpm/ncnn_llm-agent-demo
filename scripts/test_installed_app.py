@@ -28,7 +28,7 @@ def main():
         env['VK_ICD_FILENAMES'] = '/nonexistent/local-agent-vulkan.json'
         env['PATH'] = os.environ.get('SystemRoot', r'C:\Windows') + r'\System32' if os.name == 'nt' else '/nonexistent'
         log = (root / 'process.log').open('wb')
-        process = subprocess.Popen([str(args.binary.resolve()), '--home', str(home), '--port', '0', '--no-browser'],
+        process = subprocess.Popen([str(args.binary.resolve()), '--home', str(home), '--port', '0', '--no-browser', '--no-monitor'],
                                    cwd=root, env=env, stdout=log, stderr=log)
         port = None; token = ''
         def api(path, method='GET', data=None):

@@ -7,6 +7,20 @@ import subprocess
 import threading
 from typing import Sequence
 
+def background_options() -> dict:
+    """Create background console workers on Windows WITHOUT dropping stdio.
+
+    Applies to inference/probes/MCP/tools. Never use DETACHED_PROCESS or
+    CREATE_NEW_CONSOLE, and do not use this for intentional GUI windows.
+    """
+    if os.name != "nt":
+        return {}
+    startup = subprocess.STARTUPINFO()
+    startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    startup.wShowWindow = subprocess.SW_HIDE
+    return {"creationflags": subprocess.CREATE_NO_WINDOW, "startupinfo": startup}
+
+
 def clean_env(extra: dict[str, str] | None = None) -> dict[str, str]:
     keys = ("PATH", "SystemRoot", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "LANG", "LC_ALL")
     env = {k: os.environ[k] for k in keys if k in os.environ}
@@ -35,7 +49,7 @@ def run_process(argv: Sequence[str], *, cwd: Path, timeout: float = 30,
     p = subprocess.Popen(list(argv), cwd=cwd, env=clean_env(env), shell=False,
                          stdin=subprocess.PIPE if input_text is not None else subprocess.DEVNULL,
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                         start_new_session=(os.name == "posix"))
+                         start_new_session=(os.name == "posix"), **background_options())
     buffers = [bytearray(), bytearray()]
     truncated = [False, False]
     def drain(stream, idx):
@@ -67,7 +81,6 @@ def run_process(argv: Sequence[str], *, cwd: Path, timeout: float = 30,
         timed_out = True
         kill_tree(p)
         p.wait(timeout=5)
-    # Also remove ordinary descendants after the parent exits on POSIX.
     if os.name == "posix":
         kill_tree(p)
     for t in threads:

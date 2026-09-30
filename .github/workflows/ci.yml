@@ -30,7 +30,7 @@ jobs:
         with:
           python-version: '3.13'
       - name: Install Office test dependencies
-        run: python -m pip install -r requirements-office.txt
+        run: python -m pip install -r requirements-office.txt -r requirements-monitor.txt
       - name: Compile Python source to bytecode (not C++ compilation)
         run: python -m compileall -q local_agent examples scripts tests
       - name: Real filesystem, Python, Office and HTTP tests; model/device fixtures labelled

@@ -8,6 +8,8 @@ on:
       - 'local_agent/**'
       - 'requirements-desktop.txt'
       - 'requirements-office.txt'
+      - 'requirements-monitor.txt'
+      - 'tests/test_monitor.py'
       - 'native/**'
       - 'scripts/ci_native.py'
       - 'scripts/probe_regression.py'
@@ -150,8 +152,12 @@ jobs:
         run: brew install molten-vk vulkan-loader
       - name: Run all tests with complete Office runtime
         run: python scripts/run_tests.py --output-dir reports/desktop/unit
-      - name: Freeze, test with clean PATH, build and check installer
+      - name: Freeze and verify native dashboard and installer (Windows/macOS)
+        if: runner.os != 'Linux'
         run: python scripts/package_desktop.py --archives build/native-inputs
+      - name: Freeze and verify native dashboard and installer (Linux Xvfb)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a python scripts/package_desktop.py --archives build/native-inputs
       - name: Upload installer only after application acceptance
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:

@@ -1,0 +1,2 @@
+# Optional for source CLI; bundled with the Desktop monitor.
+psutil==7.0.0

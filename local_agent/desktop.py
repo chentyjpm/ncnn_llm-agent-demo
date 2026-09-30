@@ -116,11 +116,17 @@ def main():
     ap.add_argument('--port', type=int, default=8765)
     ap.add_argument('--no-browser', action='store_true')
     ap.add_argument('--self-test', type=Path, metavar='REPORT_JSON')
+    ap.add_argument('--no-monitor', action='store_true', help='Headless service for automation; normal startup shows the native manager')
+    ap.add_argument('--monitor-test', type=Path, help='Run actual native UI and OS telemetry acceptance')
     args = ap.parse_args()
+    if args.monitor_test:
+        from .monitor_ui import native_self_test
+        args.monitor_test.parent.mkdir(parents=True, exist_ok=True)
+        return native_self_test(args.monitor_test)
     if args.self_test:
         return self_test(args.self_test)
     from .model_hub import ModelHub, save_json
-    from .web import WebApp, LocalServer
+    from .monitor_http import ManagedWebApp as WebApp, ManagedServer as LocalServer
     home = (args.home or user_home()).resolve()
     home.mkdir(parents=True, exist_ok=True)
     if sys.stdout is None or sys.stderr is None:
@@ -139,6 +145,12 @@ def main():
             existing = json.load(response)
         if not existing.get('runtime', {}).get('managed_install'):
             raise RuntimeError('Existing port is not a Local Agent desktop service')
+        if not args.no_monitor:
+            from urllib.request import Request
+            request = Request(url + '/api/monitor/show', data=b'{}', method='POST',
+                headers={'Content-Type': 'application/json', 'X-Agent-Token': existing['token']})
+            with urlopen(request, timeout=3) as response:
+                response.read()
         if not args.no_browser:
             import webbrowser
             webbrowser.open(url)
@@ -151,6 +163,7 @@ def main():
             app.config = automatic_config(home, hub)
     hub.on_change = refresh
     server = None
+    monitor = None
     try:
         try:
             server = LocalServer(app, args.port)
@@ -164,10 +177,26 @@ def main():
         if not args.no_browser:
             import webbrowser
             webbrowser.open(url)
-        server.serve_forever()
+        if args.no_monitor:
+            server.serve_forever()
+        else:
+            import threading
+            from .monitor import MonitorService
+            from .monitor_ui import Dashboard
+            monitor = MonitorService(app)
+            app.monitor = monitor
+            thread = threading.Thread(target=lambda: server.serve_forever(poll_interval=.2), daemon=True)
+            thread.start()
+            try:
+                Dashboard(app, monitor, url, server.shutdown, thread.is_alive, home).run()
+            finally:
+                server.shutdown()
+                thread.join(5)
     except KeyboardInterrupt:
         pass
     finally:
+        if monitor:
+            monitor.close()
         hub.stop()
         for rid in list(app.runs):
             app.cancel(rid)

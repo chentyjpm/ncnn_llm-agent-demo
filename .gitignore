@@ -18,3 +18,5 @@ reports/web-*/
 source-checkout.zip
 *.spec
 reports/desktop/
+
+reports/monitor/

@@ -75,7 +75,7 @@ def prepare(archives: Path, staging: Path):
     if platform.system() == 'Darwin':
         info['vulkan_runtime'] = prepare_runtime(staging)
     for package in ('pyinstaller', 'python-docx', 'openpyxl', 'python-pptx', 'numpy', 'lxml', 'Pillow',
-                    'XlsxWriter', 'defusedxml', 'certifi', 'typing_extensions', 'et_xmlfile'):
+                    'XlsxWriter', 'defusedxml', 'certifi', 'typing_extensions', 'et_xmlfile', 'psutil'):
         dist = importlib.metadata.distribution(package)
         info['packages'].append({'name': package, 'version': dist.version, 'license': dist.metadata.get('License', '')})
         for item in dist.files or []:
@@ -111,7 +111,7 @@ def main():
                '--paths', str(ROOT), '--distpath', str(ROOT / 'dist/desktop'), '--workpath', str(ROOT / 'build/pyinstaller'),
                '--specpath', str(ROOT / 'build'), '--collect-data', 'docx', '--collect-data', 'pptx',
                '--collect-data', 'certifi', '--hidden-import', 'scripts.qwen05_export', '--exclude-module', 'torch',
-               '--exclude-module', 'transformers', '--exclude-module', 'matplotlib', '--exclude-module', 'pandas', '--exclude-module', 'tkinter']
+               '--exclude-module', 'transformers', '--exclude-module', 'matplotlib', '--exclude-module', 'pandas', '--hidden-import', 'tkinter', '--hidden-import', 'psutil']
     for source, dest in [(ROOT / 'local_agent/webui', 'local_agent/webui'), (staging / 'engines', 'engines'),
                          (staging / 'licenses', 'licenses'), (staging / 'BUNDLE.json', '.'), (staging / 'LICENSE', '.'),
                          (staging / 'THIRD_PARTY.md', '.'), (ROOT / 'configs', 'configs')]:
@@ -155,6 +155,9 @@ def main():
         # the app (NOT --deep signing) so measured nested binaries remain intact.
         run(['codesign', '--force', '--sign', '-', '--timestamp=none', bundle])
         run(['codesign', '--verify', '--deep', '--strict', '--verbose=2', bundle])
+    run([exe, '--monitor-test', reports / 'native-monitor.json'])
+    if not json.loads((reports / 'native-monitor.json').read_text(encoding='utf-8'))['ok']:
+        raise RuntimeError('Frozen native dashboard acceptance failed')
     run([exe, '--self-test', reports / 'bundle-self-test.json'])
     if not json.loads((reports / 'bundle-self-test.json').read_text())['ok']:
         raise RuntimeError('Frozen app self-test failed')

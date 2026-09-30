@@ -1,0 +1,51 @@
+name: Native desktop monitor
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'local_agent/**'
+      - 'tests/test_monitor.py'
+      - 'requirements-monitor.txt'
+      - '.github/workflows/native-monitor.yml'
+  pull_request:
+    paths:
+      - 'local_agent/**'
+      - 'tests/test_monitor.py'
+      - '.github/workflows/native-monitor.yml'
+permissions:
+  contents: read
+jobs:
+  monitor:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, ubuntu-24.04, macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 12
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -r requirements-monitor.txt -r requirements-office.txt
+      - name: Real OS resource, Windows no-console and protected HTTP tests
+        run: python -m unittest tests.test_monitor -v
+      - name: Actual native window (Windows and macOS)
+        if: runner.os != 'Linux'
+        run: python -m local_agent.monitor_ui --self-test reports/monitor/native.json
+      - name: Actual native window (Linux virtual display, not browser)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a python -m local_agent.monitor_ui --self-test reports/monitor/native.json
+      - name: Save native screenshot and actual measurement evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: native-monitor-${{ matrix.os }}
+          path: reports/monitor/
+          if-no-files-found: warn
+          retention-days: 14

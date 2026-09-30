@@ -6,7 +6,7 @@ import queue
 import subprocess
 import threading
 import time
-from .process import clean_env, kill_tree
+from .process import clean_env, kill_tree, background_options
 
 class RPCError(RuntimeError):
     pass
@@ -18,7 +18,7 @@ class StdioRPC:
         self.timeout, self.max_message = timeout, max_message
         self.process = subprocess.Popen(command, cwd=cwd, env=clean_env(env),
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            start_new_session=(os.name == "posix"), shell=False)
+            start_new_session=(os.name == "posix"), shell=False, **background_options())
         self.inbox: queue.Queue = queue.Queue(maxsize=128)
         self.stderr = bytearray()
         self.notifications: list[dict] = []
@@ -103,7 +103,6 @@ class StdioRPC:
                     raise msg
                 if "method" in msg:
                     if "id" in msg:
-                        # No sampling/elicitation/roots capability is advertised.
                         reply = {"jsonrpc": "2.0", "id": msg["id"]}
                         if msg["method"] == "ping":
                             reply["result"] = {}
