@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['local_agent/native_catalog.py', 'local_agent/native_models.py', 'local_agent/model_catalog.py', 'scripts/native_catalog_smoke.py', '.github/workflows/native-catalog.yml']
+    paths: ['local_agent/native_catalog.py', 'local_agent/native_models.py', 'local_agent/model_catalog.py', 'scripts/native_catalog_smoke.py', 'tests/test_native_catalog_acceptance.py', '.github/workflows/native-catalog.yml']
 permissions:
   contents: read
 concurrency:
@@ -20,6 +20,8 @@ jobs:
         with: {persist-credentials: false}
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with: {python-version: '3.13'}
+      - name: Acceptance policy regression (fixtures only, no model inference)
+        run: python -m unittest tests.test_native_catalog_acceptance -v
       - id: matrix
         run: |
           python - <<'PY'
