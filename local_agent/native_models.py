@@ -55,7 +55,7 @@ def validate_install(root: Path, model_id: str) -> None:
     def walk(value):
         if isinstance(value,dict):
             for key,val in value.items():
-                if isinstance(val,str) and (key.endswith(('_param','_bin','_file')) or val.endswith(('.ncnn.bin','.ncnn.param','.f32')):
+                if isinstance(val,str) and (key.endswith(('_param','_bin','_file')) or val.endswith(('.ncnn.bin','.ncnn.param','.f32'))):
                     name=safe_name(val)
                     target=root/name
                     if name not in allowed or not target.resolve().is_relative_to(root) or target.is_symlink() or not target.is_file():
