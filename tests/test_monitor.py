@@ -20,12 +20,25 @@ from local_agent.monitor import ResourceSampler, MonitorService, runtime_snapsho
 from local_agent.monitor_http import ManagedWebApp, ManagedServer
 
 HAS_PS = importlib.util.find_spec('psutil') is not None
-CONSOLE = '''import ctypes as C, json, sys
-C.windll.kernel32.GetConsoleWindow.restype=C.c_void_p
-info={'hwnd':C.windll.kernel32.GetConsoleWindow(), 'cp':C.windll.kernel32.GetConsoleCP()}
-print(json.dumps(info),flush=True)
+CONSOLE_INFO = '''import ctypes as C, json, sys
+k=C.windll.kernel32
+k.GetConsoleWindow.restype=C.c_void_p
+k.GetStdHandle.argtypes=[C.c_uint32];k.GetStdHandle.restype=C.c_void_p
+k.GetFileType.argtypes=[C.c_void_p];k.GetFileType.restype=C.c_uint32
+info={'hwnd':k.GetConsoleWindow(), 'cp':k.GetConsoleCP(),
+      'stdout_type':k.GetFileType(k.GetStdHandle(-11)),
+      'stderr_type':k.GetFileType(k.GetStdHandle(-12))}
+'''
+CONSOLE = CONSOLE_INFO + '''print(json.dumps(info),flush=True)
 print('diagnostic preserved',file=sys.stderr,flush=True)
 '''
+
+
+def console_evidence(kind, data):
+    folder = Path(__file__).resolve().parents[1] / 'reports/monitor'
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / ('windows-console-' + kind + '.json')).write_text(json.dumps(data, indent=2), encoding='utf-8')
+
 
 
 class BackgroundTests(unittest.TestCase):
@@ -59,22 +72,24 @@ class BackgroundTests(unittest.TestCase):
             r = run_process([sys.executable, '-c', CONSOLE], cwd=Path(tmp))
             self.assertEqual(r['returncode'], 0, r)
             data = json.loads(r['stdout'])
-            self.assertFalse(data['hwnd']); self.assertEqual(data['cp'], 0)
+            self.assertFalse(data['hwnd']); self.assertEqual(data['stdout_type'], 3)
+            self.assertEqual(data['stderr_type'], 3)
+            console_evidence('worker', data)
             self.assertIn('diagnostic preserved', r['stderr'])
 
     @unittest.skipUnless(os.name == 'nt', 'Windows console API only')
     def test_windows_actual_rpc_has_no_console(self):
-        script = '''import ctypes as C, json, sys
-C.windll.kernel32.GetConsoleWindow.restype=C.c_void_p
-for line in sys.stdin:
+        script = CONSOLE_INFO + '''for line in sys.stdin:
  m=json.loads(line)
  if 'id' in m:
-  print(json.dumps({'jsonrpc':'2.0','id':m['id'],'result':{'hwnd':C.windll.kernel32.GetConsoleWindow(),'cp':C.windll.kernel32.GetConsoleCP()}}),flush=True)
+  print(json.dumps({'jsonrpc':'2.0','id':m['id'],'result':info}),flush=True)
 '''
         with tempfile.TemporaryDirectory() as tmp:
             with StdioRPC([sys.executable, '-u', '-c', script], cwd=Path(tmp)) as rpc:
                 data = rpc.request('ping')
-                self.assertFalse(data['hwnd']); self.assertEqual(data['cp'], 0)
+                self.assertFalse(data['hwnd']); self.assertEqual(data['stdout_type'], 3)
+                self.assertEqual(data['stderr_type'], 3)
+                console_evidence('rpc', data)
 
 
 class GpuParserTests(unittest.TestCase):
