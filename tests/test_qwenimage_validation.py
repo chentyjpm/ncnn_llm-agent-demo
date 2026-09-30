@@ -68,6 +68,25 @@ class ManifestTests(unittest.TestCase):
         self.assertFalse(verified_file(p, self.m['files'][0]))
     def test_path_escape_rejected(self):
         with self.assertRaises(ValueError): model_file(self.root, '../outside')
+    def test_model_path_uses_canonical_root(self):
+        alias = self.root / 'subdir' / '..'
+        (self.root / 'subdir').mkdir()
+        self.assertEqual(model_file(alias, 'weights/model.bin'), self.root.resolve() / 'weights/model.bin')
+    def test_links_above_trusted_root_are_not_model_members(self):
+        root = self.root.resolve()
+        with patch.object(Path, 'is_symlink', autospec=True, side_effect=lambda p: p == root.parent) as check:
+            self.assertEqual(model_file(root, 'weights/model.bin'), root / 'weights/model.bin')
+        self.assertTrue(all(call.args[0].is_relative_to(root) for call in check.call_args_list))
+    def test_nested_directory_link_still_rejected(self):
+        root = self.root.resolve()
+        with patch.object(Path, 'is_symlink', autospec=True, side_effect=lambda p: p == root / 'weights'):
+            with self.assertRaisesRegex(ValueError, 'symlinks'):
+                model_file(root, 'weights/model.bin')
+    def test_model_leaf_link_still_rejected(self):
+        root = self.root.resolve()
+        with patch.object(Path, 'is_symlink', autospec=True, side_effect=lambda p: p == root / 'model.bin'):
+            with self.assertRaisesRegex(ValueError, 'symlinks'):
+                model_file(root, 'model.bin')
     def test_download_hashes_actual_bytes_and_reuses_completed(self):
         calls=[]
         def open_fixture(url, timeout): calls.append(url); return io.BytesIO(self.data)

@@ -24,7 +24,7 @@ Actions → **Real Qwen Image** → **Run workflow**，分支选择 main。
 
 ## 验收链路
 
-1. 31 项验证器单元用例使用**明确标注的合成样本**，测试完整性/异常拒绝逻辑，不记作模型推理。
+1. 35 项验证器单元用例使用**明确标注的合成样本**，测试完整性/异常拒绝逻辑，不记作模型推理。
 2. 查询上游 HEAD，记录锁定提交；获取带精确子模块的 Qwen Image 源码，编译原生引擎与 Vulkan 探测器，执行原有 CLI 和预检。
 3. 通过现有 Hugging Face 来源适配器解析固定快照，保存完整文件清单。只下载文生图必须的 12 个文件：分词器、文本编码器、Transformer 输入/32层块/输出和 VAE 解码器；**不下载本次不使用的 vision、VAE encoder、ControlNet 或 LoRA**。这不是裁剪或缩小实际文生图模型。
 4. 每个文件核对大小及来源校验值；权重使用 SHA-256。仅复用已下载且重新校验通过的完整文件，半截 `.part` 会丢弃；当前不承诺 HTTP Range 断点续传。
@@ -66,3 +66,7 @@ python scripts/qwenimage_real_test.py run --binary build/ci-image/qwenimage-ncnn
 ```
 
 Windows 使用对应 `.exe`，`--native-status` 指向该程序实际构建/预检生成的 `status.json`。Linux Vulkan 机器可将最后一行改为 `--device vulkan`。命令行参数 `--output` 指定报告目录，`--model` 指定测试权重目录；不应把它指向用户业务文件夹。
+
+## 首轮跨平台修正
+
+首轮 `272c241` 的两个 macOS 工具任务暴露了测试下载器的路径错误：向上遍历到系统 `/var` 别名时将其误判为模型目录内的符号链接。改为先规范化调用者选定的根目录，仅拒绝根目录内各段的链接与路径逃逸；仍然保留完整校验，不允许模型成员使用符号链接。增加 4 项根目录/目录链接/文件链接回归，原始失败记录保留。

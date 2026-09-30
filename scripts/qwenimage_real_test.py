@@ -92,9 +92,17 @@ def verified_file(path: Path, item: dict) -> bool:
 
 
 def model_file(root: Path, name: str) -> Path:
+    # The CLI-selected root is trusted. Canonicalize OS aliases such as macOS
+    # /var -> /private/var, then reject links only INSIDE the managed directory.
+    root = root.expanduser().resolve()
     path = root / safe_name(name)
-    if not path.resolve().is_relative_to(root.resolve()) or any(p.is_symlink() for p in (path, *path.parents) if p != root.parent):
-        raise ValueError('Model paths must not contain symlinks')
+    current = root
+    for part in path.relative_to(root).parts:
+        current = current / part
+        if current.is_symlink():
+            raise ValueError('Model paths must not contain symlinks')
+    if not path.resolve().is_relative_to(root):
+        raise ValueError('Model path escapes the managed directory')
     return path
 
 
@@ -149,6 +157,7 @@ def prepare(model: Path, output: Path):
 
 def download(m: dict, root: Path, report_dir: Path, *, opener=open_https, timeout_seconds=1800):
     validate_manifest(m)
+    root = root.expanduser().resolve()
     root.mkdir(parents=True, exist_ok=True)
     deadline = time.monotonic() + timeout_seconds
     records = []
