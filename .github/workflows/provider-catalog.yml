@@ -1,0 +1,31 @@
+name: Model provider catalog
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/catalog_source_probe.py'
+      - '.github/workflows/provider-catalog.yml'
+permissions:
+  contents: read
+jobs:
+  metadata:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.11'
+      - name: Read real metadata/config from both official providers
+        run: python scripts/catalog_source_probe.py
+      - name: Preserve actual provider responses (no weights or tokens)
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: model-provider-metadata-${{ github.run_id }}
+          path: reports/provider-catalog/
+          retention-days: 14
+          if-no-files-found: error
