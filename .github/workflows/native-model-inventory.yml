@@ -1,0 +1,32 @@
+name: Native model inventory
+on:
+  workflow_dispatch:
+  push:
+    branches: [feat/model-catalog-image-routing]
+    paths: ['scripts/inventory_native_models.py', '.github/workflows/native-model-inventory.yml']
+permissions:
+  contents: read
+jobs:
+  inventory:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        model: [qwen3_0.6b, qwen3_0.6b_int8, minicpm4_0.5b, minicpm4_0.5b_int8, youtu_llm, youtu_llm_int8, qwen3.5_0.8b, qwen3.5_0.8b_int8, qwen2.5_vl_3b, qwen2.5_vl_3b_int8]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with: {persist-credentials: false}
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with: {python-version: '3.13'}
+      - name: Inspect model config and hash full actual weights (not inference)
+        run: python scripts/inventory_native_models.py --model '${{ matrix.model }}' --output reports/model-inventory/${{ matrix.model }}.json
+      - name: Save metadata and checksums only, not model weights
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: inventory-${{ matrix.model }}-${{ github.run_id }}
+          path: reports/model-inventory/
+          if-no-files-found: error
+          retention-days: 14
