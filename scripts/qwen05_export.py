@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Export the exact official Qwen2.5-0.5B-Instruct snapshot to ncnn.
+"""Export reviewed official dense Qwen2.5 snapshots to ncnn.
 
-CI-only conversion utility. No pickle, remote Python, torch or GPU is needed.
+No pickle, remote Python, torch or GPU is needed for conversion.
 Numpy is imported only for conversion; the Agent keeps its stdlib-only runtime.
 Graph uses ncnn Gemm/RMSNorm/RotaryEmbed/SDPA with the pinned runtime KV ABI.
-This is a model-specific exporter, NOT support for arbitrary Qwen architectures.
+Reviewed dense Qwen2.5 profiles only; NOT an arbitrary model/quantization importer.
 """
 from __future__ import annotations
 import argparse
@@ -17,6 +17,9 @@ from pathlib import Path
 import struct
 import time
 import urllib.request
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from local_agent.model_catalog import PROFILES
 
 MODEL_ID = 'Qwen/Qwen2.5-0.5B-Instruct'
 REVISION = '7ae557604adf67be50417f59c2c2f167def9a775'
@@ -150,10 +153,26 @@ class Graph:
         return f'7767517\n{len(lines)} {blob_count}\n' + '\n'.join(lines) + '\n'
 
 
-def export_model(source: Path, output: Path) -> dict:
+def export_model(source: Path, output: Path, *, model_key='qwen05', progress=None, cancelled=None) -> dict:
+    if model_key not in PROFILES:
+        raise ValueError('No reviewed exporter profile for this model')
+    profile = PROFILES[model_key]
+    geometry = profile['profile']
+    hidden, inter = geometry['hidden_size'], geometry['intermediate_size']
+    layers, heads_q, heads_kv = geometry['num_hidden_layers'], geometry['num_attention_heads'], geometry['num_key_value_heads']
+    vocab_size = geometry['vocab_size']
+    head_dim = hidden // heads_q
+    def check_stop():
+        if cancelled and cancelled(): raise InterruptedError('已取消模型转换')
+    def tick(done, message):
+        check_stop()
+        if progress: progress(done, layers + 4, message)
+    tick(0, '检查模型结构与权重')
     config = json.loads((source / 'config.json').read_text(encoding='utf-8'))
-    validate_config(config)
-    if sha256(source / 'model.safetensors') != WEIGHT_SHA256:
+    for key, value in geometry.items():
+        if config.get(key) != value:
+            raise ValueError('Unsupported model geometry: ' + key)
+    if sha256(source / 'model.safetensors') != profile['weight_sha256']:
         raise ValueError('Refusing non-pinned source weights')
     if output.exists() and any(output.iterdir()):
         raise ValueError('Export requires a new empty directory')
@@ -161,21 +180,23 @@ def export_model(source: Path, output: Path) -> dict:
     w = SafeWeights(source / 'model.safetensors')
     try:
         # Embedding and tied projection share the same binary bytes.
-        embedding = w.read('model.embed_tokens.weight', (151936, 896))
+        embedding = w.read('model.embed_tokens.weight', (vocab_size, hidden))
         with (output / 'embed.bin').open('wb') as f:
             f.write(struct.pack('<I', 0)); embedding.tofile(f)
         del embedding
+        tick(1, "词嵌入已转换")
         g = Graph(); g.add('Input', 'input', [], ['in0'])
-        g.add('Embed', 'embed', ['in0'], ['out0'], f'0=896 1=151936 2=0 3={151936 * 896}')
+        g.add('Embed', 'embed', ['in0'], ['out0'], f'0={hidden} 1={vocab_size} 2=0 3={vocab_size * hidden}')
         (output / 'embed.param').write_text(g.text(), encoding='utf-8')
         g = Graph(); g.add('Input', 'input', [], ['in0'])
-        g.add('Gemm', 'lm_head', ['in0'], ['out0'], '3=1 5=1 6=1 8=151936 9=896 10=-1')
+        g.add('Gemm', 'lm_head', ['in0'], ['out0'], f'3=1 5=1 6=1 8={vocab_size} 9={hidden} 10=-1')
         (output / 'head.param').write_text(g.text(), encoding='utf-8')
         g = Graph()
-        for x in ['in0', 'in1', 'in2', 'in3'] + [f'cache_{t}{i}' for i in range(24) for t in ('k', 'v')]:
+        for x in ['in0', 'in1', 'in2', 'in3'] + [f'cache_{t}{i}' for i in range(layers) for t in ('k', 'v')]:
             g.add('Input', 'input_' + x, [], [x])
         with (output / 'decoder.bin').open('wb') as f:
             def tensor(key, shape, tagged=False):
+                check_stop()
                 array = w.read(key, shape)
                 if tagged:
                     f.write(struct.pack('<I', 0))
@@ -186,19 +207,19 @@ def export_model(source: Path, output: Path) -> dict:
                 if bias: tensor(key + '.bias', (n,), True)
                 return name
             def norm(name, src, key):
-                g.add('RMSNorm', name, [src], [name], '0=896 1=1e-6 2=1')
-                tensor(key, (896,))
+                g.add('RMSNorm', name, [src], [name], f'0={hidden} 1=1e-6 2=1')
+                tensor(key, (hidden,))
                 return name
             x = 'in0'
-            for i in range(24):
+            for i in range(layers):
                 pre = f'model.layers.{i}.'
                 residual = x
                 x = norm(f'l{i}_ln1', x, pre + 'input_layernorm.weight')
                 projections = []
-                for t, heads in [('q', 14), ('k', 2), ('v', 2)]:
+                for t, heads in [('q', heads_q), ('k', heads_kv), ('v', heads_kv)]:
                     p = f'l{i}_{t}'
-                    linear(p, x, heads * 64, 896, pre + f'self_attn.{t}_proj', True)
-                    g.add('Reshape', p + '_shape', [p], [p + '_shape'], f'0=64 1={heads} 2=-1')
+                    linear(p, x, heads * head_dim, hidden, pre + f'self_attn.{t}_proj', True)
+                    g.add('Reshape', p + '_shape', [p], [p + '_shape'], f'0={head_dim} 1={heads} 2=-1')
                     g.add('Permute', p + '_heads', [p + '_shape'], [p + '_heads'], '0=2')
                     p += '_heads'
                     if t != 'v':
@@ -207,23 +228,25 @@ def export_model(source: Path, output: Path) -> dict:
                     projections.append(p)
                 attn = f'l{i}_attn'
                 g.add('SDPA', attn, [*projections, 'in1', f'cache_k{i}', f'cache_v{i}'],
-                      [attn, f'out_cache_k{i}', f'out_cache_v{i}'], '5=1 6=0.125 7=1')
+                      [attn, f'out_cache_k{i}', f'out_cache_v{i}'], f'5=1 6={head_dim ** -0.5:.17g} 7=1')
                 g.add('Permute', attn + '_perm', [attn], [attn + '_perm'], '0=2')
-                g.add('Reshape', attn + '_flat', [attn + '_perm'], [attn + '_flat'], '0=896 1=-1')
-                x = linear(f'l{i}_o', attn + '_flat', 896, 896, pre + 'self_attn.o_proj')
+                g.add('Reshape', attn + '_flat', [attn + '_perm'], [attn + '_flat'], f'0={hidden} 1=-1')
+                x = linear(f'l{i}_o', attn + '_flat', hidden, hidden, pre + 'self_attn.o_proj')
                 g.add('BinaryOp', f'l{i}_res1', [residual, x], [f'l{i}_res1'], '0=0')
                 residual = f'l{i}_res1'
                 x = norm(f'l{i}_ln2', residual, pre + 'post_attention_layernorm.weight')
-                gate = linear(f'l{i}_gate', x, 4864, 896, pre + 'mlp.gate_proj')
-                up = linear(f'l{i}_up', x, 4864, 896, pre + 'mlp.up_proj')
+                gate = linear(f'l{i}_gate', x, inter, hidden, pre + 'mlp.gate_proj')
+                up = linear(f'l{i}_up', x, inter, hidden, pre + 'mlp.up_proj')
                 g.add('Swish', gate + '_act', [gate], [gate + '_act'])
                 g.add('BinaryOp', f'l{i}_mul', [gate + '_act', up], [f'l{i}_mul'], '0=2')
-                down = linear(f'l{i}_down', f'l{i}_mul', 896, 4864, pre + 'mlp.down_proj')
+                down = linear(f'l{i}_down', f'l{i}_mul', hidden, inter, pre + 'mlp.down_proj')
                 x = f'l{i}_res2'
                 g.add('BinaryOp', x, [residual, down], [x], '0=0')
-            g.add('RMSNorm', 'final_norm', [x], ['out0'], '0=896 1=1e-6 2=1')
-            tensor('model.norm.weight', (896,))
+                tick(i + 2, f'转换解码层 {i+1}/{layers}')
+            g.add('RMSNorm', 'final_norm', [x], ['out0'], f'0={hidden} 1=1e-6 2=1')
+            tensor('model.norm.weight', (hidden,))
         (output / 'decoder.param').write_text(g.text(), encoding='utf-8')
+        tick(layers + 2, '准备分词器')
         tok = json.loads((source / 'tokenizer.json').read_text(encoding='utf-8'))
         vocab = sorted(tok['model']['vocab'].items(), key=lambda kv: kv[1])
         if [v for _, v in vocab] != list(range(len(vocab))):
@@ -234,21 +257,23 @@ def export_model(source: Path, output: Path) -> dict:
         added = sorted(tok['added_tokens'], key=lambda t: t['id'])
         if [t['id'] for t in added] != list(range(len(vocab), len(vocab) + len(added))):
             raise ValueError('Unexpected special token IDs')
-        model = {'type': 'qwen2', 'source_model': MODEL_ID, 'source_revision': REVISION,
+        model = {'type': 'qwen2', 'source_model': profile['repository'], 'source_revision': profile['revision'],
                  'params': {'decoder_param': 'decoder.param', 'decoder_bin': 'decoder.bin',
                             'embed_token_param': 'embed.param', 'embed_token_bin': 'embed.bin',
                             'proj_out_param': 'head.param', 'proj_out_bin': 'embed.bin'},
-                 'setting': {'attn_cnt': 24, 'rope': {'type': 'RoPE', 'rope_head_dim': 64, 'rope_theta': 1000000.0},
+                 'setting': {'attn_cnt': layers, 'rope': {'type': 'RoPE', 'rope_head_dim': head_dim, 'rope_theta': 1000000.0},
                              'vision': {'type': 'close'}},
                  'tokenizer': {'type': 'bbpe', 'vocab_file': 'vocab.txt', 'merges_file': 'merges.txt',
                                'bos': '', 'eos': '<|im_end|>', 'additional_special_tokens': [t['content'] for t in added]}}
         (output / 'model.json').write_text(json.dumps(model, indent=2) + '\n', encoding='utf-8')
         (output / 'LICENSE').write_bytes((source / 'LICENSE').read_bytes())
-        result = {'model_id': MODEL_ID, 'revision': REVISION, 'source_weight_sha256': WEIGHT_SHA256,
+        tick(layers + 3, '核对转换产物')
+        result = {'model_id': profile['repository'], 'revision': profile['revision'], 'source_weight_sha256': profile['weight_sha256'],
                   'format': 'ncnn FP32 weights, tied head reuses embedding file',
                   'files': {p.name: {'bytes': p.stat().st_size, 'sha256': sha256(p)} for p in sorted(output.iterdir()) if p.is_file()}}
         (output / 'EXPORT.json').write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
         print(json.dumps(result, indent=2), flush=True)
+        tick(layers + 4, '转换完成')
         return result
     finally:
         w.close()
@@ -259,10 +284,13 @@ def main():
     p.add_argument('stage', choices=['download', 'export'])
     p.add_argument('--source', type=Path, required=True)
     p.add_argument('--output', type=Path)
+    p.add_argument('--model-key', choices=list(PROFILES), default='qwen05')
     a = p.parse_args()
-    if a.stage == 'download': download_snapshot(a.source)
+    if a.stage == 'download':
+        if a.model_key != 'qwen05': p.error('Use the model center to download additional profiles')
+        download_snapshot(a.source)
     elif a.output is None: p.error('--output required for export')
-    else: export_model(a.source, a.output)
+    else: export_model(a.source, a.output, model_key=a.model_key)
 
 
 if __name__ == '__main__': main()

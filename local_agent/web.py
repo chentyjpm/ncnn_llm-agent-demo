@@ -236,7 +236,7 @@ class WebApp:
             raise WebError('At most 10 attachment paths are accepted')
         with self.lock:
             s = self.sessions.get(sid)
-            if self.model_hub and self.model_hub.status()['job']['status'] in ('downloading', 'converting'):
+            if self.model_hub and self.model_hub.status()['job']['status'] in ('downloading', 'verifying', 'converting', 'activating'):
                 raise WebError('模型安装中，请完成后再开始推理。', 409)
             if self.active and self.get_run(self.active).status not in TERMINAL:
                 raise WebError('另一个任务正在运行，请先完成或停止它。', 409)
@@ -517,7 +517,7 @@ class Handler(BaseHTTPRequestHandler):
                     if self.app.active:
                         raise WebError('先完成或停止当前任务。', 409)
                 if path.endswith('/prepare'):
-                    return self.respond(hub.prepare(payload.get('id')))
+                    return self.respond(hub.prepare(payload.get('id'), payload.get('provider', 'huggingface')))
                 if path.endswith('/install'):
                     with self.app.lock:
                         if self.app.active:

@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/qwen05-cpu.yml'
       - 'scripts/qwen05_*.py'
+      - 'scripts/model_catalog_inference.py'
       - 'scripts/web_real_smoke.py'
       - 'model-tests/**'
       - 'tests/test_qwen05_cpu.py'
@@ -87,6 +88,17 @@ jobs:
         env:
           VK_DRIVER_FILES: /nonexistent/local-agent-vulkan.json
           VK_ICD_FILENAMES: /nonexistent/local-agent-vulkan.json
+      - name: Release weights from completed 0.5B checks, retaining their evidence
+        run: |
+          python - <<'PY_CLEAN'
+          from pathlib import Path
+          for p in Path('models/official-qwen05').glob('*.safetensors'):
+              p.unlink()
+          for p in Path('models/ncnn-qwen05').glob('*.bin'):
+              p.unlink()
+          PY_CLEAN
+      - name: Actually install and infer added Coder 0.5B and 1.5B profiles
+        run: python scripts/model_catalog_inference.py --binary build/qwen05/bridge/ncnn_agent_bridge --output reports/qwen05/catalog-models
       - name: Preserve current-run evidence (no weights)
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f

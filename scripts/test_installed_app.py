@@ -78,7 +78,7 @@ def main():
                 deadline = time.monotonic() + 1200
                 while True:
                     code, state = api('/api/setup'); assert code == 200
-                    if state['job']['status'] not in ('downloading', 'converting'): break
+                    if state['job']['status'] not in ('downloading', 'verifying', 'converting', 'activating'): break
                     if time.monotonic() > deadline: raise TimeoutError('Real model installation timeout')
                     time.sleep(2)
                 report['model_install'] = state['job']

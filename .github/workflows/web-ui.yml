@@ -51,6 +51,8 @@ jobs:
         run: python scripts/browser_web.py --output reports/web-browser
       - name: Actual Office workbench and model center (no model needed)
         run: python scripts/browser_documents.py --output reports/web-documents
+      - name: Model source selection and visible progress (controlled job fixture, no model)
+        run: python scripts/browser_model_center.py --output reports/model-center-browser
       - name: Archive exact source for verification
         if: always()
         run: git archive --format=zip --output=source-checkout.zip HEAD
@@ -63,6 +65,7 @@ jobs:
             reports/web-unit/
             reports/web-browser/
             reports/web-documents/
+            reports/model-center-browser/
             source-checkout.zip
           retention-days: 14
           if-no-files-found: error

@@ -6,6 +6,21 @@
 
 > 安装包、无模型测试、真实模型推理、物理 GPU 性能是不同的验收层。请以同一提交的 GitHub Actions 结果和产物为准。源码 ZIP 不等于安装包；小型 Vulkan 预检不等于整个 Qwen Image 已完成生图测试。
 
+## 模型中心：下载源、多模型与安装进度
+
+模型中心现在区分 **下载源、待安装模型、当前启用模型**。下载源可选 **ModelScope 魔搭 / Hugging Face**，默认魔搭；不会因为一个来源失败就自动从另一个来源下载。先查询文件大小和磁盘需求，再由用户点击“确认下载并安装”，不再使用容易误解的“查看下载量”。这里的大小指所需网络数据字节数，不是下载次数。
+
+| 模型 | 用途 | 下载源 | 验证范围 |
+|---|---|---|---|
+| Qwen2.5 0.5B Instruct | 入门短问答、轻量任务 | ModelScope / Hugging Face | 原有模型已完成 CPU 基础推理验收 |
+| Qwen2.5 Coder 0.5B Instruct | 轻量代码与格式任务 | ModelScope / Hugging Face | 新增固定结构适配，以当前提交的真实模型 CI 为准 |
+| Qwen2.5 1.5B Instruct | 较大文本模型选项 | ModelScope / Hugging Face | 新增固定结构适配，以当前提交的真实模型 CI 为准 |
+| Qwen Image 2.1 | 可选图像生成 | 目前仅 Hugging Face | 引擎和下载接入，完整生图未验收；魔搭未核实到匹配的 ncnn 权重 |
+
+下载时显示真实字节进度、速率、估算剩余时间、当前文件和已校验文件数；网络等待、校验、转换和最终启用分别显示。**下载达到 100% 不等于安装完成**；无法精确测量的阶段显示状态或实际转换步骤，不编造百分比。失败原因保留在模型卡附近，可以重试或明确更换来源。页面重新打开可恢复当前任务状态；服务重启则标记安装中断，不自动重放下载。
+
+新增模型保持白名单和独立固定快照，官方 safetensors 会自动转换成引擎可加载的 ncnn 格式，不把任意 Hugging Face/ModelScope 模型列为兼容。两处下载源的三个文本模型已实查权重 SHA-256 一致；这不代替新模型的推理测试。完整说明、缓存边界及 CI 证据分层见 [模型中心](docs/MODEL_CENTER.md)。
+
 ## 1. 普通用户：安装后直接使用
 
 在 Actions 中选择成功完成的 **Application installers**，下载对应系统的 `LocalAgent-installer-*` 产物。四种构建目标为 Windows x64、Ubuntu x64、macOS Apple Silicon 和 macOS Intel。
@@ -17,7 +32,7 @@ Windows 使用 `LocalAgent-windows-x64-setup.exe`，也提供便携目录 ZIP。
 ```text
 双击 Local Agent
     → 自动启动本机服务并打开 H5 页面
-    → 安装与模型 → 查看文本模型下载量 → 明确确认
+    → 安装与模型 → 选择下载源和模型 → 查询文件大小 → 明确确认
     → 自动下载、校验、转换、启用
     → 聊天 / Agent / 文档工作台
 ```
@@ -204,7 +219,9 @@ MCP 流程为 `initialize → initialized → tools/list → allowlist → tools
 local_agent/
   cli.py                 源码命令入口、配置和运行时装配
   desktop.py             安装版自动定位、单实例、浏览器启动和自测
-  model_hub.py           固定来源、明确同意、下载校验、转换和原子激活
+  model_hub.py           明确来源、下载进度、校验、转换和原子激活
+  model_catalog.py       可选模型与两个来源各自的固定快照
+  model_sources.py       Hugging Face / ModelScope 清单解析与安全下载
   device.py              每引擎 Vulkan 优先选择、缓存、超时和回退原因
   web.py                 回环 HTTP、会话、任务、审批、取消和文件/文档 API
   webui/
@@ -223,7 +240,7 @@ local_agent/
   images.py              Qwen Image 参数、独立设备选择与结果
 native/
   ncnn_agent_bridge.cpp  文本推理 JSON-RPC 桥
-  device_probe.cpp       实际 Vulkan ReLU 探测，两引擎分别编译
+  device_probe.cpp       实际 Vulkan 计算探测，两引擎分别编译
   image/CMakeLists.txt   Qwen Image 与其同版本 probe 的构建包装
   CMakeLists.txt         文本引擎依赖、桥接器和 probe 构建
   *test.cpp              参数解析与异常展开原生回归
@@ -236,7 +253,10 @@ scripts/
   probe_regression.py    真实 Vulkan 指令和无 ICD 报告验证
   package_desktop.py     封装两引擎、文档库和解释器，生成安装产物
   test_installed_app.py  清洁 PATH 下冻结程序 HTTP/Office/模型验收
-  qwen05_*.py            固定官方 0.5B 导出、参考与真实推理
+  qwen05_*.py            官方模型导出、参考与真实推理
+  catalog_source_probe.py  两来源真实清单和 config 校验
+  model_catalog_inference.py  新增模型真实下载、转换、CPU 推理
+  browser_model_center.py  来源/确认/真实字节映射的浏览器测试
   web_real_smoke.py      真实模型 HTTP 历史与 auto→CPU 回退验收
   browser_web.py         Chromium 聊天交互，模型明确为 fixture
   browser_documents.py  无需模型的真实文档与模型中心浏览器验收
@@ -245,7 +265,7 @@ model-tests/native/     ncnn FP32 与独立参考的数值比较
 configs/                源码用户示例，不是安装版必填配置
 ci/dependencies.json    原生依赖固定提交
 upstream-lock.json      业务上游固定提交
-.github/workflows/      4 平台工具/原生、真实模型、H5 和安装包 CI
+.github/workflows/      跨平台工具/原生、真实模型、H5、来源与安装包 CI
 docs/                   使用、架构、设备、安全和测试细节
 ```
 
@@ -273,8 +293,9 @@ Docker 模式需要用户另行准备可信容器环境/镜像，失败不降级
 |---|---|
 | Cross-platform tool tests | 4 平台 Python/HTTP/文件/Office；模型和 GPU 能力使用标记 fixture |
 | Native C++ build | 8 个引擎任务，真实 C++ 编译、CLI/CTest、设备 probe、归档复测 |
-| Real Qwen 0.5B CPU | 固定官方权重、参考数值对照、实际问答/文件工具/HTTP、无 Vulkan 时 auto→CPU |
-| H5 browser acceptance | 实际 Chromium：聊天 fixture 流程；无需模型的真实文档导出/读取和安装界面 |
+| Real Qwen 0.5B CPU | 原有权重、数值/文件/HTTP/回退验收；新增 Coder 0.5B 和 1.5B 的真实下载、转换、最小问答 |
+| Model provider catalog | 3 个文本模型 × 2 个来源，实际清单与小型 config 下载校验 |
+| H5 browser acceptance | 实际 Chromium：聊天 fixture、真实文档、来源选择与可见进度 |
 | Application installers | 8 引擎任务 + 4 安装程序任务，冻结程序启动、Office、Windows 安装/卸载、Linux 真实模型 |
 
 Linux 原生 CI 安装 Mesa 软件 Vulkan，以 `--include-software` 明确测试真正的 Vulkan 指令。自动模式仍排除该软件实现；不存在的 ICD 路径验证真实无驱动状态。**软件实现不是物理 GPU 加速或性能证据。**
@@ -284,7 +305,7 @@ Linux 原生 CI 安装 Mesa 软件 Vulkan，以 `--include-software` 明确测�
 ```bash
 python -m pip install -r requirements-office.txt
 python scripts/run_tests.py --output-dir reports/ci/tools
-python -m unittest tests.test_device tests.test_desktop -v
+python -m unittest tests.test_device tests.test_desktop tests.test_model_center -v
 ```
 
 浏览器测试依赖仅用于开发：
@@ -294,6 +315,7 @@ python -m pip install playwright==1.57.0
 python -m playwright install chromium
 python scripts/browser_web.py --output reports/web-browser
 python scripts/browser_documents.py --output reports/web-documents
+python scripts/browser_model_center.py --output reports/model-center-browser
 ```
 
 真实模型需要真实引擎和匹配权重。0.5B 只适合短问答与明确引导任务，已有记录显示通用提示下会出现错误动作；不能由一个简单文件任务推断通用 Agent 已可靠。
@@ -302,7 +324,7 @@ python scripts/browser_documents.py --output reports/web-documents
 
 **显示 CPU 而不是 Vulkan？** 查看运行设置中的原因。没有硬件设备、驱动不可用、匹配 probe 缺失或预检失败会在 auto 下回退。纯软件 Vulkan 不作为默认加速设备；源码旧配置明确强制 CPU 的仍然生效。
 
-**为什么显卡预检成功，模型还是失败？** 小型 ReLU 不证明模型所有算子、显存和驱动长期稳定性。权重损坏、OOM、运行中设备丢失等错误不会被吞掉或无条件重复工具操作。
+**为什么显卡预检成功，模型还是失败？** 小型计算不证明模型所有算子、显存和驱动长期稳定性。权重损坏、OOM、运行中设备丢失等错误不会被吞掉或无条件重复工具操作。
 
 **安装后聊天不可用？** 在安装与模型中确认下载文本模型；引擎已经内置但权重按需安装。联网失败有错误提示，没有未知来源兜底。
 

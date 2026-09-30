@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'scripts/catalog_source_probe.py'
+      - 'local_agent/model_catalog.py'
+      - 'local_agent/model_sources.py'
       - '.github/workflows/provider-catalog.yml'
 permissions:
   contents: read
@@ -19,7 +21,7 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: '3.11'
-      - name: Read real metadata/config from both official providers
+      - name: Use actual adapters for both providers and verify downloaded configs
         run: python scripts/catalog_source_probe.py
       - name: Preserve actual provider responses (no weights or tokens)
         if: always()

@@ -1,52 +1,41 @@
 #!/usr/bin/env python3
-"""Read official provider metadata/config only; never download large weights.
-Evidence for provider adapters. Network failures are reported, not mocked.
+"""Live provider adapter acceptance: manifests and a checksummed config download.
+No large weights. Six model/source pairs must actually succeed, no fake fallback.
 """
 import argparse
-import hashlib
 import json
 from pathlib import Path
-import urllib.request
-from urllib.parse import urlencode
-
-REPOS = ['Qwen/Qwen2.5-0.5B-Instruct', 'Qwen/Qwen2.5-Coder-0.5B-Instruct', 'Qwen/Qwen2.5-1.5B-Instruct']
-
-
-def read(url):
-    with urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': 'LocalAgent-provider-check/1'}), timeout=30) as r:
-        data = r.read(8 * 1024 * 1024 + 1)
-    if len(data) > 8 * 1024 * 1024:
-        raise ValueError('Metadata exceeded size limit')
-    return json.loads(data)
+import sys
+import tempfile
+ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
+from local_agent.model_catalog import PROFILES
+from local_agent.model_sources import resolve_manifest,file_url,open_https,digest
 
 
 def main():
-    p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--output', type=Path, default=Path('reports/provider-catalog'))
-    a = p.parse_args(); a.output.mkdir(parents=True, exist_ok=True)
-    results = []
-    for provider in ('huggingface', 'modelscope'):
-        for repo in REPOS:
-            record = {'provider': provider, 'repository': repo, 'ok': False}
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--output',type=Path,default=ROOT/'reports/provider-catalog');a=p.parse_args();a.output.mkdir(parents=True,exist_ok=True)
+    results=[]
+    for provider in ('huggingface','modelscope'):
+        for model,profile in PROFILES.items():
+            record={'provider':provider,'model':model,'ok':False}
             try:
-                if provider == 'huggingface':
-                    meta = read(f'https://huggingface.co/api/models/{repo}?blobs=true')
-                    record['revision'] = meta['sha']; record['files'] = meta['siblings']
-                    record['config'] = read(f'https://huggingface.co/{repo}/resolve/{meta["sha"]}/config.json')
-                else:
-                    branches = read(f'https://modelscope.cn/api/v1/models/{repo}/revisions')
-                    record['revisions'] = branches
-                    meta = read(f'https://modelscope.cn/api/v1/models/{repo}/repo/files?Revision=master&Recursive=true')
-                    record['files_response'] = meta
-                    record['config'] = read(f'https://modelscope.cn/api/v1/models/{repo}/repo?' + urlencode({'Revision':'master','FilePath':'config.json'}))
-                record['ok'] = True
-            except Exception as e:
-                record['error'] = f'{type(e).__name__}: {e}'
-            results.append(record)
-            print(provider, repo, record['ok'], record.get('error', ''))
-    (a.output / 'metadata.json').write_text(json.dumps({'scope':'Live metadata/config only; not full-model inference', 'results':results}, ensure_ascii=False, indent=2), encoding='utf-8')
-    return 0 if all(r['ok'] for r in results) else 1
+                q=resolve_manifest(model,provider)
+                record['manifest']=q
+                entry=next(f for f in q['files'] if f['name']=='config.json')
+                with open_https(file_url(q,entry)) as response:raw=response.read(65537)
+                if len(raw)!=entry['bytes']:raise ValueError('Downloaded config size mismatch')
+                with tempfile.TemporaryDirectory() as tmp:
+                    f=Path(tmp)/'config.json';f.write_bytes(raw)
+                    if digest(f,entry['algorithm'])!=entry['digest']:raise ValueError('Downloaded config checksum mismatch')
+                config=json.loads(raw)
+                for key,value in profile['profile'].items():
+                    if config.get(key)!=value:raise ValueError('Profile geometry differs: '+key)
+                record.update(ok=True,config=config)
+            except Exception as e:record['error']=f'{type(e).__name__}: {e}'
+            results.append(record);print(provider,model,record['ok'],record.get('error',''),flush=True)
+    report={'scope':__doc__,'ok':all(r['ok'] for r in results),'results':results}
+    (a.output/'metadata.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
+    return 0 if report['ok'] else 1
 
 
-if __name__ == '__main__':
-    raise SystemExit(main())
+if __name__=='__main__':raise SystemExit(main())
