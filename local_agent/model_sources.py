@@ -43,8 +43,9 @@ def source_for(model_id, provider):
     if not isinstance(model_id, str) or model_id not in CATALOG:
         raise ValueError('Unknown model')
     if not isinstance(provider, str) or provider not in PROVIDERS:
-        raise ValueError('下载源必须为 modelscope 或 huggingface')
+        raise ValueError('请选择 ModelScope、Hugging Face 或 ncnn 上游镜像')
     item = CATALOG[model_id]
+    if not item.get('installable', True): raise ValueError('该模型需要专用适配，尚不能安装为聊天模型')
     if provider not in item['sources']:
         raise ValueError(item.get('unavailable_sources', {}).get(provider, '此模型暂无该来源'))
     return item['sources'][provider]
@@ -59,12 +60,16 @@ def _https_host(url):
 
 def open_https(url, timeout=30):
     host = _https_host(url)
-    if host not in ('huggingface.co', 'modelscope.cn'):
-        raise ValueError('Only the two selected model providers are supported')
-    suffixes = ('huggingface.co', 'hf.co', 'xethub.hf.co') if host == 'huggingface.co' else ('modelscope.cn', 'modelscope.ai', 'aliyuncs.com')
+    if host not in ('huggingface.co', 'modelscope.cn', 'mirrors.sdu.edu.cn'):
+        raise ValueError('Only reviewed model providers are supported')
+    if host == 'mirrors.sdu.edu.cn' and not urlsplit(url).path.startswith('/ncnn_modelzoo/'):
+        raise ValueError('Unexpected mirror directory')
+    suffixes = ('huggingface.co', 'hf.co', 'xethub.hf.co') if host == 'huggingface.co' else ('mirrors.sdu.edu.cn',) if host == 'mirrors.sdu.edu.cn' else ('modelscope.cn', 'modelscope.ai', 'aliyuncs.com')
     class Redirect(urllib.request.HTTPRedirectHandler):
         def redirect_request(self, req, fp, code, msg, headers, newurl):
             dest = _https_host(newurl)
+            if host == 'mirrors.sdu.edu.cn' and (dest != host or not urlsplit(newurl).path.startswith('/ncnn_modelzoo/')):
+                raise ValueError('Mirror redirect escaped allowed directory')
             if not any(dest == suffix or dest.endswith('.' + suffix) for suffix in suffixes):
                 raise ValueError('下载源跳转至未授权域名，已拒绝；没有自动更换下载源')
             return super().redirect_request(req, fp, code, msg, headers, newurl)
@@ -88,6 +93,9 @@ def read_metadata(url, opener):
 
 def resolve_manifest(model_id: str, provider='huggingface', *, opener=open_https) -> dict:
     source = source_for(model_id, provider)
+    if provider == 'sdu':
+        from .native_models import manifest
+        return manifest(model_id)
     repo, revision = source['repository'], source['revision']
     if provider == 'huggingface':
         meta = read_metadata(f'https://huggingface.co/api/models/{repo}/revision/{revision}?blobs=true', opener)
@@ -141,6 +149,9 @@ def file_url(manifest, item):
     # The caller uses an internal issued manifest, never raw client-supplied URLs.
     provider = manifest.get('provider', 'huggingface')
     source = source_for(manifest['id'], provider)
+    if provider == 'sdu':
+        from .native_models import download_url
+        return download_url(manifest, item)
     if source['repository'] != manifest['repository']: raise ValueError('Repository differs from catalog')
     repo, revision = source['repository'], manifest['revision']
     if not re.fullmatch('[a-f0-9]{40}', revision): raise ValueError('Immutable revision required')

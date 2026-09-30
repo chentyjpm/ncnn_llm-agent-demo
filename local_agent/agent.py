@@ -55,6 +55,7 @@ class Audit:
                 f.write(json.dumps(event, ensure_ascii=False, allow_nan=False) + "\n")
 
 def system_prompt(schemas: list[dict]) -> str:
+    from .image_tasks import image_instructions
     return (
         "You are a local workflow agent. Return ONE JSON object, no markdown. "
         'To use a tool: {"tool":"registered_name","arguments":{...}}. '
@@ -64,7 +65,7 @@ def system_prompt(schemas: list[dict]) -> str:
         "Use relative workspace paths with forward slashes. Never edit files outside workspace. "
         "For Python use UTF-8 and standard library unless the user installed other packages. "
         "Do not call tools in XML tags. /no_think\nAvailable tools:\n" +
-        json.dumps(schemas, ensure_ascii=False)
+        json.dumps(schemas, ensure_ascii=False) + image_instructions(schemas)
     )
 
 class Agent:

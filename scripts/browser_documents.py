@@ -14,6 +14,7 @@ sys.path.insert(0,str(ROOT))
 from local_agent.web import WebApp,LocalServer
 from local_agent.desktop import automatic_config
 from local_agent.model_hub import ModelHub
+from local_agent.model_catalog import CATALOG
 from local_agent.documents import DocumentTools
 
 
@@ -80,7 +81,7 @@ def main():
                 expect(page.locator('#runtime-details')).to_contain_text('engine_missing')
                 page.locator('#close-settings').click();passed('separate Vulkan-first preflight and fallback reason displayed')
                 page.locator('#setup-button').click();expect(page.locator('#setup-dialog')).to_be_visible()
-                expect(page.locator('.model-card')).to_have_count(4)
+                expect(page.locator('.model-card')).to_have_count(len(CATALOG))
                 if hub.status()['job']['status']!='idle' or list(hub.models.iterdir()): raise AssertionError('unconsented model download')
                 page.screenshot(path=str(args.output/'model-center.png'),full_page=True);passed('model center does not download without consent')
                 page.locator('#close-setup').click();page.set_viewport_size({'width':390,'height':844})

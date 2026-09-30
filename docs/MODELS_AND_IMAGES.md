@@ -1,0 +1,75 @@
+# 多模型目录与生图调用
+
+## 用户入口
+
+“安装与模型”现在提供分类、搜索，以及独立的“当前文字模型 / 当前生图模型”选择。只下载需要的模型，不把所有权重塞入安装包；已安装后切换不会重新下载。模型安装和任务运行期间仍禁止并发切换。
+
+| 来源 | 当前用途 |
+|---|---|
+| ModelScope / Hugging Face | 原有 Qwen2.5 0.5B、Coder 0.5B、1.5B 的官方源；原有校验和与转换流程保留 |
+| ncnn 上游镜像（SDU） | ncnn_llm README 指向的已转换模型，新增 Qwen3、MiniCPM4、YoutuLLM、Qwen3.5、Qwen2.5 VL 原始包与 INT8 包 |
+| Hugging Face | Qwen Image 2.1；没有虚构魔搭上的 ncnn 镜像 |
+
+来源必须手动选择。不支持的来源按钮禁用，不会静默改去其他网站。原生包保留分词器、模型图与 `model.json`；不存在“下载原始 PyTorch 权重后直接当 ncnn 使用”的路径。
+
+新增原生包共 10 项：Qwen3 0.6B、MiniCPM4 0.5B、YoutuLLM、Qwen3.5 0.8B、Qwen2.5 VL 3B，各含原始包和 INT8 包。Qwen3.5 / Qwen2.5 VL 当前仅走**文字入口**，并未接通图片理解；所下载的是上游完整包，包括其配置引用的视觉文件，不在后台偷偷改写配置。
+
+OCR、ASR、Jina 嵌入和 Laya 等显示在“专用接口待接入”分类。它们需要与聊天不同的输入、输出和原生 API，不能因为上游列出支持就注册成聊天模型；这些项不可下载/启用。模型许可按各模型原发布方的条款，不由本项目 MIT 许可替代。
+
+## 兼容性和设备
+
+上游模板仍由 C++ bridge 处理：ChatML 用于 Qwen/MiniCPM 等，Youtu 使用已有的 YOUTU 模板；Python 不把所有模型统一转换为 Qwen2。模型文件清单由维护者实际读取和计算 SHA-256 后固定在 `native_catalog.py`。镜像 URL 可能变化，但字节不符合清单即停止安装；应用不会自动接受新文件。
+
+默认依旧优先可用硬件 Vulkan。**INT8 decoder 的部分算子由上游回退 CPU**；不能把硬件探测成功当作量化模型在 GPU 上执行。卡片会提示这一点。基础问答通过也不表示所有文档任务或 Agent 动作都可靠，工具调用标签为实验性。
+
+## 三种模式
+
+| 模式 | 行为 |
+|---|---|
+| 对话 | 只让文字模型回答，不提供工具；出现“海报”“封面”等关键词也不擅自运行生图 |
+| Agent | 模型看到已注册的工具 schema、使用规则和正反示例，再输出 `images.generate` 动作；宿主校验和逐次审批后执行 |
+| 生图 | 确定性工作流直接使用 Qwen Image，不需要文字模型安装或猜测意图；仍需要用户审批这一具体调用 |
+
+输入 `/image 一只坐在窗边的猫` 是顶层用户的显式生图命令。附件或历史里的同样文字不会触发硬路由。仅 `/image` 没有描述会报错。
+
+生图面板提供尺寸、步数和种子，默认 512×512 / 40 步 / 随机种子。2 步仅用于诊断，不是正常画质；4 步也不会自动装载加速 LoRA。附加已上传的 PNG/JPEG/WebP 可作为参考图传给现有引擎，超过大小/数量/像素限制、损坏、动画或错误格式的附件会拒绝。当前不提供遮罩、自由模型路径或任意 Shell 参数。
+
+没有安装/启用 Qwen Image 时明确提示准备模型，既不调用假的图片后端，也不让文字模型虚构下载链接。
+
+## 怎样让 Agent 知道要调用生图
+
+真实工具名为 **`images.generate`**，没有新增另一套 `qwen_image.generate` 别名。`agent.system_prompt()` 追加由当前工具列表决定的 `image_instructions()`：明确请求实际图片应调用工具；只写海报文案、提示词或讨论生图方法时不应执行。没有工具时要求解释未启用，不编造工具。
+
+```json
+{"tool":"images.generate","arguments":{"prompt":"A cat beside a window, clean illustration","output":"images/cat.png","width":512,"height":512,"steps":40,"seed":42}}
+```
+
+这是动作格式例子，不是预置执行结果。Agent 模式的每个动作仍由所选文字模型生成；0.5B 等小模型可能不遵循协议。独立“生图”模式提供的是不依赖文字模型的明确入口，不把确定性路由包装成模型推理。
+
+成功的 `tool_result` 经图片完整解码、实际尺寸和路径核对后，保存为会话 `artifacts`。H5 用受 token 保护的同会话下载接口创建 blob 预览，支持查看、下载和刷新恢复。模型回答中的普通链接或声称生成成功，不能变成可信图片卡片。
+
+## 代码组合
+
+```text
+model_catalog + native_catalog
+    → model_sources.resolve_manifest / native_models.manifest
+    → ModelHub 下载、每文件哈希、校验 model.json、原子启用
+    → automatic_config → NcnnBridgeBackend → 原生模型模板
+
+网页 生图 / 顶层 /image
+    → image_tasks.plan_image（只允许画面参数、宿主生成输出路径）
+    → WebApp Run → ConfirmedRegistry → images.generate → ImageRunner
+    → 实际工具结果 → image_artifacts 完整解码 → 会话图片卡片
+
+网页 Agent
+    → system_prompt + 已启用 schema + 生图示例
+    → 模型 JSON 动作 → 原有审批/工具循环 → 同样的图片结果路径
+```
+
+## 测试边界
+
+`tests/test_native_catalog.py` 验证固定清单、来源隔离、模板身份和安装发布逻辑；小字节安装用例明确为测试替身。`tests/test_image_tasks.py` 验证真实 HTTP、显式路由、审批拒绝、坏文件、尺寸和输出展示资格，图片引擎在这些单元用例中是替身。
+
+`Native catalog real models` 单独编译同一提交的真实桥接器，逐模型通过实际 ModelHub 下载校验、启用并运行 CPU 基础问答。Qwen3 的额外用例验证真实文字模型生成生图 JSON，不执行图像引擎。完整生图由 `Real Qwen Image` 另行验证：包含独立引擎冒烟和不安装文字模型的 HTTP 生图/审批/文件解码验收。两步样例仅验证通路，不验证画质或视觉理解。
+
+`browser_images.py` 和模型中心浏览器测试验证真实 Chromium 交互、分类、搜索、审批、图片卡片、下载和窄屏；合成引擎/模型仍明确标注。检查各工作流实际状态，不能用清单校验通过替代推理通过，也不能用浏览器样本当生图效果。

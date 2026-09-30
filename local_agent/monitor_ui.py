@@ -347,7 +347,7 @@ class Dashboard:
             memory(d.get('shared_used_bytes')),memory(d.get('app_dedicated_bytes')))) for d in gpu.get('devices',[])])
         self.gpu_note.configure(text=gpu.get('note') or '整卡利用率 / 显存，不等于模型独占。共享内存 ≠ 专用显存；没有数据时显示不可用。')
         self.rows(self.processes,[(v['pid'],(v['pid'],v['name'],percent(v['cpu_pct']),memory(v['rss_bytes']),v['threads'],v['status'])) for v in snap.get('processes',[])])
-        self.rows(self.tasks,[(r['id'],(r['id'][:12],'Agent' if r['mode']=='agent' else '对话',STATES.get(r['status'],r['status']),
+        self.rows(self.tasks,[(r['id'],(r['id'][:12],{'agent':'Agent','chat':'对话','image':'生图'}.get(r['mode'],r['mode']),STATES.get(r['status'],r['status']),
             r.get('tool') or STATES.get(r['stage'],r['stage']),(r.get('device') or {}).get('name','尚未记录'))) for r in reversed(runtime.get('tasks',[]))])
         job=runtime.get('model_job',{})
         self.diag.configure(text='模型安装：'+STATES.get(job.get('status','idle'),job.get('status','idle'))+'   ·   原始任务审计保存在本机 state/runs；监控不展示正文或工具参数。')

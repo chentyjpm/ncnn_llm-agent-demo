@@ -113,7 +113,7 @@ def make_registry(ws: Workspace, python_runner=None, command_runner=None, image_
         r.add(Tool("system.run", "Run a fixed administrator-configured command, with no model-supplied arguments.",
                    schema({"name": {"type": "string", "enum": list(command_runner.commands)}}, ["name"]), command_runner.run))
     if image_runner and image_runner.config.get("enabled", False):
-        r.add(Tool("images.generate", "Generate or edit an image with Qwen Image; references selects image editing. No overwrite.",
+        r.add(Tool("images.generate", "Create an actual picture/illustration/poster using Qwen Image (生图/画图). Not for text-only image advice. references edits existing images. Default 40 steps, no overwrite.",
             schema({"prompt": TEXT, "output": TEXT,
                     "width": {"type": "integer", "minimum": 64, "maximum": 2048},
                     "height": {"type": "integer", "minimum": 64, "maximum": 2048},

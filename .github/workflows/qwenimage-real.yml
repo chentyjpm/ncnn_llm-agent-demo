@@ -12,6 +12,8 @@ on:
     paths:
       - '.github/workflows/qwenimage-real.yml'
       - 'scripts/qwenimage_real_test.py'
+      - 'scripts/web_image_smoke.py'
+      - 'local_agent/image_tasks.py'
       - 'tests/test_qwenimage_validation.py'
       - 'upstream-lock.json'
       - 'ci/dependencies.json'
@@ -70,6 +72,9 @@ jobs:
       - name: Actual ImageRunner inference and complete PNG decoding (256x256, 2 steps)
         timeout-minutes: 45
         run: python scripts/qwenimage_real_test.py run --binary build/ci-image/qwenimage-ncnn-vulkan --device "$TEST_DEVICE" --timeout 2400
+      - name: Real image HTTP route without text model, with explicit approval
+        timeout-minutes: 45
+        run: python scripts/web_image_smoke.py --binary build/ci-image/qwenimage-ncnn-vulkan --model models/ci-qwenimage21 --device "$TEST_DEVICE" --output reports/qwenimage-real/http
       - name: Summarize actual stages, never report skipped inference as success
         if: always()
         shell: python
@@ -98,6 +103,9 @@ jobs:
             reports/qwenimage-real/*.jsonl
             reports/qwenimage-real/*.log
             reports/qwenimage-real/generated.png
+            reports/qwenimage-real/http/result.json
+            reports/qwenimage-real/http/generated.png
+            reports/qwenimage-real/http/resources.jsonl
             reports/ci/image/
           retention-days: 14
           if-no-files-found: error
