@@ -1,0 +1,103 @@
+name: Real Qwen Image
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: 'hosted CPU, or an already registered isolated Linux x64 runner'
+        type: choice
+        default: hosted-cpu
+        options: [hosted-cpu, self-hosted-cpu, self-hosted-vulkan]
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/qwenimage-real.yml'
+      - 'scripts/qwenimage_real_test.py'
+      - 'tests/test_qwenimage_validation.py'
+      - 'upstream-lock.json'
+      - 'ci/dependencies.json'
+      - 'native/image/**'
+permissions:
+  contents: read
+concurrency:
+  group: real-qwenimage-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  image:
+    # Self-hosted is manual, trusted main ONLY, never an external PR runner.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ${{ inputs.runner == 'self-hosted-vulkan' && fromJSON('["self-hosted","linux","x64","qwenimage-vulkan"]') || inputs.runner == 'self-hosted-cpu' && fromJSON('["self-hosted","linux","x64","qwenimage-cpu"]') || 'ubuntu-24.04' }}
+    timeout-minutes: 90
+    env:
+      PYTHONUTF8: '1'
+      PYTHONIOENCODING: utf-8
+      CUDA_VISIBLE_DEVICES: ''
+      TEST_DEVICE: ${{ inputs.runner == 'self-hosted-vulkan' && 'vulkan' || 'cpu' }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.13'
+      - name: Install test-only image decoder and resource observer
+        run: python -m pip install Pillow==12.0.0 -r requirements-monitor.txt
+      - name: Verify strict manifest/image validators (synthetic unit fixtures, not inference)
+        run: python -m unittest tests.test_qwenimage_validation -v
+      - name: Record latest upstream HEAD versus immutable project lock
+        run: python scripts/qwenimage_real_test.py upstream
+      - name: Read pinned native dependencies
+        id: pins
+        run: python scripts/ci_native.py refs --component image
+      - name: Fetch Qwen Image with its exact recursive submodules
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: nihui/qwenimage-ncnn-vulkan
+          ref: ${{ steps.pins.outputs.qwenimage }}
+          path: .ci-src/qwenimage
+          submodules: recursive
+          persist-credentials: false
+      - name: Configure matching image engine and Vulkan probe
+        run: python scripts/ci_native.py configure --component image
+      - name: Build real C++ executable
+        run: python scripts/ci_native.py build --component image
+      - name: CLI and Vulkan preflight (NOT image generation)
+        run: python scripts/ci_native.py smoke --component image
+      - name: Resolve exact T2I weights and measure disk/memory before download
+        run: python scripts/qwenimage_real_test.py prepare
+      - name: Download all required T2I weights and verify every checksum
+        timeout-minutes: 35
+        run: python scripts/qwenimage_real_test.py download
+      - name: Actual ImageRunner inference and complete PNG decoding (256x256, 2 steps)
+        timeout-minutes: 45
+        run: python scripts/qwenimage_real_test.py run --binary build/ci-image/qwenimage-ncnn-vulkan --device "$TEST_DEVICE" --timeout 2400
+      - name: Summarize actual stages, never report skipped inference as success
+        if: always()
+        shell: python
+        run: |
+          import json, os
+          from pathlib import Path
+          root = Path('reports/qwenimage-real')
+          lines = ['## Real Qwen Image', 'Full T2I weights, 256x256, 2 steps. This is not a quality benchmark.', '']
+          for name in ('upstream', 'prepare', 'download', 'run'):
+              p = root / (name + '-stage.json')
+              r = json.loads(p.read_text(encoding='utf-8')) if p.exists() else {}
+              lines.append(f"- {name}: {'passed' if r.get('ok') else 'failed / not run'} {r.get('error', '')}")
+          p = root / 'result.json'
+          if p.exists():
+              r = json.loads(p.read_text(encoding='utf-8'))
+              lines.append(f"- Actual generation: {r.get('status', 'not_run')}; requested device: {r.get('device_requested')}")
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as f:
+              f.write('\n'.join(lines) + '\n')
+      - name: Preserve evidence and generated PNG only, never model weights
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: real-qwenimage-${{ env.TEST_DEVICE }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            reports/qwenimage-real/*.json
+            reports/qwenimage-real/*.jsonl
+            reports/qwenimage-real/*.log
+            reports/qwenimage-real/generated.png
+            reports/ci/image/
+          retention-days: 14
+          if-no-files-found: error
