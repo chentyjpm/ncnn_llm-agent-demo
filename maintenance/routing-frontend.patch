@@ -1,0 +1,135 @@
+diff --git a/local_agent/webui/app.js b/local_agent/webui/app.js
+index dd832e9..74e13a5 100644
+--- a/local_agent/webui/app.js
++++ b/local_agent/webui/app.js
+@@ -14,2 +14,2 @@ function safe(fn){return (...args)=>Promise.resolve().then(()=>fn(...args)).catc
+-function setMode(mode){state.mode=mode;for(const v of ['chat','agent']){$('mode-'+v).classList.toggle('active',v===mode);$('mode-'+v).setAttribute('aria-pressed',String(v===mode));}$('mode-hint').textContent=mode==='chat'?'直接回答，不调用工具':'写入与执行前需要确认';}
+-function controls(){const busy=!!state.run||!!state.sending;$('send-button').hidden=!!state.run;$('stop-button').hidden=!state.run;$('send-button').disabled=busy||!state.runtime?.ready||!$('message-input').value.trim()||state.uploading;$('upload-button').disabled=busy||state.uploading;$('mode-chat').disabled=busy;$('mode-agent').disabled=busy;}
++function setMode(mode){if(!['chat','agent','image'].includes(mode))return;state.mode=mode;for(const v of ['chat','agent','image']){$('mode-'+v).classList.toggle('active',v===mode);$('mode-'+v).setAttribute('aria-pressed',String(v===mode));}$('mode-hint').textContent=mode==='chat'?'直接回答，不调用工具':mode==='image'?'Qwen Image · 确认后生成':'写入与执行前需要确认';controls();}
++function controls(){const busy=!!state.run||!!state.sending;const image=state.mode==='image'||/^\s*\/image(?:\s|$)/.test($('message-input').value);const ready=image?state.runtime?.image_ready:state.runtime?.ready;$('send-button').hidden=!!state.run;$('stop-button').hidden=!state.run;$('send-button').disabled=busy||!ready||!$('message-input').value.trim()||state.uploading;$('upload-button').disabled=busy||state.uploading;for(const m of ['chat','agent','image'])$('mode-'+m).disabled=busy;$('image-options').hidden=!image;for(const id of ['image-width','image-height','image-steps','image-seed'])$(id).disabled=busy;$('image-mode-note').textContent=state.runtime?.image_ready?'Qwen Image 独立生图 · 不需要文字模型 · 提交后仍需逐次确认':'请在“安装与模型”中安装并启用 Qwen Image。当前不能生图，不会使用假图片兜底。';}
+@@ -49 +49 @@ function renderMessages(){const scroll=$('scroll-area');const near=scroll.scroll
+-    else {const label=el('div','message-label');label.append(icon('spark'),el('span','','Local Agent'));if(m.mode==='agent')label.append(el('span','badge','AGENT'));article.append(label);
++    else {const label=el('div','message-label');label.append(icon('spark'),el('span','','Local Agent'));if(m.mode==='agent'||m.mode==='image')label.append(el('span','badge',m.mode==='image'?'QWEN IMAGE':'AGENT'));article.append(label);
+@@ -54 +54 @@ function renderMessages(){const scroll=$('scroll-area');const near=scroll.scroll
+-      if((running||m.state==='running')&&!m.content){const pending=el('div','pending-text');pending.append(el('span','spinner'),el('span','',state.approval?'等待你的确认':state.stopping?'正在停止，等待当前操作结束…':'正在处理 · 模型完成本轮后显示回答'));content.append(pending);}
++      if((running||m.state==='running')&&!m.content){const pending=el('div','pending-text');pending.append(el('span','spinner'),el('span','',state.approval?'等待你的确认':state.stopping?'正在停止，等待当前操作结束…':m.mode==='image'?'Qwen Image 正在处理 · 请等待真实生成结果':'正在处理 · 模型完成本轮后显示回答'));content.append(pending);}
+@@ -56 +56 @@ function renderMessages(){const scroll=$('scroll-area');const near=scroll.scroll
+-      article.append(content);if(m.content){const actions=el('div','message-actions');actions.append(button('复制回答','copy',safe(async()=>{await navigator.clipboard.writeText(m.content);toast('回答已复制');})));if(m.state==='failed'){actions.append(button('重试最后一条消息',null,()=>{const last=[...messages].reverse().find(x=>x.role==='user');if(last){$('message-input').value=last.content;controls();$('message-input').focus();}},'soft-button'));}actions.append(el('span','',m.elapsed_seconds?`${m.elapsed_seconds} 秒`:'本地回复'));article.append(actions);}
++      article.append(content);if(m.artifacts?.length){const gallery=el('div','generated-images');for(const item of m.artifacts)if(item.kind==='image'&&item.source_tool==='images.generate')gallery.append(imageCard(item,state.session.id));article.append(gallery);}if(m.content){const actions=el('div','message-actions');actions.append(button('复制回答','copy',safe(async()=>{await navigator.clipboard.writeText(m.content);toast('回答已复制');})));if(m.state==='failed'){actions.append(button('重试最后一条消息',null,()=>{const last=[...messages].reverse().find(x=>x.role==='user');if(last){$('message-input').value=last.content;controls();$('message-input').focus();}},'soft-button'));}actions.append(el('span','',m.elapsed_seconds?`${m.elapsed_seconds} 秒`:'本地回复'));article.append(actions);}
+@@ -64,2 +64,2 @@ async function send(){
+-  const message=$('message-input').value.trim();if(!message)return;if(!state.runtime?.ready)return toast('请先配置本地模型。');
+-  const payload={message,mode:state.mode,max_new_tokens:Number($('token-limit').value),attachments:state.attachments.map(x=>x.path)};
++  const message=$('message-input').value.trim();if(!message)return;const image=state.mode==='image'||/^\s*\/image(?:\s|$)/.test(message);if(!(image?state.runtime?.image_ready:state.runtime?.ready))return toast(image?'请先安装并启用 Qwen Image。':'请先配置本地模型。');
++  const payload={message,mode:state.mode,max_new_tokens:Number($('token-limit').value),attachments:state.attachments.map(x=>x.path),...(image?{image_options:{width:Number($('image-width').value),height:Number($('image-height').value),steps:Number($('image-steps').value),...($('image-seed').value.trim()?{seed:Number($('image-seed').value)}:{})}}:{})};
+@@ -88 +88,18 @@ function formatBytes(n){return n===null?'文件夹':n>=1048576?(n/1048576).toFix
+-async function getFile(path){const r=await fetch(`/api/sessions/${state.session.id}/download?path=${encodeURIComponent(path)}`,{headers:{'X-Agent-Token':state.token}});if(!r.ok){const e=await r.json();throw Error(e.error);}return r.blob();}
++async function getSessionFile(sid,path){const r=await fetch(`/api/sessions/${sid}/download?path=${encodeURIComponent(path)}`,{headers:{'X-Agent-Token':state.token}});if(!r.ok){const e=await r.json();throw Error(e.error);}return r.blob();}
++async function getFile(path){return getSessionFile(state.session.id,path);}
++const imageURLs=new Map();
++function imageCard(item,sid){
++ const card=el('figure','generated-image'),img=el('img');img.alt='Qwen Image 生成结果';img.loading='lazy';
++ const caption=el('figcaption');caption.append(el('strong','','Qwen Image'),el('span','',`${item.width} × ${item.height} · ${formatBytes(item.bytes)}`));
++ caption.append(button('下载图片','down',safe(async()=>saveBlob(await getSessionFile(sid,item.path),item.path.split('/').pop()))),button('查看文件','folder',safe(()=>{if(state.session?.id===sid)return openFilesAt(item.path);}))); 
++ card.append(img,caption);const key=sid+':'+item.path;
++ if(!imageURLs.has(key))imageURLs.set(key,getSessionFile(sid,item.path).then(blob=>{
++  if(!['image/png','image/jpeg','image/webp'].includes(item.mime))throw Error('不支持的图片预览格式');
++  return URL.createObjectURL(new Blob([blob],{type:item.mime}));
++ }).catch(e=>{imageURLs.delete(key);throw e;}));
++ imageURLs.get(key).then(url=>{if(img.isConnected)img.src=url;}).catch(e=>{if(card.isConnected)caption.append(el('span','error-text',e.message));});
++ // Keep the small local preview cache bounded; no auth tokens enter URLs/storage.
++ if(imageURLs.size>32){const [k,p]=imageURLs.entries().next().value;imageURLs.delete(k);p.then(u=>URL.revokeObjectURL(u)).catch(()=>{});}
++ return card;
++}
++window.addEventListener('beforeunload',()=>{for(const p of imageURLs.values())p.then(u=>URL.revokeObjectURL(u)).catch(()=>{});});
+@@ -106 +123 @@ $('theme-button').onclick=()=>setTheme(document.documentElement.dataset.theme===
+-$('mode-chat').onclick=()=>setMode('chat');$('mode-agent').onclick=()=>setMode('agent');
++$('mode-chat').onclick=()=>setMode('chat');$('mode-agent').onclick=()=>setMode('agent');$('mode-image').onclick=()=>setMode('image');
+diff --git a/local_agent/webui/index.html b/local_agent/webui/index.html
+index a25777d..9063974 100644
+--- a/local_agent/webui/index.html
++++ b/local_agent/webui/index.html
+@@ -79 +79,11 @@
+-        <div class="composer-toolbar"><div class="composer-tools"><button id="upload-button" type="button" class="icon-button" aria-label="上传文件" title="上传文件，单个文件不超过 8 MiB"><svg class="icon"><use href="#i-plus"/></svg></button><input id="file-input" type="file" hidden multiple><div class="mode-switch" aria-label="运行模式"><button id="mode-chat" type="button" class="mode-button active" aria-pressed="true"><svg class="icon"><use href="#i-chat"/></svg>对话</button><button id="mode-agent" type="button" class="mode-button" aria-pressed="false"><svg class="icon"><use href="#i-spark"/></svg>Agent</button></div></div><div class="composer-actions"><span id="mode-hint">直接回答，不调用工具</span><button id="send-button" type="submit" class="send-button" aria-label="发送消息" disabled><svg class="icon"><use href="#i-arrow"/></svg></button><button id="stop-button" type="button" class="send-button stop" aria-label="停止任务" hidden><span></span></button></div></div>
++        <div id="image-options" class="image-options" hidden>
++          <div class="image-mode-note" id="image-mode-note">Qwen Image 独立生图 · 不需要文字模型 · 提交后仍需逐次确认</div>
++          <div class="image-parameters">
++            <label>宽度<select id="image-width"><option>256</option><option selected>512</option><option>768</option><option>1024</option></select></label>
++            <label>高度<select id="image-height"><option>256</option><option selected>512</option><option>768</option><option>1024</option></select></label>
++            <label>步数<input id="image-steps" type="number" min="1" max="100" value="40"></label>
++            <label>种子<input id="image-seed" type="number" min="0" max="2147483647" placeholder="随机"></label>
++          </div>
++          <small>参考图通过附件上传。少步数仅适合诊断；4 步不等于加载了加速 LoRA。</small>
++        </div>
++        <div class="composer-toolbar"><div class="composer-tools"><button id="upload-button" type="button" class="icon-button" aria-label="上传文件" title="上传文件，单个文件不超过 8 MiB"><svg class="icon"><use href="#i-plus"/></svg></button><input id="file-input" type="file" hidden multiple><div class="mode-switch" aria-label="运行模式"><button id="mode-chat" type="button" class="mode-button active" aria-pressed="true"><svg class="icon"><use href="#i-chat"/></svg>对话</button><button id="mode-agent" type="button" class="mode-button" aria-pressed="false"><svg class="icon"><use href="#i-spark"/></svg>Agent</button><button id="mode-image" type="button" class="mode-button" aria-pressed="false"><svg class="icon"><use href="#i-spark"/></svg>生图</button></div></div><div class="composer-actions"><span id="mode-hint">直接回答，不调用工具</span><button id="send-button" type="submit" class="send-button" aria-label="发送消息" disabled><svg class="icon"><use href="#i-arrow"/></svg></button><button id="stop-button" type="button" class="send-button stop" aria-label="停止任务" hidden><span></span></button></div></div>
+@@ -103,2 +113,2 @@
+-    <label>下载来源<select id="model-source" aria-label="模型下载来源"><option value="modelscope">ModelScope 魔搭</option><option value="huggingface">Hugging Face</option></select></label>
+-    <label>模型类型<select id="model-filter" aria-label="模型类型"><option value="all">全部模型</option><option value="llm">文本 / 代码</option><option value="image">图像生成</option></select></label>
++    <label>下载来源<select id="model-source" aria-label="模型下载来源"><option value="modelscope">ModelScope 魔搭</option><option value="huggingface">Hugging Face</option><option value="sdu">ncnn 上游镜像（SDU）</option></select></label>
++    <label>模型类型<select id="model-filter" aria-label="模型类型"><option value="all">全部模型</option><option value="llm">文本 / 代码</option><option value="image">图像生成</option><option value="code">代码模型</option><option value="light">轻量模型</option><option value="native">ncnn 原生格式</option><option value="installed">已安装</option><option value="pending">待接入能力</option></select></label>
+@@ -105,0 +116,2 @@
++  <div class="catalog-search"><input id="model-search" type="search" aria-label="搜索模型" placeholder="搜索 Qwen / MiniCPM / Youtu / 代码…"><span id="model-count"></span></div>
++  <div id="active-models" class="active-models"></div>
+diff --git a/local_agent/webui/style.css b/local_agent/webui/style.css
+index f3498e0..30ee8cc 100644
+--- a/local_agent/webui/style.css
++++ b/local_agent/webui/style.css
+@@ -17,0 +18,13 @@ html[data-theme="light"]{color-scheme:light;--bg:#fafbf9;--sidebar:#f0f2ef;--pan
++
++/* Image route and model catalogue; safe local outputs, no remote HTML previews. */
++.image-options{border-top:1px solid var(--line);padding:10px 6px;margin:6px 0 8px;color:var(--muted);font-size:11px}
++.image-mode-note{margin-bottom:9px;color:var(--accent)}.image-parameters{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px}
++.image-parameters label{display:flex;align-items:center;gap:7px}.image-parameters select,.image-parameters input{border:1px solid var(--line);border-radius:7px;padding:4px 6px;background:var(--card);width:76px;font-size:12px}#image-seed{width:112px}
++.generated-images{padding-left:29px;display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr));margin:14px 0}
++.generated-image{margin:0;border:1px solid var(--line);border-radius:13px;overflow:hidden;background:var(--card)}
++.generated-image img{display:block;max-height:480px;width:100%;object-fit:contain;background:var(--sidebar)}
++.generated-image figcaption{display:flex;align-items:center;flex-wrap:wrap;gap:7px;padding:10px 12px;font-size:11px}.generated-image figcaption span{color:var(--muted);margin-right:auto}
++.catalog-search{display:flex;align-items:center;gap:12px;margin:12px 0}.catalog-search input{flex:1;border:1px solid var(--line);border-radius:9px;padding:10px 12px;background:var(--card)}#model-count{font-size:11px;color:var(--muted);white-space:nowrap}
++.active-models{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}.active-model-slot{padding:10px;border:1px solid var(--line);border-radius:9px;font-size:11px;color:var(--muted)}.active-model-slot label{display:block;margin-bottom:5px}.active-model-slot select{width:100%;padding:5px;background:var(--card);border:1px solid var(--line);border-radius:6px;color:var(--text);font-size:12px}
++.model-tags{display:flex;gap:5px;flex-wrap:wrap;margin:8px 0}.model-tags .badge{color:var(--accent);background:var(--sidebar)}
++@media(max-width:800px){.generated-images{padding-left:0}.active-models{grid-template-columns:1fr}.image-options small{font-size:9px}.image-parameters{gap:8px}.image-parameters input,.image-parameters select{width:63px;font-size:11px}#image-seed{width:88px}.mode-button{padding:5px 6px;font-size:10px}.mode-switch{gap:1px}}
+diff --git a/local_agent/webui/workbench.js b/local_agent/webui/workbench.js
+index a86b48b..f5237f7 100644
+--- a/local_agent/webui/workbench.js
++++ b/local_agent/webui/workbench.js
+@@ -19,2 +19,2 @@ $('doc-export').onclick=safe(async()=>{if(state.run)return toast('请先完成
+-const setup = {data:null, provider:storage.get('model-provider')||'modelscope', filter:'all', quote:null, query:null, error:'', seq:0, completed:null, controller:null};
+-if(!['modelscope','huggingface'].includes(setup.provider))setup.provider='modelscope';
++const setup = {data:null, provider:storage.get('model-provider')||'modelscope', filter:'all', search:'', quote:null, query:null, error:'', seq:0, completed:null, controller:null};
++if(!['modelscope','huggingface','sdu'].includes(setup.provider))setup.provider='modelscope';
+@@ -24 +24 @@ function duration(seconds){if(!Number.isFinite(seconds))return '正在估算';re
+-function providerName(key){return key==='modelscope'?'ModelScope 魔搭':'Hugging Face';}
++function providerName(key){return {modelscope:'ModelScope 魔搭',huggingface:'Hugging Face',sdu:'ncnn 上游镜像（SDU）'}[key]||key;}
+@@ -31,0 +32,14 @@ async function setupRequest(path,data,timeout=30000){
++function filteredModels(models){const q=setup.search.trim().toLowerCase();return models.filter(m=>{
++ const f=setup.filter;
++ const matches=f==='all'||f===m.kind||f===m.category||(f==='light'&&m.light)||(f==='native'&&m.install_kind==='ncnn')||(f==='installed'&&m.installed)||(f==='pending'&&m.installable===false);
++ return matches&&(!q||[m.name,m.family,m.description,m.precision,...(m.capabilities||[])].join(' ').toLowerCase().includes(q));
++});}
++function activeModels(data,busy){const key=JSON.stringify([data.models.map(m=>[m.id,m.installed,m.active]),busy]);if(setup.activeKey===key)return;setup.activeKey=key;
++ const area=$('active-models');area.replaceChildren();
++ for(const [kind,label] of [['llm','当前文字模型'],['image','当前生图模型']]){const row=el('label','setting-row');row.append(el('span','',label));const select=el('select');select.setAttribute('aria-label',label);select.id='active-'+kind;
++  const current=data.models.find(m=>m.kind===kind&&m.active);const empty=el('option','',current?'选择已安装模型':'尚未安装／启用');empty.value='';select.append(empty);
++  for(const m of data.models.filter(m=>m.kind===kind&&m.installed&&m.installable!==false)){const o=el('option','',m.name);o.value=m.id;select.append(o);}
++  select.value=current?.id||'';select.disabled=busy||select.options.length<2;
++  select.onchange=safe(async()=>{if(!select.value)return;select.disabled=true;try{await api('/api/setup/activate','POST',{id:select.value});await updateSetup();await refreshRuntime();}catch(e){setup.activeKey=null;renderSetup();throw e;}});row.append(select);area.append(row);
++ }
++}
+@@ -42 +56,3 @@ function renderSetup(){
+- const cardsKey=JSON.stringify([data.models,setup.provider,setup.filter,setup.quote,setup.query,!!setup.starting,busy,job.model]);
++ const visible=filteredModels(data.models);$('model-count').textContent=`${visible.length} / ${data.models.length} 项`;
++ activeModels(data,busy||querying||!!setup.starting);
++ const cardsKey=JSON.stringify([data.models,setup.provider,setup.filter,setup.search,setup.quote,setup.query,!!setup.starting,busy,job.model]);
+@@ -44 +60,2 @@ function renderSetup(){
+- for(const model of data.models.filter(m=>setup.filter==='all'||m.kind===setup.filter)){
++ if(!visible.length)$('model-cards').append(el('p','setting-note','没有匹配的模型，请调整分类或搜索词。'));
++ for(const model of visible){
+@@ -47,0 +65,2 @@ function renderSetup(){
++  const tags=el('div','model-tags');for(const label of [model.family,model.precision,...(model.capabilities||[]).map(k=>({chat:'对话',documents:'文档','agent-experimental':'Agent · 待任务验证',image:'生图'}[k]||k))].filter(Boolean))tags.append(el('span','badge',label));card.append(tags);
++  if(model.runtime_note)card.append(el('p','setting-note',model.runtime_note));
+@@ -54,2 +73,2 @@ function renderSetup(){
+-  const action=button(model.active?'当前使用':model.installed?'启用此模型':setup.query===model.id?'正在查询大小…':activeJob?'正在安装…':'准备下载',null,()=>chooseModel(model),'primary-button');
+-  action.disabled=model.active||busy||querying||!!setup.starting||(!supported&&!model.installed);card.append(action);
++  const action=button(model.installable===false?'专用接口待接入':model.active?'当前使用':model.installed?'启用此模型':setup.query===model.id?'正在查询大小…':activeJob?'正在安装…':'准备下载',null,()=>chooseModel(model),'primary-button');
++  action.disabled=model.installable===false||model.active||busy||querying||!!setup.starting||(!supported&&!model.installed);card.append(action);
+@@ -117,0 +137 @@ $('model-filter').onchange=()=>{setup.filter=$('model-filter').value;renderSetup
++$('model-search').oninput=()=>{setup.search=$('model-search').value;renderSetup();};

@@ -1,0 +1,187 @@
+diff --git a/local_agent/agent.py b/local_agent/agent.py
+index c6576f0..6e507a2 100644
+--- a/local_agent/agent.py
++++ b/local_agent/agent.py
+@@ -57,0 +58 @@ def system_prompt(schemas: list[dict]) -> str:
++    from .image_tasks import image_instructions
+@@ -67 +68 @@ def system_prompt(schemas: list[dict]) -> str:
+-        json.dumps(schemas, ensure_ascii=False)
++        json.dumps(schemas, ensure_ascii=False) + image_instructions(schemas)
+diff --git a/local_agent/model_catalog.py b/local_agent/model_catalog.py
+index f9cc2b3..c584429 100644
+--- a/local_agent/model_catalog.py
++++ b/local_agent/model_catalog.py
+@@ -61,0 +62,43 @@ CATALOG['qwenimage21'] = {
++
++# Native converted bundles keep their upstream tokenizer, graph and template.
++# Do not attempt to run OCR/embedding/discriminator models through a chat ABI.
++from .native_catalog import NATIVE_MODELS
++PROVIDERS['sdu'] = 'ncnn 上游镜像（SDU）'
++for _id, _item in CATALOG.items():
++    _item.update(installable=True, category='code' if 'coder' in _id else _item['kind'],
++                 family='Qwen Image' if _item['kind']=='image' else 'Qwen2.5',
++                 capabilities=['image'] if _item['kind']=='image' else ['chat','documents','agent-experimental'],
++                 light=_id in ('qwen05','qwen_coder05'), install_kind='converted' if _id in PROFILES else 'image')
++    _item.setdefault('unavailable_sources', {})['sdu'] = '此模型保留官方 Hugging Face / ModelScope 来源，请手动选择。'
++for _id, _native in NATIVE_MODELS.items():
++    _family = {'qwen3':'Qwen3','minicpm4':'MiniCPM4','youtu_llm':'YoutuLLM','qwen3.5':'Qwen3.5','qwen2.5_vl':'Qwen2.5 VL','qwen2-vl':'Qwen2.5 VL'}.get(_native['expected_type'],_native['expected_type'])
++    _label = _native['repository'].replace('qwen3.5_0.8b','Qwen3.5 0.8B').replace('qwen2.5_vl_3b','Qwen2.5 VL 3B').replace('qwen3_0.6b','Qwen3 0.6B').replace('minicpm4_0.5b','MiniCPM4 0.5B').replace('youtu_llm','YoutuLLM').replace('_int8',' INT8')
++    _quantized = _native['precision']=='int8'
++    CATALOG[_id] = {
++        'name':_label + (' · 文本入口' if _native['text_only'] else ''), 'kind':'llm',
++        'family':_family, 'category':'llm', 'light':_family in ('Qwen3','Qwen3.5','MiniCPM4'),
++        'precision':'INT8 decoder' if _quantized else '上游原始包',
++        'format':'ncnn 原生权重 · 无需转换', 'install_kind':'ncnn', 'installable':True,
++        'description':'保留上游模型配置、分词器和聊天模板。' + ('当前仅接入文字，不把图片上传当作视觉输入。' if _native['text_only'] else ''),
++        'capabilities':['chat','documents','agent-experimental'],
++        'runtime_note':'INT8 解码器由上游切换到 CPU；Vulkan 预检成功不表示量化解码在 GPU。' if _quantized else '可用硬件 Vulkan 优先；完整模型运行结果以实测为准。',
++        'validation':'文件全量 SHA-256 已核对；本项目推理验收待运行',
++        'estimated_download_bytes':_native['download_bytes'], 'repository':_native['repository'], 'revision':_native['revision'],
++        'sources':{'sdu':{'repository':_native['repository'],'revision':_native['revision']}},
++        'unavailable_sources':{'huggingface':'尚未核实相同 ncnn 字节的 HF 镜像。请手动选择 ncnn 上游镜像（SDU）。',
++                               'modelscope':'尚未核实相同 ncnn 字节的魔搭镜像。请手动选择 ncnn 上游镜像（SDU）。'},
++    }
++
++# Visible roadmap, deliberately not downloadable/activatable through the chat engine.
++for _id, _name, _family, _why in (
++    ('pending_glm_ocr','GLM-OCR / INT8','OCR','需要图像 prefill 和 OCR 专用结果接口'),
++    ('pending_hunyuan_ocr','HunyuanOCR / INT8','OCR','需要专用图像预处理与 OCR 输出接口'),
++    ('pending_liteocr','LiteOCR','OCR','需要独立 OCR 适配'),
++    ('pending_qwen_asr','Qwen3 ASR 0.6B / 1.7B / INT8','ASR','需要音频输入和语音识别适配'),
++    ('pending_laya','Laya / Laya Multilingual / INT8','判别器','判别器输出分类分数，不是聊天生成模型'),
++    ('pending_jina_text','Jina Embeddings v5 Text Nano / INT8','嵌入','输出向量，需要嵌入或检索接口'),
++    ('pending_jina_clip','Jina CLIP v2 / INT8','多模态嵌入','输出图文向量，不是对话或生图模型'),
++):
++    CATALOG[_id]={'name':_name,'kind':'pending','category':'pending','family':_family,'installable':False,
++        'sources':{},'description':_why,'validation':'上游有支持，本应用尚未接通专用调用接口',
++        'format':'专用模型 · 不是聊天后端','capabilities':[], 'light':False}
+diff --git a/local_agent/model_hub.py b/local_agent/model_hub.py
+index 586005f..4df6876 100644
+--- a/local_agent/model_hub.py
++++ b/local_agent/model_hub.py
+@@ -55,0 +56 @@ class ModelHub:
++        if model_id not in CATALOG or not CATALOG[model_id].get('installable', True): return False
+@@ -209,0 +211,3 @@ class ModelHub:
++                if CATALOG[model_id].get('install_kind') == 'ncnn':
++                    from .native_models import validate_install
++                    validate_install(cache, model_id)
+diff --git a/local_agent/model_sources.py b/local_agent/model_sources.py
+index 10b683c..42489da 100644
+--- a/local_agent/model_sources.py
++++ b/local_agent/model_sources.py
+@@ -46 +46 @@ def source_for(model_id, provider):
+-        raise ValueError('下载源必须为 modelscope 或 huggingface')
++        raise ValueError('请选择 ModelScope、Hugging Face 或 ncnn 上游镜像')
+@@ -47,0 +48 @@ def source_for(model_id, provider):
++    if not item.get('installable', True): raise ValueError('该模型需要专用适配，尚不能安装为聊天模型')
+@@ -62,3 +63,5 @@ def open_https(url, timeout=30):
+-    if host not in ('huggingface.co', 'modelscope.cn'):
+-        raise ValueError('Only the two selected model providers are supported')
+-    suffixes = ('huggingface.co', 'hf.co', 'xethub.hf.co') if host == 'huggingface.co' else ('modelscope.cn', 'modelscope.ai', 'aliyuncs.com')
++    if host not in ('huggingface.co', 'modelscope.cn', 'mirrors.sdu.edu.cn'):
++        raise ValueError('Only reviewed model providers are supported')
++    if host == 'mirrors.sdu.edu.cn' and not urlsplit(url).path.startswith('/ncnn_modelzoo/'):
++        raise ValueError('Unexpected mirror directory')
++    suffixes = ('huggingface.co', 'hf.co', 'xethub.hf.co') if host == 'huggingface.co' else ('mirrors.sdu.edu.cn',) if host == 'mirrors.sdu.edu.cn' else ('modelscope.cn', 'modelscope.ai', 'aliyuncs.com')
+@@ -67,0 +71,2 @@ def open_https(url, timeout=30):
++            if host == 'mirrors.sdu.edu.cn' and (dest != host or not urlsplit(newurl).path.startswith('/ncnn_modelzoo/')):
++                raise ValueError('Mirror redirect escaped allowed directory')
+@@ -90,0 +96,3 @@ def resolve_manifest(model_id: str, provider='huggingface', *, opener=open_https
++    if provider == 'sdu':
++        from .native_models import manifest
++        return manifest(model_id)
+@@ -143,0 +152,3 @@ def file_url(manifest, item):
++    if provider == 'sdu':
++        from .native_models import download_url
++        return download_url(manifest, item)
+diff --git a/local_agent/monitor_ui.py b/local_agent/monitor_ui.py
+index 38fa2d9..5e2f6c8 100644
+--- a/local_agent/monitor_ui.py
++++ b/local_agent/monitor_ui.py
+@@ -350 +350 @@ class Dashboard:
+-        self.rows(self.tasks,[(r['id'],(r['id'][:12],'Agent' if r['mode']=='agent' else '对话',STATES.get(r['status'],r['status']),
++        self.rows(self.tasks,[(r['id'],(r['id'][:12],{'agent':'Agent','chat':'对话','image':'生图'}.get(r['mode'],r['mode']),STATES.get(r['status'],r['status']),
+diff --git a/local_agent/tools.py b/local_agent/tools.py
+index b11845d..17a1b9f 100644
+--- a/local_agent/tools.py
++++ b/local_agent/tools.py
+@@ -116 +116 @@ def make_registry(ws: Workspace, python_runner=None, command_runner=None, image_
+-        r.add(Tool("images.generate", "Generate or edit an image with Qwen Image; references selects image editing. No overwrite.",
++        r.add(Tool("images.generate", "Create an actual picture/illustration/poster using Qwen Image (生图/画图). Not for text-only image advice. references edits existing images. Default 40 steps, no overwrite.",
+diff --git a/local_agent/web.py b/local_agent/web.py
+index 0dcc266..ba466c7 100644
+--- a/local_agent/web.py
++++ b/local_agent/web.py
+@@ -27,0 +28,3 @@ from .process import kill_tree
++from .image_tasks import route_request, image_ready, plan_image, image_artifacts
++from .images import ImageRunner
++from .tools import make_registry, Registry
+@@ -120,0 +124 @@ class Run:
++    image_plan: dict | None = None
+@@ -210,0 +215,4 @@ class WebApp:
++        result['image_ready'] = image_ready(self.config.get('image', {}))
++        if self.model_hub is not None:
++            result['image_ready'] = result['image_ready'] and 'image' in self.model_hub.active()
++        result['image_model'] = Path(self.config.get('image', {}).get('model', '')).name or '未配置'
+@@ -228,3 +236,3 @@ class WebApp:
+-        mode = payload.get('mode', 'chat')
+-        if mode not in ('chat', 'agent'):
+-            raise WebError('mode must be chat or agent')
++        mode, image_prompt = route_request(question, payload.get('mode', 'chat'))
++        if mode != 'image' and payload.get('image_options'):
++            raise WebError('生图参数只能在生图模式使用')
+@@ -245 +253,4 @@ class WebApp:
+-            if not self.info()['ready']:
++            runtime = self.info()
++            if mode == 'image' and not runtime['image_ready']:
++                raise WebError('生图模型未就绪。请在“安装与模型”中安装并启用 Qwen Image；不需要先安装文字模型。', 503)
++            if mode != 'image' and not runtime['ready']:
+@@ -247,0 +259 @@ class WebApp:
++            image_plan = plan_image(ws, image_prompt, payload.get('image_options'), attachments) if mode == 'image' else None
+@@ -292 +304 @@ class WebApp:
+-            run = Run(rid, sid, mid, mode)
++            run = Run(rid, sid, mid, mode, image_plan=image_plan)
+@@ -305 +317 @@ class WebApp:
+-            cfg['llm']['max_new_tokens'] = tokens
++            cfg.setdefault('llm', {})['max_new_tokens'] = tokens
+@@ -307,5 +319,6 @@ class WebApp:
+-            if self.factory:
+-                backend = self.factory(cfg['llm'])
+-            else:
+-                backend = classes[cfg['llm']['backend']](cfg['llm'], Path(__file__).resolve().parents[1])
+-            run.backend = backend
++            if run.mode != 'image':
++                if self.factory:
++                    backend = self.factory(cfg['llm'])
++                else:
++                    backend = classes[cfg['llm']['backend']](cfg['llm'], Path(__file__).resolve().parents[1])
++                run.backend = backend
+@@ -314 +327,18 @@ class WebApp:
+-            if run.mode == 'chat':
++            if run.mode == 'image':
++                # Explicit deterministic route: never call a fake/planning text model.
++                ws = self.ws(run.session_id)
++                image = ImageRunner(ws, cfg['image'])
++                run.backend = image
++                registry = Registry()
++                registry.add(make_registry(ws, image_runner=image).tools['images.generate'])
++                audit.add('start', backend='QWEN_IMAGE_DIRECT', task=task, routing='explicit_image_mode')
++                audit.add('tool_start', step=1, tool='images.generate', arguments=run.image_plan)
++                result = ConfirmedRegistry(registry, run).call('images.generate', run.image_plan)
++                audit.add('tool_result', step=1, tool='images.generate', arguments=run.image_plan, result=result)
++                if not result['ok']:
++                    raise RuntimeError(result.get('error') or str(result.get('result', {}).get('error') or 'Qwen Image 执行失败，请展开工具记录'))
++                cards = image_artifacts(ws, audit.events)
++                if not cards:
++                    raise RuntimeError('工具未返回可验证的图片文件')
++                content, state = '图片已生成：' + cards[0]['path'], 'completed'
++            elif run.mode == 'chat':
+@@ -345,0 +376,5 @@ class WebApp:
++            try:
++                artifacts = image_artifacts(self.ws(run.session_id), audit.events)
++            except Exception as exc:
++                artifacts = []
++                state, content = 'failed', f'图片文件验证失败：{exc}'
+@@ -349 +384 @@ class WebApp:
+-                message.update(device_selection=getattr(backend, 'device_selection', None), content=content[:131072], state=state,
++                message.update(artifacts=artifacts, device_selection=getattr(run.backend, 'device_selection', None), content=content[:131072], state=state,

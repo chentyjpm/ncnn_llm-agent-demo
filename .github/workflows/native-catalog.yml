@@ -1,0 +1,92 @@
+name: Native catalog real models
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['local_agent/native_catalog.py', 'local_agent/native_models.py', 'local_agent/model_catalog.py', 'scripts/native_catalog_smoke.py', '.github/workflows/native-catalog.yml']
+permissions:
+  contents: read
+concurrency:
+  group: native-catalog-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  bridge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    outputs:
+      models: ${{ steps.matrix.outputs.models }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with: {persist-credentials: false}
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with: {python-version: '3.13'}
+      - id: matrix
+        run: |
+          python - <<'PY'
+          import os,json
+          from local_agent.native_catalog import NATIVE_MODELS
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('models='+json.dumps(list(NATIVE_MODELS))+'\n')
+          PY
+      - id: pins
+        run: python scripts/ci_native.py refs --component bridge
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: futz12/ncnn_llm
+          ref: ${{ steps.pins.outputs.ncnn_llm }}
+          path: .ci-src/ncnn_llm
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: Tencent/ncnn
+          ref: ${{ steps.pins.outputs.ncnn }}
+          path: .ci-src/ncnn
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: nlohmann/json
+          ref: ${{ steps.pins.outputs.json }}
+          path: .ci-src/json
+          persist-credentials: false
+      - run: |
+          python scripts/ci_native.py configure --component bridge
+          python scripts/ci_native.py build --component bridge
+          python scripts/ci_native.py smoke --component bridge
+          python scripts/ci_native.py package --component bridge
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: catalog-bridge
+          path: dist/ci/*.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+      - if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: catalog-bridge-logs
+          path: reports/ci/bridge/
+          retention-days: 14
+  model:
+    needs: bridge
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        model: ${{ fromJSON(needs.bridge.outputs.models) }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with: {persist-credentials: false}
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with: {python-version: '3.13'}
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with: {name: catalog-bridge, path: .native-artifact}
+      - name: Real native install and CPU inference, no mock model
+        run: python scripts/native_catalog_smoke.py --archive .native-artifact/bridge-linux-x86_64.tar.gz --model '${{ matrix.model }}' --output reports/native-catalog ${{ matrix.model == 'ncnn_qwen3_0_6b' && '--image-intent' || '' }}
+      - if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: native-catalog-${{ matrix.model }}-${{ github.run_id }}
+          path: reports/native-catalog/
+          if-no-files-found: error
+          retention-days: 14
