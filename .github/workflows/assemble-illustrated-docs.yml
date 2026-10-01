@@ -1,0 +1,85 @@
+name: Assemble illustrated documentation assets
+on:
+  push:
+    branches: [docs/illustrated-cover-20261001]
+    paths: ['.visual-import/**', '.github/workflows/assemble-illustrated-docs.yml']
+permissions:
+  contents: write
+concurrency:
+  group: illustrated-doc-assets
+  cancel-in-progress: true
+jobs:
+  assets:
+    if: github.repository == 'chentyjpm/ncnn_llm-agent-demo' && github.ref == 'refs/heads/docs/illustrated-cover-20261001'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.13'
+      - name: Install artwork decoder only
+        run: python -m pip install Pillow==12.0.0
+      - name: Validate user-approved cover bytes and generate original SVG guides
+        run: |
+          python .visual-import/render_project_guides.py --svg-only
+          python - <<'PY'
+          import base64, hashlib, io, json
+          from pathlib import Path
+          from PIL import Image
+          from xml.etree import ElementTree as ET
+          folder = Path('.visual-import')
+          encoded = ''.join((folder/f'cover-{i:02}.b64').read_text() for i in range(6))
+          assert len(encoded) == 65408
+          raw = base64.b64decode(encoded, validate=True)
+          assert hashlib.sha256(raw).hexdigest() == 'ee6a63fbec0f52030ba9da89c298d1a438f864fcb57087b251870853e0691712'
+          output = Path('docs/images')
+          with Image.open(io.BytesIO(raw)) as im:
+              im.load()
+              assert im.size == (1440, 810)
+              im.convert('RGB').save(output/'project-cover.webp', lossless=True, method=6)
+          names = ['project-cover.webp','guide-modules.svg','guide-workflows.svg','guide-model-lifecycle.svg']
+          for name in names[1:]:
+              doc = ET.fromstring((output/name).read_text())
+              assert doc.attrib['viewBox'] == '0 0 1600 1000'
+              assert not any(e.tag.rsplit('}',1)[-1] in ('script','foreignObject','image') for e in doc.iter())
+          record = {
+              'schema_version':1,
+              'code_baseline':'cc0b0676c4a44bfc9879e835a6b3904b23c5563e',
+              'scope':'Concept cover and authored technical diagrams, NOT screenshots, inference outputs or test results.',
+              'cover':{
+                  'source':'User-approved image from this conversation: 樱花暮色中的本地智能工作站.png',
+                  'original_png_sha256':'5096d333dc7fe2959faa5bcda28cbd6b140e1ba3ea83e90eb66fdfab2f16a3e0',
+                  'original_dimensions':[1672,941],
+                  'web_dimensions':[1440,810],
+                  'processing':'Aspect-preserving resize, AVIF quality 32 transport, lossless WebP of decoded pixels. No crop or compositional edit.',
+                  'transport_sha256':'ee6a63fbec0f52030ba9da89c298d1a438f864fcb57087b251870853e0691712',
+                  'note':'Cover icons/arrows are decorative. The guide diagrams and source code define the actual architecture.'
+              },
+              'diagrams':{
+                  'format':'Editable SVG text and vector geometry; no scripts, external images or bundled fonts.',
+                  'source':'docs/render_project_guides.py',
+                  'basis':['local_agent/web.py','local_agent/agent.py','local_agent/tools.py','local_agent/image_tasks.py','local_agent/images.py','local_agent/model_hub.py','local_agent/device.py','docs/ARCHITECTURE.md','docs/MODELS_AND_IMAGES.md']
+              },
+              'files':[{'path':name,'bytes':(output/name).stat().st_size,'sha256':hashlib.sha256((output/name).read_bytes()).hexdigest()} for name in names]
+          }
+          (output/'ILLUSTRATIONS.json').write_text(json.dumps(record,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(record,ensure_ascii=False,indent=2))
+          PY
+      - name: Commit only generated documentation assets to the temporary branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/images/project-cover.webp docs/images/guide-modules.svg docs/images/guide-workflows.svg docs/images/guide-model-lifecycle.svg docs/images/ILLUSTRATIONS.json
+          git commit -m 'docs: materialize approved cover and checked SVG workflow guides'
+          git push origin HEAD:docs/illustrated-cover-20261001
+      - name: Preserve documentation assets
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: illustrated-doc-assets
+          path: |
+            docs/images/project-cover.webp
+            docs/images/guide-*.svg
+            docs/images/ILLUSTRATIONS.json
+          if-no-files-found: error
+          retention-days: 14
