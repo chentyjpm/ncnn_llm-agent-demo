@@ -34,10 +34,6 @@ jobs:
              bx=sx+14*dx; by=sy+14*dy; px=-7*dy; py=7*dx
              self.parts.append(f'<path d="M{bx+px:g} {by+py:g} L{sx:g} {sy:g} L{bx-px:g} {by-py:g}" fill="none" stroke="{TEAL}" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>')
             if label:self.text(lx,ly,label,17,TEAL,500,'middle')'''
-          # The inline literal has ten spaces of YAML/Python alignment after
-          # its first line. Remove those, preserving the generator's indentation.
-          lines=new.splitlines()
-          new=lines[0]+'\n'+'\n'.join(line[10:] for line in lines[1:])
           assert s.count(anchor)==1
           s=s.replace(anchor,new,1)
           out=s.encode()
