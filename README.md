@@ -1,3 +1,8 @@
+<p align="center">
+  <img src="docs/images/project-cover.webp" alt="Local Agent 项目封面：樱花暮色中的本地智能工作站，Powered by ncnn 与 ncnn_llm" width="100%">
+</p>
+<p align="center"><sub>项目概念封面 · 经用户选定的插画；不是界面截图、真实模型输出或架构定义。模块关系以下方图解和源码为准。</sub></p>
+
 <div align="center">
 
 <h1>Local Agent</h1>
@@ -15,6 +20,7 @@
 <p>
   <a href="docs/INSTALLATION.md"><strong>安装与升级</strong></a> ·
   <a href="#screenshots">运行画面</a> ·
+  <a href="#visual-guide">图解项目</a> ·
   <a href="#architecture">架构与模块</a> ·
   <a href="#quick-start">快速开始</a> ·
   <a href="docs/ARCHITECTURE.md">深入代码</a>
@@ -152,6 +158,38 @@ python -m local_agent serve --config configs/local.json --open
 
 桌面入口、内置引擎与打包方法见[安装说明](docs/INSTALLATION.md)和[原生接入](docs/NATIVE_SETUP.md)。
 
+<a id="visual-guide"></a>
+
+## 三张图，看懂项目如何组合
+
+**先分清角色，再看一次任务怎么执行，最后看模型如何准备和选择设备。** 下列图解为可缩放 SVG，点击可查看原图；它们解释运行结构，不代表模型能力或性能已经验收。
+
+### 01 / 模块分工
+
+<a href="docs/images/guide-modules.svg"><img src="docs/images/guide-modules.svg" alt="模块分工图：H5 和原生监控连接 Python 服务；文件工具独立执行，ncnn_llm 与 Qwen Image 是两个采用 ncnn 的独立推理进程" width="100%"></a>
+
+**ncnn_llm 和 Qwen Image 不是前后串联。** 它们分别负责文字和图像推理，底层各自采用 ncnn；Python 的 WebApp、Agent 和 Registry 管理会话、动作与工具。
+
+<details>
+<summary><strong>02 / 展开三种模式的完整工作流程</strong></summary>
+
+![工作流程图：对话直接回答；Agent 经过模型动作、校验审批、真实工具和结果回传；独立生图无需文字模型](docs/images/guide-workflows.svg)
+
+普通对话不提供工具。Agent 只在模型提出合法工具动作后进入执行链，`final` 则直接结束并回答；有副作用的操作需确认。独立生图和顶层 `/image` 指令直接进入受确认控制的 Qwen Image 路径，不要求文字模型先做决定。
+
+</details>
+
+<details>
+<summary><strong>03 / 展开模型安装与 Vulkan / CPU 选择流程</strong></summary>
+
+![模型准备图：选择来源、确认清单、下载校验、按格式准备、分别启用；两个引擎各自进行硬件 Vulkan 预检，无可用硬件才选 CPU](docs/images/guide-model-lifecycle.svg)
+
+来源按模型匹配，不暗中切换。受支持的官方 Qwen2.5 权重经转换使用，已转换的原生 ncnn 包直接校验部署；不是任意模型都能通用转换。默认 `device: auto` 在两个引擎中分别预检，硬件 Vulkan 不可用才选择 CPU；运行时报错不靠无条件 CPU 重试掩盖。
+
+</details>
+
+[阅读图解说明与代码入口](docs/VISUAL_GUIDE.md) · [查看可编辑 SVG 的生成脚本](docs/render_project_guides.py) · [完整架构文档](docs/ARCHITECTURE.md)
+
 <a id="architecture"></a>
 
 ## 引擎怎样变成 Agent
@@ -169,6 +207,7 @@ flowchart TB
     UI["H5 工作台"] <-->|"本机 HTTP / 任务事件"| WEB["WebApp / Run<br/>会话、任务、审批"]
     WEB -->|"对话模式"| B["文本后端适配器"]
     WEB -->|"Agent 模式"| A["Agent 循环"]
+    WEB -->|"生图 / /image（逐次确认）"| I
     A <-->|"messages / 回答"| B
     B <-->|"JSON-RPC / stdio"| L["C++ 桥接器 + ncnn_llm"]
     A <-->|"动作 / 真实结果"| T["审批层 + Registry"]
@@ -268,7 +307,7 @@ docs/                         架构与专题文档；images/ 保存真实截图
 
 ## 模型与能力边界
 
-文字模型中心提供 **Qwen2.5 0.5B Instruct、Coder 0.5B Instruct、1.5B Instruct**，支持 ModelScope / Hugging Face。Qwen Image 2.1 为可选项，目前仅接入已匹配的 Hugging Face ncnn 来源。详见[模型中心](docs/MODEL_CENTER.md)。
+模型中心保留 **Qwen2.5 0.5B、Coder 0.5B、1.5B** 的 ModelScope / Hugging Face 来源，并列入 Qwen3、MiniCPM4、YoutuLLM 等上游原生 ncnn 包与 INT8 版本。**列入目录不等于全部模型已通过推理或质量验收**。Qwen Image 2.1 为可选项，目前仅接入已匹配的 Hugging Face ncnn 来源。详见[模型中心](docs/MODEL_CENTER.md)与[多模型说明](docs/MODELS_AND_IMAGES.md)。
 
 默认 `device: "auto"` 会按引擎分别预检，优先可用的硬件 Vulkan，否则选择 CPU 并记录原因；**不是所有推理异常都自动用 CPU 重试**。图像引擎接通和启动检查通过，也不代表完整生图、画质或各显卡性能已验证。
 
@@ -302,6 +341,7 @@ python scripts/run_tests.py --output-dir reports/ci/tools
 
 | 理解项目 | 使用与配置 | 验证与排错 |
 |---|---|---|
+| [图解项目](docs/VISUAL_GUIDE.md) | [多模型与生图入口](docs/MODELS_AND_IMAGES.md) | [0.8B 验收策略](docs/NATIVE_MODEL_ACCEPTANCE.md) |
 | [架构与模块组合](docs/ARCHITECTURE.md) | [安装与升级](docs/INSTALLATION.md) | [CI 说明](docs/CI.md) |
 | [H5 API 与任务](docs/WEB_UI.md) | [模型中心与下载源](docs/MODEL_CENTER.md) | [真实 Qwen CPU](docs/QWEN05_CPU.md) |
 | [文档处理模块](docs/DOCUMENTS.md) | [Vulkan 与 CPU](docs/VULKAN.md) | [监控采样](docs/MONITOR.md) |
