@@ -41,7 +41,16 @@ class Drawing:
   for i,line in enumerate(lines):self.text(x+23,y+76+29*i,line,20,MUTED)
   if tag:self.text(x+w-20,y+h-19,tag,15,accent,600,'end')
  def arrow(self,points,label=None,lx=None,ly=None,dashed=False,both=False):
-  self.parts.append(f'<path d="{points}" fill="none" stroke="{TEAL}" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"'+(' marker-start="url(#arrow-back)"' if both else '')+(' stroke-dasharray="6 8"' if dashed else '')+'/>')
+  self.parts.append(f'<path d="{points}" fill="none" stroke="{TEAL}" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"'+(' stroke-dasharray="6 8"' if dashed else '')+'/>')
+  if both:
+   # Explicit geometry avoids renderer-dependent marker-start orientation.
+   token=points.split(); sx=float(token[0][1:]); sy=float(token[1]); segment=token[2]
+   if segment[0] not in ('H','V'): raise ValueError('Bidirectional arrows require an H/V first segment')
+   target=float(segment[1:]); origin=sx if segment[0]=='H' else sy
+   direction=1 if target>origin else -1
+   dx=direction if segment[0]=='H' else 0; dy=direction if segment[0]=='V' else 0
+   bx=sx+14*dx; by=sy+14*dy; px=-7*dy; py=7*dx
+   self.parts.append(f'<path d="M{bx+px:g} {by+py:g} L{sx:g} {sy:g} L{bx-px:g} {by-py:g}" fill="none" stroke="{TEAL}" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>')
   if label:self.text(lx,ly,label,17,TEAL,500,'middle')
  def pill(self,x,y,w,label,fill='#ecf5f7',color=TEAL):
   self.rect(x,y,w,32,fill,fill,16);self.text(x+w/2,y+23,label,17,color,600,'middle')
