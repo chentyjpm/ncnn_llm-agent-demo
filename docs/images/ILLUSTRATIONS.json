@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "code_baseline": "cc0b0676c4a44bfc9879e835a6b3904b23c5563e",
+  "scope": "Concept cover and authored technical diagrams, NOT screenshots, inference outputs or test results.",
+  "cover": {
+    "source": "User-approved image from this conversation: 樱花暮色中的本地智能工作站.png",
+    "original_png_sha256": "5096d333dc7fe2959faa5bcda28cbd6b140e1ba3ea83e90eb66fdfab2f16a3e0",
+    "original_dimensions": [
+      1672,
+      941
+    ],
+    "web_dimensions": [
+      1440,
+      810
+    ],
+    "processing": "Aspect-preserving resize, AVIF quality 32 transport, lossless WebP of decoded pixels. No crop or compositional edit.",
+    "transport_sha256": "ee6a63fbec0f52030ba9da89c298d1a438f864fcb57087b251870853e0691712",
+    "note": "Cover icons/arrows are decorative. The guide diagrams and source code define the actual architecture."
+  },
+  "diagrams": {
+    "format": "Editable SVG text and vector geometry; no scripts, external images or bundled fonts.",
+    "source": "docs/render_project_guides.py",
+    "basis": [
+      "local_agent/web.py",
+      "local_agent/agent.py",
+      "local_agent/tools.py",
+      "local_agent/image_tasks.py",
+      "local_agent/images.py",
+      "local_agent/model_hub.py",
+      "local_agent/device.py",
+      "docs/ARCHITECTURE.md",
+      "docs/MODELS_AND_IMAGES.md"
+    ]
+  },
+  "files": [
+    {
+      "path": "project-cover.webp",
+      "bytes": 1085768,
+      "sha256": "621814c394ffd617345265e3a4d607d3ed41139f60ffad35a0b8c59024074d9c"
+    },
+    {
+      "path": "guide-modules.svg",
+      "bytes": 11623,
+      "sha256": "c6f849b2b3f298bff9ddfc300ab2ee07a99ec011aff70e0d4c3c6b83e888cdb0"
+    },
+    {
+      "path": "guide-workflows.svg",
+      "bytes": 12185,
+      "sha256": "686fecc44a8177f3c614b83905ba8d7c410def74f7b09347ccaffdd48048cbab"
+    },
+    {
+      "path": "guide-model-lifecycle.svg",
+      "bytes": 10827,
+      "sha256": "40c18dfcaafe89b745aee603d135af00c4e43c19e87800ae30b87cb08dcbe406"
+    }
+  ]
+}
