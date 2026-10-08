@@ -42,6 +42,7 @@ jobs:
       - name: Verify real UI event ordering with controlled timing
         run: |
           node --check local_agent/webui/app.js
+          node --check local_agent/webui/activity.js
           node scripts/test_ui_lifecycle.js
       - name: Install browser test dependencies (not app requirements)
         run: |
@@ -55,6 +56,8 @@ jobs:
         run: python scripts/browser_model_center.py --output reports/model-center-browser
       - name: Explicit image mode, approval and result cards (synthetic engine, real browser)
         run: python scripts/browser_images.py --output reports/browser-images
+      - name: Execution summaries and tool traces (real browser, labelled model fixtures)
+        run: python scripts/browser_activity.py --output reports/browser-activity
       - name: Archive exact source for verification
         if: always()
         run: git archive --format=zip --output=source-checkout.zip HEAD
@@ -69,6 +72,7 @@ jobs:
             reports/web-documents/
             reports/model-center-browser/
             reports/browser-images/
+            reports/browser-activity/
             source-checkout.zip
           retention-days: 14
           if-no-files-found: error

@@ -1,7 +1,7 @@
 'use strict';
 const $ = id => document.getElementById(id);
 const state = {token:'',runtime:null,sessions:[],session:null,attachments:[],mode:'chat',
-  run:null,runSession:null,traces:[],approval:null,folder:'.',previewURL:null,uploading:false};
+  run:null,runSession:null,traces:[],activity:null,approval:null,folder:'.',previewURL:null,uploading:false};
 const terminal = new Set(['completed','failed','cancelled']);
 const storage = {get(k){try{return localStorage.getItem(k);}catch{return null;}},set(k,v){try{localStorage.setItem(k,v);}catch{}}};
 function el(tag, cls, value) {const n=document.createElement(tag); if(cls)n.className=cls; if(value!==undefined)n.textContent=value; return n;}
@@ -44,19 +44,22 @@ function traceView(events){const root=el('div','trace');root.append(el('div','tr
   for(const e of events.filter(e=>e.event==='format_error'))root.append(el('div','tool-event error-text','模型动作格式错误，正在请求修正。'));
   return root;}
 function approvalView(){const a=state.approval;const card=el('div','approval-card');card.append(el('strong','','需要你确认 · '+a.tool),el('p','','请核对下面的参数。仅允许这一次调用；拒绝或超时将阻止执行。'),el('pre','',JSON.stringify(a.arguments,null,2)));const actions=el('div','approval-actions');const decide=allow=>safe(async()=>{await api(`/api/runs/${state.run}/approve`,'POST',{approval_id:a.id,allow});state.approval=null;renderMessages();});actions.append(button('拒绝',null,decide(false),'soft-button'),button('允许这一次',null,decide(true),'primary-button'));card.append(actions);return card;}
-function renderMessages(){const scroll=$('scroll-area');const near=scroll.scrollHeight-scroll.scrollTop-scroll.clientHeight<130;const opened=[...$('messages').querySelectorAll('details[open]')].map(x=>x.dataset.step);const list=$('messages');list.replaceChildren();const messages=state.session?.messages||[];$('welcome').hidden=messages.length>0;
+function renderMessages(){const activityFocus=window.AgentActivity?.remember($('messages'));const scroll=$('scroll-area');const near=scroll.scrollHeight-scroll.scrollTop-scroll.clientHeight<130;const opened=[...$('messages').querySelectorAll('details[open]')].map(x=>x.dataset.step).filter(Boolean);const list=$('messages');list.replaceChildren();const messages=state.session?.messages||[];$('welcome').hidden=messages.length>0;
   for(const m of messages){const article=el('article','message '+m.role);article.dataset.messageId=m.id;const content=el('div','message-content');if(m.role==='user'){content.textContent=m.content;article.append(content);if(m.attachments?.length){const links=el('div','attachments');for(const p of m.attachments)links.append(button(p.split('/').pop(),'file',safe(()=>openFilesAt(p)),'attachment-chip'));article.append(links);}}
     else {const label=el('div','message-label');label.append(icon('spark'),el('span','','Local Agent'));if(m.mode==='agent'||m.mode==='image')label.append(el('span','badge',m.mode==='image'?'QWEN IMAGE':'AGENT'));article.append(label);
       const running=state.run&&state.runSession===state.session.id&&m.run_id===state.run;
       const traces=running?state.traces:m.trace||[];
-      if(traces.some(e=>e.event==='tool_start'||e.event==='format_error'))article.append(traceView(traces));
+      const activity=running?(state.activity||m.activity):m.activity;
+      if(activity&&window.AgentActivity)article.append(window.AgentActivity.render(activity,m.id));
+      else if(traces.some(e=>e.event==='tool_start'||e.event==='format_error'))article.append(traceView(traces));
       if(running&&state.approval)article.append(approvalView());
-      if((running||m.state==='running')&&!m.content){const pending=el('div','pending-text');pending.append(el('span','spinner'),el('span','',state.approval?'等待你的确认':state.stopping?'正在停止，等待当前操作结束…':m.mode==='image'?'Qwen Image 正在处理 · 请等待真实生成结果':'正在处理 · 模型完成本轮后显示回答'));content.append(pending);}
+      if((running||m.state==='running')&&!m.content){const pending=el('div','pending-text');pending.append(el('span','spinner'),el('span','',state.approval?'等待你的确认':state.stopping?'正在停止，等待当前操作结束…':activity?.stage?activity.stage:m.mode==='image'?'Qwen Image 正在处理 · 请等待真实生成结果':'正在处理 · 模型完成本轮后显示回答'));content.append(pending);}
       else {if(m.state==='failed'||m.state==='cancelled')content.classList.add('error-text');content.append(markdown(m.content));}
       article.append(content);if(m.artifacts?.length){const gallery=el('div','generated-images');for(const item of m.artifacts)if(item.kind==='image'&&item.source_tool==='images.generate')gallery.append(imageCard(item,state.session.id));article.append(gallery);}if(m.content){const actions=el('div','message-actions');actions.append(button('复制回答','copy',safe(async()=>{await navigator.clipboard.writeText(m.content);toast('回答已复制');})));if(m.state==='failed'){actions.append(button('重试最后一条消息',null,()=>{const last=[...messages].reverse().find(x=>x.role==='user');if(last){$('message-input').value=last.content;controls();$('message-input').focus();}},'soft-button'));}actions.append(el('span','',m.elapsed_seconds?`${m.elapsed_seconds} 秒`:'本地回复'));article.append(actions);}
     }list.append(article);
   }
   for(const d of list.querySelectorAll('details'))if(opened.includes(d.dataset.step))d.open=true;
+  window.AgentActivity?.restore(list,activityFocus);
   if(near||!messages.length)requestAnimationFrame(()=>scroll.scrollTop=scroll.scrollHeight);
 }
 async function send(){
@@ -71,15 +74,15 @@ async function send(){
     requestAnimationFrame(()=>$('scroll-area').scrollTop=$('scroll-area').scrollHeight);
   }finally{state.sending=false;controls();}
 }
-async function watchRun(rid,sid){if(state.run)return;state.run=rid;state.runSession=sid;state.traces=[];state.approval=null;state.stopping=false;$('stop-button').disabled=false;controls();let cursor=0;
-  try {while(state.run===rid){const result=await api(`/api/runs/${rid}/events?after=${cursor}`);cursor=result.cursor;for(const e of result.events){if(e.event==='approval_required')state.approval=e.approval;if(e.event==='approval_resolved')state.approval=null;if(e.event==='stopping')state.stopping=true;if(e.event!=='done')state.traces.push(e);if(e.event==='done'&&state.session?.id===sid){const m=state.session.messages.find(m=>m.id===e.message.id);if(m)Object.assign(m,e.message);state.session.active_run=null;}}
+async function watchRun(rid,sid){if(state.run)return;state.run=rid;state.runSession=sid;state.traces=[];state.activity=null;state.approval=null;state.stopping=false;$('stop-button').disabled=false;controls();let cursor=0;
+  try {while(state.run===rid){const result=await api(`/api/runs/${rid}/events?after=${cursor}`);cursor=result.cursor;if(result.activity)state.activity=result.activity;for(const e of result.events){if(e.event==='approval_required')state.approval=e.approval;if(e.event==='approval_resolved')state.approval=null;if(e.event==='stopping')state.stopping=true;if(e.event!=='done')state.traces.push(e);if(e.event==='done'&&state.session?.id===sid){const m=state.session.messages.find(m=>m.id===e.message.id);if(m)Object.assign(m,e.message);state.session.active_run=null;}}
       if(state.session?.id===sid)renderMessages();if(terminal.has(result.status))break;
     }}catch(e){notice('与任务的连接中断：'+e.message+'。刷新页面可重新查询任务状态。');}
   finally{
     // Keep the current run locked until its final session refresh completes.
     // Otherwise a late response can erase the next run's assistant/approval card.
     try{await refreshSessions();if(state.session?.id===sid){const session=await api('/api/sessions/'+sid);if(state.session?.id===sid){state.session=session;renderMessages();if(!$('file-panel').hidden)await showFiles();}}}catch(e){toast(e.message);}
-    finally{if(state.run===rid){state.run=null;state.runSession=null;state.approval=null;state.traces=[];state.stopping=false;}controls();renderMessages();}
+    finally{if(state.run===rid){state.run=null;state.runSession=null;state.approval=null;state.traces=[];state.activity=null;state.stopping=false;}controls();renderMessages();}
   }
 }
 function renderAttachments(){const root=$('attachments');root.replaceChildren();for(const item of state.attachments){const chip=el('div','attachment-chip');chip.append(icon('file'),el('span','',item.name),button('移除附件','close',()=>{state.attachments=state.attachments.filter(x=>x!==item);renderAttachments();}));root.append(chip);}}
