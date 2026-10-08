@@ -9,6 +9,8 @@ jobs:
   inspect:
     runs-on: ubuntu-24.04
     timeout-minutes: 8
+    env:
+      PYTHONPATH: .
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with: {persist-credentials: false}
@@ -17,13 +19,12 @@ jobs:
       - name: Inspect official metadata and mirror small-file transport only
         shell: python
         run: |
-          import copy, hashlib, json, time, urllib.request
+          import hashlib, json, urllib.request
           from pathlib import Path
           from urllib.parse import urlsplit
           from local_agent.model_sources import resolve_manifest, file_url
           from local_agent.model_catalog import CATALOG, PROFILES
           root = Path('reports/hf-discovery'); root.mkdir(parents=True, exist_ok=True)
-          # Use the Qwen Image snapshot previously verified with actual CPU inference.
           CATALOG['qwenimage21']['sources']['huggingface']['revision'] = '89f21845fe94168a493206d8095956095c454caa'
           report = []
           for model in [*PROFILES, 'qwenimage21']:
