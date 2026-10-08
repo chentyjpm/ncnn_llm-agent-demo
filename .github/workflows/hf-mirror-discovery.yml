@@ -1,0 +1,74 @@
+name: HF mirror transport discovery
+on:
+  push:
+    branches: [feat/hf-mirror-20261008]
+    paths: ['.github/workflows/hf-mirror-discovery.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with: {persist-credentials: false}
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with: {python-version: '3.13'}
+      - name: Inspect official metadata and mirror small-file transport only
+        shell: python
+        run: |
+          import copy, hashlib, json, time, urllib.request
+          from pathlib import Path
+          from urllib.parse import urlsplit
+          from local_agent.model_sources import resolve_manifest, file_url
+          from local_agent.model_catalog import CATALOG, PROFILES
+          root = Path('reports/hf-discovery'); root.mkdir(parents=True, exist_ok=True)
+          # Use the Qwen Image snapshot previously verified with actual CPU inference.
+          CATALOG['qwenimage21']['sources']['huggingface']['revision'] = '89f21845fe94168a493206d8095956095c454caa'
+          report = []
+          for model in [*PROFILES, 'qwenimage21']:
+              row = {'model': model, 'ok': False, 'redirects': []}
+              try:
+                  manifest = resolve_manifest(model, 'huggingface')
+                  (root / (model + '-official.json')).write_text(json.dumps(manifest, indent=2))
+                  def opener(url, *, ranged=False, limit=8388609):
+                      class Guard(urllib.request.HTTPRedirectHandler):
+                          def redirect_request(self, req, fp, code, msg, headers, newurl):
+                              p = urlsplit(newurl)
+                              row['redirects'].append({'host': p.hostname, 'path': p.path, 'status': code})
+                              if p.scheme != 'https' or p.username or p.password or p.port not in (None, 443):
+                                  raise ValueError('Unsafe transport redirect')
+                              if not any(p.hostname == h or p.hostname.endswith('.' + h) for h in ('hf-mirror.com', 'hf.co', 'huggingface.co')):
+                                  raise ValueError('Unreviewed transport host: ' + str(p.hostname))
+                              return super().redirect_request(req, fp, code, msg, headers, newurl)
+                      h = {'User-Agent': 'LocalAgent-Mirror-Discovery/1'}
+                      if ranged: h['Range'] = 'bytes=0-65535'
+                      with urllib.request.build_opener(Guard()).open(urllib.request.Request(url, headers=h), timeout=25) as r:
+                          data = r.read(limit)
+                          return data, {'status': r.status, 'host': urlsplit(r.url).hostname, 'bytes_read': len(data)}
+                  repo, rev = manifest['repository'], manifest['revision']
+                  raw, info = opener('https://hf-mirror.com/api/models/' + repo + '/revision/' + rev + '?blobs=true')
+                  mirrored = json.loads(raw)
+                  row['metadata'] = info; row['metadata_sha_matches'] = mirrored.get('sha') == rev
+                  (root / (model + '-mirror-metadata.json')).write_bytes(raw)
+                  entry = next(f for f in manifest['files'] if f['name'] == ('vae/decoder.ncnn.param' if model == 'qwenimage21' else 'config.json'))
+                  url = file_url(manifest, entry).replace('https://huggingface.co/', 'https://hf-mirror.com/', 1)
+                  raw, info = opener(url, limit=entry['bytes'] + 1)
+                  h = hashlib.sha256(raw).hexdigest() if entry['algorithm'] == 'sha256' else hashlib.sha1(('blob ' + str(len(raw)) + '\0').encode() + raw).hexdigest()
+                  row['small_file'] = info; row['small_file_hash_matches'] = len(raw) == entry['bytes'] and h == entry['digest']
+                  large = next(f for f in manifest['files'] if f['name'].endswith(('.bin', '.safetensors')))
+                  raw, info = opener(file_url(manifest, large).replace('https://huggingface.co/', 'https://hf-mirror.com/', 1), ranged=True, limit=65536)
+                  row['weight_prefix_transport'] = info
+                  row['ok'] = row['metadata_sha_matches'] and row['small_file_hash_matches'] and bool(raw)
+              except Exception as e: row['error'] = type(e).__name__ + ': ' + str(e)
+              report.append(row)
+              print(model, row['ok'], row.get('error', ''), flush=True)
+          (root / 'result.json').write_text(json.dumps({'scope': 'Metadata and bounded downloads; no full weights, no inference, no speed claim.', 'results': report}, indent=2))
+          if not all(x['ok'] for x in report): raise SystemExit(1)
+      - if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: hf-mirror-discovery
+          path: reports/hf-discovery/
+          retention-days: 14
+          if-no-files-found: error
