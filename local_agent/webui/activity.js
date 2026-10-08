@@ -49,7 +49,9 @@ window.AgentActivity = (() => {
     if(bad)body.append(node('p','activity-note',`${bad} 次工具失败、拒绝、超时或中断，详见工具轨迹；本轮结束不代表每次操作均成功。`));
     const exportButton=node('button','activity-export','导出摘要与轨迹');exportButton.type='button';exportButton.dataset.activityFocus=key+':export';
     exportButton.onclick=()=>download(data,'activity-'+key.slice(0,12)+'.json');body.append(exportButton);overview.append(body);root.append(overview);
-    const trace=detail(key+':tools','activity-tools',tools.length>0);
+    // Agent/image tasks start open even before their first tool event arrives.
+    // Otherwise the initial empty, collapsed snapshot becomes a sticky preference.
+    const trace=detail(key+':tools','activity-tools',data.mode!=='chat');
     trace.append(summary(key+':tools','工具轨迹',tools.length?`${data.tool_calls} 次调用${bad?' · '+bad+' 次异常':''}`:'本轮尚未调用工具',data.state));
     const rows=node('div','activity-body');
     if(!tools.length)rows.append(node('p','activity-note',data.mode==='chat'?'对话模式不提供工具。模型输出代码并不代表执行了代码。':'尚未发出工具调用，不显示预设或伪造的步骤。'));

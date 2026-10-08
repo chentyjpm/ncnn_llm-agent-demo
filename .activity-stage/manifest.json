@@ -12,7 +12,7 @@
     "local_agent/webui/index.html": "142f2251a84d1a04249513eace5962203623f22b",
     ".github/workflows/web-ui.yml": "2d45c70b78ed47141e15cedc5acb86a5f280efd6",
     "local_agent/activity.py": "5a1f40051db1f8f8b57af2a9fb2608c3cf901e70",
-    "local_agent/webui/activity.js": "1c9beeeba0e6b2bf07113d449d75c849f8ed0d1b",
+    "local_agent/webui/activity.js": "1210f5273866b077acd2a32d26580504132ec4f0",
     "local_agent/webui/activity.css": "5b19f5b3c78ee927a250bdb32518a2d11d343fd7",
     "scripts/browser_activity.py": "1b5118fb7968409f5695528df659dd5474be8e1f",
     "tests/test_activity.py": "0c4f28397ff7067541b64ae3ccb082fe2a023408",
