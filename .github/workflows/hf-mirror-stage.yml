@@ -25,8 +25,11 @@ jobs:
           data=b''.join(f.read_bytes() for f in sorted(p.glob('*.diff')))
           assert hashlib.sha256(data).hexdigest()==m['patch_sha256'], 'Transport digest mismatch'
           path=p/'complete.patch';path.write_bytes(data)
-          subprocess.run(['git','apply','--unidiff-zero','--check',str(path)],check=True)
-          subprocess.run(['git','apply','--unidiff-zero',str(path)],check=True)
+          # The workflow itself was already committed through the authorized
+          # repository connection. The job token only pushes application files.
+          excluded='--exclude=.github/workflows/hf-mirror.yml'
+          subprocess.run(['git','apply',excluded,'--unidiff-zero','--check',str(path)],check=True)
+          subprocess.run(['git','apply',excluded,'--unidiff-zero',str(path)],check=True)
           actual={f:hashlib.sha256(pathlib.Path(f).read_bytes()).hexdigest() for f in m['files']}
           assert actual==m['files'], 'Applied source mismatch'
           subprocess.run(['git','diff','--check'],check=True)
