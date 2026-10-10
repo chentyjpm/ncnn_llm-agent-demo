@@ -25,7 +25,7 @@ from .backends import NcnnBridgeBackend, NcnnCLIBackend
 from .cli import doctor, make_runtime
 from .paths import Workspace, PolicyError
 from .process import kill_tree
-from .image_tasks import route_request, image_ready, plan_image, image_artifacts
+from .image_tasks import route_request, image_ready, plan_image, image_artifacts, previous_image, image_followup
 from .image_profiles import image_profile
 from .images import ImageRunner
 from .tools import make_registry, Registry
@@ -133,6 +133,7 @@ class Run:
     approval: dict | None = None
     backend: object = None
     image_plan: dict | None = None
+    routing: str = 'explicit_image_mode'
     activity: object = None
     activity_path: Path | None = None
 
@@ -258,9 +259,8 @@ class WebApp:
 
     def submit(self, sid: str, payload: dict) -> dict:
         question = text(payload.get('message'), 12000, 'message')
-        mode, image_prompt = route_request(question, payload.get('mode', 'chat'))
-        if mode != 'image' and payload.get('image_options'):
-            raise WebError('生图参数只能在生图模式使用')
+        requested_mode = payload.get('mode', 'chat')
+        mode, image_prompt = route_request(question, requested_mode)
         tokens = payload.get('max_new_tokens', 512)
         if type(tokens) is not int or not 32 <= tokens <= 4096:
             raise WebError('max_new_tokens must be 32..4096')
@@ -275,13 +275,22 @@ class WebApp:
                 raise WebError('另一个任务正在运行，请先完成或停止它。', 409)
             if len(s['messages']) >= 100:
                 raise WebError('本对话已达 50 轮，请新建对话。', 409)
+            ws = self.ws(sid)
+            prior_image = previous_image(s['messages'], ws)
+            mode, image_prompt = route_request(question, requested_mode, previous_image=prior_image)
+            followup = requested_mode != 'image' and image_followup(question, prior_image) and not question.strip().startswith('/image')
+            references = attachments or ([prior_image['path']] if followup else [])
+            if mode != 'image' and payload.get('image_options'):
+                raise WebError('生图参数只能在生图模式使用')
+            routing = ('explicit_image_mode' if requested_mode == 'image' else
+                       'slash_image_command' if re.match(r'^/image\s', question.strip()) else
+                       'image_followup' if followup else 'natural_language_image_request')
             runtime = self.info()
             if mode == 'image' and not runtime['image_ready']:
                 raise WebError('生图模型未就绪。请在“安装与模型”中安装并启用 Qwen Image；不需要先安装文字模型。', 503)
             if mode != 'image' and not runtime['ready']:
                 raise WebError('模型未就绪。请在安装与模型中安装文字模型；源码模式请检查 llm.command 和 llm.model。不会使用假模型兜底。', 503)
-            ws = self.ws(sid)
-            image_plan = plan_image(ws, image_prompt, payload.get('image_options'), attachments, image_config=self.config.get('image', {})) if mode == 'image' else None
+            image_plan = plan_image(ws, image_prompt, payload.get('image_options'), references, image_config=self.config.get('image', {})) if mode == 'image' else None
             context = ''
             for attachment in attachments:
                 p = ws.path(attachment)
@@ -320,15 +329,16 @@ class WebApp:
             s['messages'] += [{'id': uuid.uuid4().hex, 'role': 'user', 'content': question,
                                'attachments': attachments, 'time': time.time(), 'state': 'completed'},
                               {'id': mid, 'role': 'assistant', 'content': '', 'time': time.time(), 'state': 'running',
-                               'run_id': rid, 'mode': mode, 'trace': []}]
+                               'run_id': rid, 'mode': mode, 'requested_mode': requested_mode, 'trace': []}]
             s['active_run'] = rid
             self.sessions.save(s)
             for old in list(self.runs)[:-31]:
                 if self.runs[old].status in TERMINAL:
                     del self.runs[old]
-            run = Run(rid, sid, mid, mode, image_plan=image_plan,
+            run = Run(rid, sid, mid, mode, image_plan=image_plan, routing=routing,
                       activity_path=self.data_dir / 'runs' / (rid + '.activity.json'))
             run.emit('run_started', model=runtime['image_model'] if mode == 'image' else runtime['model'],
+                     routing=routing if mode == 'image' else requested_mode, requested_mode=requested_mode,
                      history_turns=0 if mode == 'image' else len(history) // 2, attachments=len(attachments))
             self.runs[rid], self.active = run, rid
             threading.Thread(target=self._work, args=(run, question + context, history, tokens), daemon=True).start()
@@ -353,13 +363,13 @@ class WebApp:
             if run.stop.is_set():
                 raise OperationCancelled('Stopped before inference')
             if run.mode == 'image':
-                # Explicit deterministic route: never call a fake/planning text model.
+                # Deterministic user-intent route: never impersonate a planning model.
                 ws = self.ws(run.session_id)
                 image = ImageRunner(ws, cfg['image'])
                 run.backend = image
                 registry = Registry()
                 registry.add(make_registry(ws, image_runner=image).tools['images.generate'])
-                audit.add('start', backend='QWEN_IMAGE_DIRECT', task=task, routing='explicit_image_mode')
+                audit.add('start', backend='QWEN_IMAGE_DIRECT', task=task, routing=run.routing)
                 audit.add('tool_start', step=1, tool='images.generate', arguments=run.image_plan)
                 result = ConfirmedRegistry(registry, run).call('images.generate', run.image_plan)
                 audit.add('tool_result', step=1, tool='images.generate', arguments=run.image_plan, result=result)

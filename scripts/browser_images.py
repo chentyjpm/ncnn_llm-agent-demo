@@ -84,6 +84,30 @@ def main():
                 expect(page.locator('#image-steps')).to_have_value('40')
                 expect(page.locator('#image-steps')).to_be_enabled()
                 passed('switching to standard model restores editable forty-step default')
+                # Exercise the user-facing natural-language route with no text
+                # model at all; fixture pixels prove plumbing, not inference.
+                app.factory=None
+                page.reload();page.locator('#mode-chat').click()
+                page.locator('#message-input').fill('帮我画一只猫')
+                expect(page.locator('#send-button')).to_be_enabled()
+                page.locator('#send-button').click()
+                expect(page.locator('.approval-card')).to_be_visible()
+                assert engine.call_count==2
+                expect(page.locator('.approval-card')).to_contain_text('帮我画一只猫')
+                page.reload();expect(page.locator('.approval-card')).to_be_visible()
+                page.get_by_role('button',name='允许这一次',exact=True).click()
+                expect(page.locator('#stop-button')).to_be_hidden(timeout=10000)
+                assert engine.call_count==3 and not text.calls
+                expect(page.locator('.generated-image img').last).to_be_visible()
+                page.screenshot(path=str(a.output/'automatic-image-fixture.png'),full_page=True)
+                passed('natural drawing request in chat works without text model; reload retains approval')
+                page.locator('#message-input').fill('把背景改成蓝色')
+                page.locator('#send-button').click();expect(page.locator('.approval-card')).to_be_visible()
+                expect(page.locator('.approval-card')).to_contain_text('images/')
+                page.get_by_role('button',name='拒绝',exact=True).click()
+                expect(page.locator('#stop-button')).to_be_hidden(timeout=10000)
+                assert engine.call_count==3
+                passed('verified-image followup asks again and denial does not generate')
                 assert not errors,errors;passed('no browser page errors')
                 browser.close()
         except Exception as e:report['cases'].append({'name':'browser image route','passed':False,'error':f'{type(e).__name__}: {e}'})
