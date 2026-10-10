@@ -1,17 +1,9 @@
 {
-  "reviewed_on": "2026-09-29",
+  "reviewed_on": "2026-10-10",
   "repositories": [
-    {
-      "name": "futz12/ncnn_llm",
-      "commit": "301d60a1498f3be3ecef8bbcf233841e00e766ec",
-      "url": "https://github.com/futz12/ncnn_llm"
-    },
-    {
-      "name": "nihui/qwenimage-ncnn-vulkan",
-      "commit": "128530a5e8541d85ae516727314eb5dcf0109157",
-      "url": "https://github.com/nihui/qwenimage-ncnn-vulkan"
-    }
+    {"name": "futz12/ncnn_llm", "commit": "301d60a1498f3be3ecef8bbcf233841e00e766ec", "url": "https://github.com/futz12/ncnn_llm"},
+    {"name": "nihui/qwenimage-ncnn-vulkan", "commit": "14953559f39c7658e5a6cc117481e1922660cc9e", "url": "https://github.com/nihui/qwenimage-ncnn-vulkan"}
   ],
   "mcp_implemented_protocol": "2025-11-25",
-  "ncnn_library": "User-supplied. Must be compatible with pinned ncnn_llm; exact binary is not pinned or bundled."
+  "ncnn_library": "Native builds pin Tencent/ncnn via ci/dependencies.json and verify the matching Qwen Image submodule."
 }
