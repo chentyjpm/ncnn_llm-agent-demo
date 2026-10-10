@@ -1,6 +1,18 @@
 {
-  "ncnn_llm": {"repository": "futz12/ncnn_llm", "commit": "301d60a1498f3be3ecef8bbcf233841e00e766ec"},
-  "qwenimage": {"repository": "nihui/qwenimage-ncnn-vulkan", "commit": "14953559f39c7658e5a6cc117481e1922660cc9e"},
-  "ncnn": {"repository": "Tencent/ncnn", "commit": "c6b351b56fbe32e0381ae00331e3df649b20d7b7"},
-  "json": {"repository": "nlohmann/json", "commit": "55f93686c01528224f448c19128836e7df245f72"}
+  "ncnn_llm": {
+    "repository": "futz12/ncnn_llm",
+    "commit": "301d60a1498f3be3ecef8bbcf233841e00e766ec"
+  },
+  "qwenimage": {
+    "repository": "nihui/qwenimage-ncnn-vulkan",
+    "commit": "14953559f39c7658e5a6cc117481e1922660cc9e"
+  },
+  "ncnn": {
+    "repository": "Tencent/ncnn",
+    "commit": "c6b351b56fbe32e0381ae00331e3df649b20d7b7"
+  },
+  "json": {
+    "repository": "nlohmann/json",
+    "commit": "55f93686c01528224f448c19128836e7df245f72"
+  }
 }

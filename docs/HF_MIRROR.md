@@ -51,3 +51,7 @@ python scripts/hf_mirror_smoke.py
 ```
 
 最后一行实际访问两条公开线路，合计传输约 68 MB 的权重样本及少量配置文件；不需要大模型完整安装。
+
+## Turbo 模型
+
+[Qwen Image 2.1 Turbo](QWEN_IMAGE_TURBO.md) 同样支持原站与镜像。六个 Transformer 文件增量安装；必须先安装基础模型，复用共享组件。原站和镜像都校验独立可信哈希，不把镜像元数据本身作为唯一依据。

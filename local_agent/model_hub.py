@@ -11,7 +11,8 @@ import shutil
 import threading
 import time
 from .model_catalog import CATALOG, PROFILES, PROVIDERS
-from .model_sources import safe_name, digest, open_https, resolve_manifest, file_url, QWEN_FILES, IMAGE_REQUIRED, download_route, HF_DOWNLOAD_ROUTES, response_host
+from .image_profiles import BASE_IMAGE, TURBO_IMAGE, TURBO_FILES, shared_components
+from .model_sources import safe_name, digest, open_https, resolve_manifest, file_url, QWEN_FILES, IMAGE_REQUIRED, download_route, HF_DOWNLOAD_ROUTES, response_host, verify_mirror_manifest
 
 QWEN_WEIGHT = PROFILES['qwen05']['weight_sha256']
 BUSY = ('downloading', 'verifying', 'converting', 'activating')
@@ -57,7 +58,11 @@ class ModelHub:
         if model_id not in CATALOG or not CATALOG[model_id].get('installable', True): return False
         folder = self.models / model_id
         try:
+            if model_id == TURBO_IMAGE:
+                if not self.installed(BASE_IMAGE): return False
+                shared_components(self.models / BASE_IMAGE)
             m = json.loads((folder / 'READY.json').read_text(encoding='utf-8'))
+            if model_id == TURBO_IMAGE and {f['name'] for f in m['files']} != TURBO_FILES: return False
             return bool(m['id'] == model_id and m['files'] and all(
                 (folder / safe_name(f['name'])).is_file() and (folder / f['name']).stat().st_size == f['bytes']
                 for f in m['files']))
@@ -112,11 +117,16 @@ class ModelHub:
             return {'managed':True, 'home':str(self.home), 'providers':PROVIDERS,
                 'hf_download_routes':copy.deepcopy(HF_DOWNLOAD_ROUTES),
                 'engines':{k:Path(v).is_file() for k,v in self.engines.items()},
-                'models':[dict(id=k, **v, installed=self.installed(k), active=active.get(v['kind']) == k)
+                'models':[dict(id=k, **v, installed=self.installed(k), active=active.get(v['kind']) == k,
+                               missing_dependencies=[d for d in v.get('depends_on', []) if not self.installed(d)])
                           for k,v in CATALOG.items()], 'job':job}
 
     def prepare(self, model_id, provider='huggingface', *, download_route_id='direct'):
         route = download_route(provider, download_route_id)
+        if model_id == TURBO_IMAGE:
+            if not self.installed(BASE_IMAGE):
+                raise ValueError('请先安装 Qwen Image 2.1 基础模型；Turbo 复用它的分词器、文本编码器和 VAE，不重复复制共享权重')
+            shared_components(self.models / BASE_IMAGE)
         with self.lock:
             if self.job['status'] in BUSY: raise ValueError('安装进行中，不能切换下载线路')
             self._prepare_sequence += 1
@@ -125,6 +135,8 @@ class ModelHub:
         quote = (resolve_files(model_id, provider) if download_route_id == 'direct' else
                  resolve_files(model_id, provider, download_route_id=download_route_id))
         quote = copy.deepcopy(quote)
+        if model_id == TURBO_IMAGE:
+            quote['base_dependency'] = shared_components(self.models / BASE_IMAGE)
         quote.update(download_route=download_route_id,
                      download_route_name=route['name'] if provider == 'huggingface' else PROVIDERS[provider],
                      third_party_mirror=route['third_party'])
@@ -146,6 +158,9 @@ class ModelHub:
             entry = self.quotes.pop(ticket, None)
             if not entry or time.monotonic()-entry[0] > 900: raise ValueError('大小查询已过期，请重新查询后确认')
             quote = entry[1]
+            if quote['id'] == TURBO_IMAGE:
+                if not self.installed(BASE_IMAGE): raise ValueError('基础模型已不可用，请先恢复基础模型再安装 Turbo')
+                shared_components(self.models / BASE_IMAGE)
             if self.installed(quote['id']): raise ValueError('模型已安装，选择启用即可')
             if shutil.disk_usage(self.home).free < quote['disk_required_bytes']: raise ValueError('可用磁盘空间不足')
             self.cancelled.clear()
@@ -166,6 +181,8 @@ class ModelHub:
             if not isinstance(model_id,str) or model_id not in CATALOG or not self.installed(model_id):
                 raise ValueError('Model is not installed')
             kind = CATALOG[model_id]['kind']
+            if model_id == TURBO_IMAGE and not _installation:
+                shared_components(self.models / BASE_IMAGE, verify_hashes=True)
             if not Path(self.engines[kind]).is_file(): raise ValueError('Bundled engine is missing')
             prefs = self.active(); prefs[kind] = model_id
             save_json(self.prefs, prefs)
@@ -189,6 +206,10 @@ class ModelHub:
         stage = self.models / ('.stage-' + model_id)
         final = self.models / model_id
         try:
+            if model_id == TURBO_IMAGE:
+                if not self.installed(BASE_IMAGE): raise ValueError('基础模型未完整安装，不能安装 Turbo')
+                shared_components(self.models / BASE_IMAGE)
+                verify_mirror_manifest(model_id, quote['repository'], quote['revision'], quote['files'])
             cache.mkdir(parents=True, exist_ok=True)
             if final.exists(): raise ValueError('Existing model directory was not overwritten')
             if stage.exists(): shutil.rmtree(stage)
@@ -242,7 +263,12 @@ class ModelHub:
                 self._check_stop()
                 files.append({'name':p.relative_to(stage).as_posix(),'bytes':p.stat().st_size,'sha256':digest(p,cancelled=self.cancelled.is_set)})
                 self._update(stage_done=index,stage_total=len(all_files),file=p.name)
-            save_json(stage/'READY.json', {'id':model_id,'provider':provider,'download_route':route_id,'revision':quote['revision'],'files':files})
+            dependency = {}
+            if model_id == TURBO_IMAGE:
+                self._update(message='正在核对基础模型共享组件；不会重复下载或复制')
+                dependency = shared_components(self.models / BASE_IMAGE, verify_hashes=True, cancelled=self.cancelled.is_set)
+            save_json(stage/'READY.json', {'id':model_id,'provider':provider,'download_route':route_id,'revision':quote['revision'],'files':files,
+                                         **({'base_dependency':dependency} if dependency else {})})
             self._check_stop(); os.replace(stage,final)
             self.activate(model_id, _installation=True)
             if cache.exists(): shutil.rmtree(cache)

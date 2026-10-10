@@ -60,6 +60,21 @@ CATALOG['qwenimage21'] = {
     'unavailable_sources': {'modelscope': '尚未核实同版本 ncnn 权重镜像；请手动选择 Hugging Face，不会下载原始 PyTorch 权重冒充。'},
 }
 
+# Distinct Turbo checkpoint with explicit dependency and no hidden download.
+from .image_profiles import TURBO_IMAGE, BASE_IMAGE
+from .hf_download_pins import PINNED_HF
+CATALOG[TURBO_IMAGE] = {
+    'name': 'Qwen Image 2.1 Turbo', 'kind': 'image', 'format': 'ncnn Turbo Transformer · 8 步',
+    'description': '固定 8 步生图。先安装基础模型，再仅下载 Turbo Transformer；共享组件不重复复制。',
+    'validation': '新增适配；真实生成结果见 Turbo CI，不承诺固定加速倍数',
+    'repository': PINNED_HF[TURBO_IMAGE]['repository'], 'revision': PINNED_HF[TURBO_IMAGE]['revision'],
+    'estimated_download_bytes': sum(f['bytes'] for f in PINNED_HF[TURBO_IMAGE]['files']),
+    'depends_on': [BASE_IMAGE], 'default_steps': 8, 'fixed_steps': 8,
+    'sources': {'huggingface': {'repository': PINNED_HF[TURBO_IMAGE]['repository'],
+                              'revision': PINNED_HF[TURBO_IMAGE]['revision']}},
+    'unavailable_sources': {'modelscope': '尚未核实同版本 ncnn Turbo 权重；请选 Hugging Face 原站或 HF-Mirror。'},
+}
+
 # Native converted bundles keep their upstream tokenizer, graph and template.
 # Do not attempt to run OCR/embedding/discriminator models through a chat ABI.
 from .native_catalog import NATIVE_MODELS

@@ -90,6 +90,10 @@ def cases(component: str, scratch: Path) -> list[tuple]:
             ('invalid_gpu_id', ['-g', '-2'], 2, 'invalid gpu-id', False),
             ('negative_seed', ['-r', '-1'], 2, 'invalid random-seed', False),
             ('nonfinite_lora_scale', ['--lora-scale', 'NaN'], 2, 'invalid LoRA scale', False),
+            ('turbo_reject_2_steps', ['-m', str(scratch / 'qwenimage21-turbo'), '-l', '2'], 2, 'Turbo models require exactly 8 steps', False),
+            ('turbo_reject_40_steps', ['-m', str(scratch / 'qwenimage21-turbo'), '-l', '40'], 2, 'Turbo models require exactly 8 steps', False),
+            ('turbo_case_insensitive', ['-m', str(scratch / 'QWENIMAGE21-TURBO'), '-l', '4'], 2, 'Turbo models require exactly 8 steps', False),
+            ('turbo_trailing_separator', ['-m', str(scratch / 'qwenimage21-turbo') + '/', '-l', '4'], 2, 'Turbo models require exactly 8 steps', False),
         ]
     raise ValueError('Unknown native component')
 
