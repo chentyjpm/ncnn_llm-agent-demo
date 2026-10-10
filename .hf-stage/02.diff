@@ -1,0 +1,179 @@
+diff --git a/local_agent/model_hub.py b/local_agent/model_hub.py
+index 4df6876..f9d15f9 100644
+--- a/local_agent/model_hub.py
++++ b/local_agent/model_hub.py
+@@ -14 +14 @@ from .model_catalog import CATALOG, PROFILES, PROVIDERS
+-from .model_sources import safe_name, digest, open_https, resolve_manifest, file_url, QWEN_FILES, IMAGE_REQUIRED
++from .model_sources import safe_name, digest, open_https, resolve_manifest, file_url, QWEN_FILES, IMAGE_REQUIRED, download_route, HF_DOWNLOAD_ROUTES, response_host
+@@ -27,2 +27,2 @@ def save_json(path: Path, data):
+-def resolve_files(model_id, provider='huggingface'):
+-    return resolve_manifest(model_id, provider, opener=open_https)
++def resolve_files(model_id, provider='huggingface', *, download_route_id='direct'):
++    return resolve_manifest(model_id, provider, download_route_id=download_route_id, opener=open_https)
+@@ -41,0 +42 @@ class ModelHub:
++        self._prepare_sequence = 0
+@@ -111,0 +113 @@ class ModelHub:
++                'hf_download_routes':copy.deepcopy(HF_DOWNLOAD_ROUTES),
+@@ -116,2 +118,13 @@ class ModelHub:
+-    def prepare(self, model_id, provider='huggingface'):
+-        quote = resolve_files(model_id, provider)
++    def prepare(self, model_id, provider='huggingface', *, download_route_id='direct'):
++        route = download_route(provider, download_route_id)
++        with self.lock:
++            if self.job['status'] in BUSY: raise ValueError('安装进行中，不能切换下载线路')
++            self._prepare_sequence += 1
++            sequence = self._prepare_sequence
++            self.quotes.clear()
++        quote = (resolve_files(model_id, provider) if download_route_id == 'direct' else
++                 resolve_files(model_id, provider, download_route_id=download_route_id))
++        quote = copy.deepcopy(quote)
++        quote.update(download_route=download_route_id,
++                     download_route_name=route['name'] if provider == 'huggingface' else PROVIDERS[provider],
++                     third_party_mirror=route['third_party'])
+@@ -120 +133,3 @@ class ModelHub:
+-            # One immutable consent ticket binds source + model + files, not user-editable URLs.
++            if sequence != self._prepare_sequence or self.job['status'] in BUSY:
++                raise ValueError('下载来源或线路查询已更新，请使用最新确认信息')
++            # Ticket binds provider + route + revision + checksums, never raw URLs.
+@@ -138,0 +154,2 @@ class ModelHub:
++                'download_route':quote.get('download_route','direct'), 'download_route_name':quote.get('download_route_name',''),
++                'metadata_final_host':quote.get('metadata_final_host'),
+@@ -168 +185,4 @@ class ModelHub:
+-        cache = self.models / f'.download-{model_id}-{provider}-{quote["revision"][:12]}'
++        route_id = quote.get('download_route','direct')
++        download_route(provider, route_id)
++        suffix = '-hf_mirror' if route_id == 'hf_mirror' else ''
++        cache = self.models / f'.download-{model_id}-{provider}-{quote["revision"][:12]}{suffix}'
+@@ -186 +206,3 @@ class ModelHub:
+-                        with open_https(file_url(quote,item)) as response, temp.open('wb') as stream:
++                        url = file_url(quote,item)
++                        with open_https(url) as response, temp.open('wb') as stream:
++                            self._update(last_download_host=response_host(response, url))
+@@ -223 +245 @@ class ModelHub:
+-            save_json(stage/'READY.json', {'id':model_id,'provider':provider,'revision':quote['revision'],'files':files})
++            save_json(stage/'READY.json', {'id':model_id,'provider':provider,'download_route':route_id,'revision':quote['revision'],'files':files})
+@@ -231 +253 @@ class ModelHub:
+-                error=f'{type(exc).__name__}: {exc}', message='安装未完成；没有自动更换下载源。', finished_at=time.time(), speed_bps=0)
++                error=f'{type(exc).__name__}: {exc}', message='安装未完成；没有自动更换下载源或线路。', finished_at=time.time(), speed_bps=0)
+diff --git a/local_agent/model_sources.py b/local_agent/model_sources.py
+index 42489da..499d4e3 100644
+--- a/local_agent/model_sources.py
++++ b/local_agent/model_sources.py
+@@ -12,0 +13 @@ from .model_catalog import CATALOG, PROFILES, PROVIDERS
++from .hf_download_pins import PINNED_HF
+@@ -20,0 +22,31 @@ IMAGE_REQUIRED = {'processor/vocab.txt', 'processor/merges.txt', 'text_encoder/t
++HF_DOWNLOAD_ROUTES = {
++    'direct': {'name': 'Hugging Face 原站', 'endpoint': 'https://huggingface.co', 'third_party': False},
++    'hf_mirror': {'name': 'HF-Mirror 镜像（第三方）', 'endpoint': 'https://hf-mirror.com', 'third_party': True},
++}
++
++
++def download_route(provider, route='direct'):
++    """A reviewed enum, never a user URL, proxy setting, token, or HF_ENDPOINT."""
++    if not isinstance(route, str) or route not in HF_DOWNLOAD_ROUTES:
++        raise ValueError('下载线路仅允许 direct / hf_mirror，不接受自定义地址')
++    if provider != 'huggingface' and route != 'direct':
++        raise ValueError('HF-Mirror 仅适用于 Hugging Face 来源，不支持魔搭或 SDU 模型')
++    return dict(HF_DOWNLOAD_ROUTES[route])
++
++
++def response_host(response, requested_url):
++    """Report only the hostname, never signed CDN query parameters."""
++    url = response.geturl() if hasattr(response, 'geturl') else getattr(response, 'url', None)
++    return _https_host(url or requested_url)
++
++
++def verify_mirror_manifest(model_id, repository, revision, files):
++    pin = PINNED_HF.get(model_id)
++    if not pin or (repository, revision) != (pin['repository'], pin['revision']):
++        raise ValueError('镜像模型版本不在已审核清单中；请更新应用或手动选择原站')
++    expected = {f['name']: f for f in pin['files']}
++    actual = {f['name']: f for f in files}
++    if len(actual) != len(files) or actual != expected:
++        raise ValueError('镜像文件清单与独立核实的 HF 原站大小／哈希不一致，已停止')
++
++
+@@ -51 +83,5 @@ def source_for(model_id, provider):
+-    return item['sources'][provider]
++    source = dict(item['sources'][provider])
++    if provider == 'huggingface' and model_id == 'qwenimage21':
++        # Same already-tested image snapshot for direct and mirror routes.
++        source['revision'] = PINNED_HF[model_id]['revision']
++    return source
+@@ -63 +99 @@ def open_https(url, timeout=30):
+-    if host not in ('huggingface.co', 'modelscope.cn', 'mirrors.sdu.edu.cn'):
++    if host not in ('huggingface.co', 'hf-mirror.com', 'modelscope.cn', 'mirrors.sdu.edu.cn'):
+@@ -67 +103,8 @@ def open_https(url, timeout=30):
+-    suffixes = ('huggingface.co', 'hf.co', 'xethub.hf.co') if host == 'huggingface.co' else ('mirrors.sdu.edu.cn',) if host == 'mirrors.sdu.edu.cn' else ('modelscope.cn', 'modelscope.ai', 'aliyuncs.com')
++    suffixes = {
++        'huggingface.co': ('huggingface.co', 'hf.co', 'xethub.hf.co'),
++        # The mirror can redirect to HF origin/CDN. This is reported to the UI;
++        # it is not an application retry/fallback and does not guarantee speed.
++        'hf-mirror.com': ('hf-mirror.com', 'huggingface.co', 'hf.co', 'xethub.hf.co'),
++        'mirrors.sdu.edu.cn': ('mirrors.sdu.edu.cn',),
++        'modelscope.cn': ('modelscope.cn', 'modelscope.ai', 'aliyuncs.com'),
++    }[host]
+@@ -85 +128 @@ def open_https(url, timeout=30):
+-def read_metadata(url, opener):
++def read_metadata(url, opener, transport=None):
+@@ -86,0 +130,2 @@ def read_metadata(url, opener):
++        if transport is not None:
++            transport.update(metadata_requested_host=_https_host(url), metadata_final_host=response_host(response, url))
+@@ -94 +139 @@ def read_metadata(url, opener):
+-def resolve_manifest(model_id: str, provider='huggingface', *, opener=open_https) -> dict:
++def resolve_manifest(model_id: str, provider='huggingface', *, download_route_id='direct', opener=open_https) -> dict:
+@@ -95,0 +141,2 @@ def resolve_manifest(model_id: str, provider='huggingface', *, opener=open_https
++    route = download_route(provider, download_route_id)
++    transport = {}
+@@ -101 +148 @@ def resolve_manifest(model_id: str, provider='huggingface', *, opener=open_https
+-        meta = read_metadata(f'https://huggingface.co/api/models/{repo}/revision/{revision}?blobs=true', opener)
++        meta = read_metadata(f'{route["endpoint"]}/api/models/{repo}/revision/{revision}?blobs=true', opener, transport)
+@@ -141,0 +189,2 @@ def resolve_manifest(model_id: str, provider='huggingface', *, opener=open_https
++    if download_route_id == 'hf_mirror':
++        verify_mirror_manifest(model_id, repo, revision, files)
+@@ -143,0 +193,2 @@ def resolve_manifest(model_id: str, provider='huggingface', *, opener=open_https
++        'download_route':download_route_id, 'download_route_name':route['name'] if provider == 'huggingface' else PROVIDERS[provider],
++        'third_party_mirror':route['third_party'], **transport,
+@@ -151,0 +203,5 @@ def file_url(manifest, item):
++    route_id = manifest.get('download_route', 'direct')
++    route = download_route(provider, route_id)
++    if route_id == 'hf_mirror':
++        verify_mirror_manifest(manifest['id'], manifest['repository'], manifest['revision'], manifest['files'])
++        if item not in manifest['files']: raise ValueError('文件不属于已确认的镜像清单')
+@@ -161 +217 @@ def file_url(manifest, item):
+-    return f'https://huggingface.co/{repo}/resolve/{revision}/{quote(remote, safe="/")}?download=true'
++    return f'{route["endpoint"]}/{repo}/resolve/{revision}/{quote(remote, safe="/")}?download=true'
+diff --git a/local_agent/web.py b/local_agent/web.py
+index 8bf2e15..499770d 100644
+--- a/local_agent/web.py
++++ b/local_agent/web.py
+@@ -588 +588,6 @@ class Handler(BaseHTTPRequestHandler):
+-                    return self.respond(hub.prepare(payload.get('id'), payload.get('provider', 'huggingface')))
++                    if set(payload) - {'id', 'provider', 'download_route'}:
++                        raise WebError('仅接受模型、来源和下载线路，不接受代理地址或 Token', 400)
++                    route = payload.get('download_route', 'direct')
++                    if route == 'direct':
++                        return self.respond(hub.prepare(payload.get('id'), payload.get('provider', 'huggingface')))
++                    return self.respond(hub.prepare(payload.get('id'), payload.get('provider', 'huggingface'), download_route_id=route))
+@@ -589,0 +595,2 @@ class Handler(BaseHTTPRequestHandler):
++                    if set(payload) - {'ticket', 'accept_download'}:
++                        raise WebError('安装只接受已确认的 ticket，不能在此更换下载线路', 400)
+diff --git a/local_agent/webui/index.html b/local_agent/webui/index.html
+index 142f225..f81c3b5 100644
+--- a/local_agent/webui/index.html
++++ b/local_agent/webui/index.html
+@@ -115,0 +116 @@
++    <label id="hf-route-control" hidden>HF 下载线路<select id="hf-download-route" aria-label="Hugging Face 下载线路"><option value="direct">Hugging Face 原站</option><option value="hf_mirror">HF-Mirror 镜像（第三方）</option></select></label>
+@@ -117,0 +119 @@
++  <p id="hf-route-note" class="setting-note" hidden></p>
+diff --git a/local_agent/webui/style.css b/local_agent/webui/style.css
+index 30ee8cc..d46527b 100644
+--- a/local_agent/webui/style.css
++++ b/local_agent/webui/style.css
+@@ -30,0 +31,6 @@ html[data-theme="light"]{color-scheme:light;--bg:#fafbf9;--sidebar:#f0f2ef;--pan
++
++/* Download source and transport are separate; never overflow a narrow dialog. */
++.source-controls{flex-wrap:wrap}
++.source-controls label{min-width:0}
++#hf-route-control[hidden],#hf-route-note[hidden]{display:none}
++.download-confirmation strong{overflow-wrap:anywhere}

@@ -1,0 +1,115 @@
+diff --git a/local_agent/webui/workbench.js b/local_agent/webui/workbench.js
+index f5237f7..43ccb0d 100644
+--- a/local_agent/webui/workbench.js
++++ b/local_agent/webui/workbench.js
+@@ -19 +19 @@ $('doc-export').onclick=safe(async()=>{if(state.run)return toast('请先完成
+-const setup = {data:null, provider:storage.get('model-provider')||'modelscope', filter:'all', search:'', quote:null, query:null, error:'', seq:0, completed:null, controller:null};
++const setup = {data:null, provider:storage.get('model-provider')||'modelscope', route:storage.get('hf-download-route')||'direct', filter:'all', search:'', quote:null, query:null, error:'', seq:0, completed:null, controller:null};
+@@ -20,0 +21,3 @@ if(!['modelscope','huggingface','sdu'].includes(setup.provider))setup.provider='
++if(!['direct','hf_mirror'].includes(setup.route))setup.route='direct';
++function routeName(route){return route==='hf_mirror'?'HF-Mirror 镜像（第三方）':'Hugging Face 原站';}
++function selectedRoute(){return setup.provider==='huggingface'?setup.route:'direct';}
+@@ -53,0 +57,6 @@ function renderSetup(){
++ // On refresh/another tab, show the actual running job's bound source/route.
++ if(busy&&['modelscope','huggingface','sdu'].includes(job.provider)){setup.provider=job.provider;if(job.provider==='huggingface')setup.route=job.download_route||'direct';}
++ $('hf-route-control').hidden=setup.provider!=='huggingface';
++ $('hf-download-route').value=setup.route;$('hf-download-route').disabled=busy||!!setup.starting;
++ $('hf-route-note').hidden=setup.provider!=='huggingface';
++ $('hf-route-note').textContent=setup.route==='hf_mirror'?'HF-Mirror 是第三方下载镜像，不是模型来源。清单与文件均从镜像入口请求，可能重定向到 HF 原站或 CDN；速度不保证。不传递 HF Token，不自动换线。':'直接从 Hugging Face 请求。原站连接困难时，可手动选择 HF-Mirror；不会修改系统代理。';
+@@ -58 +67 @@ function renderSetup(){
+- const cardsKey=JSON.stringify([data.models,setup.provider,setup.filter,setup.search,setup.quote,setup.query,!!setup.starting,busy,job.model]);
++ const cardsKey=JSON.stringify([data.models,setup.provider,setup.route,setup.filter,setup.search,setup.quote,setup.query,!!setup.starting,busy,job.model]);
+@@ -77 +86,2 @@ function renderSetup(){
+-   for(const [label,value] of [['下载源',providerName(q.provider)],['需要下载',amount(q.download_bytes)],['安装后预计占用',amount(q.installed_estimate_bytes)],['安装时至少预留',amount(q.disk_required_bytes)],['当前可用磁盘',amount(q.disk_free_bytes)]]){const row=el('div','runtime-row');row.append(el('span','',label),el('strong','',value));box.append(row);}
++   for(const [label,value] of [['下载源',providerName(q.provider)],...(q.provider==='huggingface'?[['下载线路',routeName(q.download_route)],['模型版本',q.revision||'待确认'],['清单响应主机',q.metadata_final_host||'等待服务器报告']]:[]),['需要下载',amount(q.download_bytes)],['安装后预计占用',amount(q.installed_estimate_bytes)],['安装时至少预留',amount(q.disk_required_bytes)],['当前可用磁盘',amount(q.disk_free_bytes)]]){const row=el('div','runtime-row');row.append(el('span','',label),el('strong','',value));box.append(row);}
++   if(q.third_party_mirror)box.append(el('p','source-unavailable','你将通过第三方 HF-Mirror 获取公开模型；逐文件比对应用内独立核实的原站清单。仅校验通过的文件才能启用。'));
+@@ -91 +101 @@ function renderSetup(){
+- $('model-error').hidden=!errors;$('model-error').textContent=errors?errors+'\n可手动选择另一个下载源并重新查询。不会自动改用其他源。':'';
++ $('model-error').hidden=!errors;$('model-error').textContent=errors?errors+'\n可手动选择其他下载源或线路并重新查询。不会自动改用其他源或线路。':'';
+@@ -93 +103 @@ function renderSetup(){
+- else if(querying){$('model-progress').textContent='正在连接 '+providerName(setup.provider)+'，查询文件大小…';$('model-progress-extra').textContent='尚未下载模型。通常需要几秒；超过 30 秒会显示超时提示。';}
++ else if(querying){$('model-progress').textContent='正在连接 '+providerName(setup.provider)+(setup.provider==='huggingface'?' / '+routeName(setup.route):'')+'，查询文件大小…';$('model-progress-extra').textContent='尚未下载模型。通常需要几秒；超过 30 秒会显示超时提示。';}
+@@ -100 +110 @@ function renderSetup(){
+-  $('model-progress-extra').textContent=`来源：${providerName(job.provider)}\n${job.file||job.message||''}\n`+(job.cancel_requested?'正在取消，等待当前读取／转换步骤结束。':job.waiting_for_data?'暂未收到新数据，请检查网络；也可取消后换源。':job.status!=='downloading'?'下载 100% 不代表安装完成，请等待校验、转换和启用。':job.message||'');
++  $('model-progress-extra').textContent=`来源：${providerName(job.provider)}${job.provider==='huggingface'?' · '+routeName(job.download_route):''}\n${job.last_download_host?'当前文件响应主机：'+job.last_download_host+'\n':''}${job.file||job.message||''}\n`+(job.cancel_requested?'正在取消，等待当前读取／转换步骤结束。':job.waiting_for_data?'暂未收到新数据，请检查网络；也可取消后换源。':job.status!=='downloading'?'下载 100% 不代表安装完成，请等待校验、转换和启用。':job.message||'');
+@@ -102 +112 @@ function renderSetup(){
+- else if(job.status==='cancelled'||job.status==='interrupted'){$('model-progress').textContent=job.status==='cancelled'?'安装已取消':'上次安装已中断';$('model-progress-extra').textContent='重试会复用同一来源、同一版本中完整且通过校验的文件；未完成的单个文件重新下载。';}
++ else if(job.status==='cancelled'||job.status==='interrupted'){$('model-progress').textContent=job.status==='cancelled'?'安装已取消':'上次安装已中断';$('model-progress-extra').textContent='重试会复用同一来源、线路、版本中完整且通过校验的文件；未完成的单个文件重新下载。';}
+@@ -111,2 +121,2 @@ async function chooseModel(model){
+- try{const q=await setupRequest('/api/setup/prepare',{id:model.id,provider:setup.provider});if(seq===setup.seq)setup.quote=q;}
+- catch(e){if(seq===setup.seq)setup.error=e.message;}
++ try{const q=await setupRequest('/api/setup/prepare',{id:model.id,provider:setup.provider,download_route:selectedRoute()});if(seq===setup.seq)setup.quote=q;}
++ catch(e){if(seq===setup.seq)setup.error=(setup.provider==='huggingface'?routeName(setup.route)+'：':'')+e.message;}
+@@ -135 +145,8 @@ $('setup-dialog').addEventListener('close',()=>clearTimeout(setupTimer));
+-$('model-source').onchange=()=>{setup.seq++;setup.controller?.abort();setup.query=null;setup.quote=null;setup.error='';setup.provider=$('model-source').value;storage.set('model-provider',setup.provider);renderSetup();};
++function changeDownloadSelection(){
++ if(installBusy(setup.data?.job)||setup.starting){renderSetup();return;}
++ setup.seq++;setup.controller?.abort();setup.query=null;setup.quote=null;setup.error='';
++ setup.provider=$('model-source').value;setup.route=$('hf-download-route').value;
++ storage.set('model-provider',setup.provider);storage.set('hf-download-route',setup.route);renderSetup();
++}
++$('model-source').onchange=changeDownloadSelection;
++$('hf-download-route').onchange=changeDownloadSelection;
+diff --git a/scripts/browser_model_center.py b/scripts/browser_model_center.py
+index d284c74..a0c41c6 100644
+--- a/scripts/browser_model_center.py
++++ b/scripts/browser_model_center.py
+@@ -26,2 +26,2 @@ class DisplayFixture(ModelHub):
+-    def prepare(self,model_id,provider='huggingface'):
+-        self.calls.append((model_id,provider));time.sleep(.6)
++    def prepare(self,model_id,provider='huggingface',*,download_route_id='direct'):
++        self.calls.append((model_id,provider));self.route=download_route_id;time.sleep(.6)
+@@ -29 +29 @@ class DisplayFixture(ModelHub):
+-        return {'id':model_id,'provider':provider,'ticket':'UI_FIXTURE_ONLY', 'repository':'Qwen/Fixture', 'revision':'0'*40,
++        return {'id':model_id,'provider':provider,'download_route':download_route_id,'third_party_mirror':download_route_id=='hf_mirror', 'metadata_final_host':'hf-mirror.com' if download_route_id=='hf_mirror' else 'huggingface.co','ticket':'UI_FIXTURE_ONLY', 'repository':'Qwen/Fixture', 'revision':'0'*40,
+@@ -34 +34 @@ class DisplayFixture(ModelHub):
+-        self.job={'status':'downloading','model':'qwen05','provider':self.calls[-1][1], 'downloaded':256*1024**2,
++        self.job={'status':'downloading','model':'qwen05','provider':self.calls[-1][1],'download_route':self.route,'last_download_host':'cdn-lfs.hf.co', 'downloaded':256*1024**2,
+@@ -93,0 +94,47 @@ def main():
++                page.set_viewport_size({'width':1200,'height':900})
++                page.locator('#model-filter').select_option('image')
++                expect(page.locator('#hf-download-route')).to_have_value('direct')
++                page.locator('#hf-download-route').select_option('hf_mirror')
++                expect(page.locator('#hf-route-note')).to_contain_text('第三方')
++                passed('mirror is explicit optional HF route with third-party disclosure')
++                page.locator('[data-model-id="qwenimage21"] button').click()
++                expect(page.locator('#model-progress')).to_contain_text('HF-Mirror')
++                expect(page.locator('.download-confirmation')).to_contain_text('HF-Mirror')
++                expect(page.locator('.download-confirmation')).to_contain_text('清单响应主机')
++                assert hub.route=='hf_mirror'
++                page.screenshot(path=str(a.output/'hf-mirror-confirmation.png'),full_page=True)
++                passed('image mirror metadata query reaches backend and quote identifies route/host')
++                page.locator('#hf-download-route').select_option('direct')
++                expect(page.locator('.download-confirmation')).to_have_count(0)
++                passed('route change invalidates old download confirmation')
++                page.locator('[data-model-id="qwenimage21"] button').click()
++                page.locator('#hf-download-route').select_option('hf_mirror')
++                page.wait_for_timeout(900)
++                expect(page.locator('.download-confirmation')).to_have_count(0)
++                passed('cancelled slow query cannot redisplay a stale route quote')
++                hub.query_error=True;page.locator('[data-model-id="qwenimage21"] button').click()
++                expect(page.locator('#model-error')).to_contain_text('HF-Mirror')
++                expect(page.locator('#hf-download-route')).to_have_value('hf_mirror')
++                passed('mirror failure stays on chosen route without hidden origin retry')
++                hub.query_error=False;page.locator('[data-model-id="qwenimage21"] button').click()
++                page.get_by_role('button',name='确认下载并安装').click()
++                expect(page.locator('#hf-download-route')).to_be_disabled()
++                expect(page.locator('#model-progress-extra')).to_contain_text('HF-Mirror')
++                expect(page.locator('#model-progress-extra')).to_contain_text('cdn-lfs.hf.co')
++                page.screenshot(path=str(a.output/'hf-mirror-progress.png'),full_page=True)
++                page.reload();page.locator('#setup-button').click()
++                expect(page.locator('#hf-download-route')).to_have_value('hf_mirror')
++                expect(page.locator('#hf-download-route')).to_be_disabled()
++                passed('ongoing mirror download restores actual route, progress and final host')
++                page.locator('#cancel-model').click();expect(page.locator('#hf-download-route')).to_be_enabled()
++                page.locator('#model-source').select_option('modelscope')
++                expect(page.locator('#hf-route-control')).to_be_hidden()
++                page.locator('#model-source').select_option('sdu')
++                expect(page.locator('#hf-route-control')).to_be_hidden()
++                page.locator('#model-source').select_option('huggingface')
++                expect(page.locator('#hf-download-route')).to_have_value('hf_mirror')
++                passed('mirror route hidden for MS/SDU and HF preference retained')
++                page.set_viewport_size({'width':390,'height':844})
++                assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
++                page.screenshot(path=str(a.output/'hf-mirror-mobile.png'),full_page=True)
++                passed('mirror selector on narrow screens has no horizontal overflow')
