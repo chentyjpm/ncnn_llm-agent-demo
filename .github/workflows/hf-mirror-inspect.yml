@@ -1,0 +1,46 @@
+name: Inspect HF mirror transport
+on:
+  push:
+    branches: [feature/hf-mirror-downloads-20261010]
+    paths: ['.github/workflows/hf-mirror-inspect.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with: {python-version: '3.13'}
+      - name: Read public model metadata and small parameter files (no model inference)
+        shell: python
+        run: |
+          import json, pathlib, urllib.request, urllib.parse, hashlib, time
+          out=pathlib.Path('reports/mirror-inspect');out.mkdir(parents=True,exist_ok=True)
+          report={'scope':'Public metadata and small files; no weights/inference/speed claim','cases':[]}
+          repo='nihui-szyl/qwen-image-ncnn'
+          for host in ['huggingface.co','hf-mirror.com']:
+              case={'host':host,'ok':False};start=time.monotonic()
+              try:
+                  url=f'https://{host}/api/models/{repo}/revision/main?blobs=true'
+                  with urllib.request.urlopen(urllib.request.Request(url,headers={'User-Agent':'LocalAgent-mirror-validation'}),timeout=30) as r:
+                      raw=r.read(8*1024*1024+1);case['metadata_final_host']=urllib.parse.urlsplit(r.url).hostname
+                  if len(raw)>8*1024*1024:raise ValueError('metadata too large')
+                  meta=json.loads(raw);case['revision']=meta['sha'];case['files']=len(meta['siblings'])
+                  (out/(host+'.json')).write_bytes(raw)
+                  name='qwenimage21/vae/decoder.ncnn.param'
+                  url=f'https://{host}/{repo}/resolve/{meta["sha"]}/{name}?download=true'
+                  with urllib.request.urlopen(urllib.request.Request(url,headers={'User-Agent':'LocalAgent-mirror-validation'}),timeout=30) as r:
+                      data=r.read(8*1024*1024+1);case['file_final_host']=urllib.parse.urlsplit(r.url).hostname
+                  if len(data)>8*1024*1024:raise ValueError('small file too large')
+                  case.update(ok=True,bytes=len(data),sha256=hashlib.sha256(data).hexdigest())
+              except Exception as e:case['error']=type(e).__name__+': '+str(e)
+              case['seconds']=round(time.monotonic()-start,3);report['cases'].append(case)
+          (out/'result.json').write_text(json.dumps(report,indent=2),encoding='utf-8');print(json.dumps(report,indent=2))
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        if: always()
+        with:
+          name: hf-mirror-endpoint-inspection
+          path: reports/mirror-inspect/
+          retention-days: 14
+          if-no-files-found: error
