@@ -11,7 +11,7 @@ import shutil
 import threading
 import time
 from .model_catalog import CATALOG, PROFILES, PROVIDERS
-from .model_sources import safe_name, digest, open_https, resolve_manifest, file_url, QWEN_FILES, IMAGE_REQUIRED
+from .model_sources import safe_name, digest, open_https, resolve_manifest, file_url, QWEN_FILES, IMAGE_REQUIRED, download_route, HF_DOWNLOAD_ROUTES, response_host
 
 QWEN_WEIGHT = PROFILES['qwen05']['weight_sha256']
 BUSY = ('downloading', 'verifying', 'converting', 'activating')
@@ -24,8 +24,8 @@ def save_json(path: Path, data):
     os.replace(tmp, path)
 
 
-def resolve_files(model_id, provider='huggingface'):
-    return resolve_manifest(model_id, provider, opener=open_https)
+def resolve_files(model_id, provider='huggingface', *, download_route_id='direct'):
+    return resolve_manifest(model_id, provider, download_route_id=download_route_id, opener=open_https)
 
 
 class ModelHub:
@@ -39,6 +39,7 @@ class ModelHub:
         self.cancelled = threading.Event()
         self.job = {'status':'idle'}
         self.quotes = {}
+        self._prepare_sequence = 0
         self.prefs = self.home / 'models.json'
         self.job_path = self.home / 'model-job.json'
         self._last_save = 0.0
@@ -109,15 +110,29 @@ class ModelHub:
             if job.get('total',0) > 0:
                 job['download_percent'] = round(min(100, 100*job.get('downloaded',0)/job['total']), 1)
             return {'managed':True, 'home':str(self.home), 'providers':PROVIDERS,
+                'hf_download_routes':copy.deepcopy(HF_DOWNLOAD_ROUTES),
                 'engines':{k:Path(v).is_file() for k,v in self.engines.items()},
                 'models':[dict(id=k, **v, installed=self.installed(k), active=active.get(v['kind']) == k)
                           for k,v in CATALOG.items()], 'job':job}
 
-    def prepare(self, model_id, provider='huggingface'):
-        quote = resolve_files(model_id, provider)
+    def prepare(self, model_id, provider='huggingface', *, download_route_id='direct'):
+        route = download_route(provider, download_route_id)
+        with self.lock:
+            if self.job['status'] in BUSY: raise ValueError('安装进行中，不能切换下载线路')
+            self._prepare_sequence += 1
+            sequence = self._prepare_sequence
+            self.quotes.clear()
+        quote = (resolve_files(model_id, provider) if download_route_id == 'direct' else
+                 resolve_files(model_id, provider, download_route_id=download_route_id))
+        quote = copy.deepcopy(quote)
+        quote.update(download_route=download_route_id,
+                     download_route_name=route['name'] if provider == 'huggingface' else PROVIDERS[provider],
+                     third_party_mirror=route['third_party'])
         token = secrets.token_urlsafe(24)
         with self.lock:
-            # One immutable consent ticket binds source + model + files, not user-editable URLs.
+            if sequence != self._prepare_sequence or self.job['status'] in BUSY:
+                raise ValueError('下载来源或线路查询已更新，请使用最新确认信息')
+            # Ticket binds provider + route + revision + checksums, never raw URLs.
             self.quotes = {token:(time.monotonic(), quote)}
         free = shutil.disk_usage(self.home).free
         return {k:v for k,v in quote.items() if k != 'files'} | {'ticket':token, 'disk_free_bytes':free,
@@ -136,6 +151,8 @@ class ModelHub:
             self.cancelled.clear()
             self._sample = None
             self.job = {'status':'downloading', 'model':quote['id'], 'provider':quote.get('provider','huggingface'),
+                'download_route':quote.get('download_route','direct'), 'download_route_name':quote.get('download_route_name',''),
+                'metadata_final_host':quote.get('metadata_final_host'),
                 'downloaded':0, 'network_bytes':0, 'total':quote['download_bytes'], 'file':'',
                 'revision':quote['revision'], 'started_at':time.time(), 'total_files':len(quote['files']),
                 'verified_files':0, 'message':'正在连接下载源…', 'speed_bps':0, 'cancel_requested':False}
@@ -165,7 +182,10 @@ class ModelHub:
     def _install(self, quote):
         model_id = quote['id']
         provider = quote.get('provider','huggingface')
-        cache = self.models / f'.download-{model_id}-{provider}-{quote["revision"][:12]}'
+        route_id = quote.get('download_route','direct')
+        download_route(provider, route_id)
+        suffix = '-hf_mirror' if route_id == 'hf_mirror' else ''
+        cache = self.models / f'.download-{model_id}-{provider}-{quote["revision"][:12]}{suffix}'
         stage = self.models / ('.stage-' + model_id)
         final = self.models / model_id
         try:
@@ -183,7 +203,9 @@ class ModelHub:
                     got = 0
                     self._update(status='downloading', message='连接下载源，等待数据…', file_downloaded=0, file_total=item['bytes'])
                     try:
-                        with open_https(file_url(quote,item)) as response, temp.open('wb') as stream:
+                        url = file_url(quote,item)
+                        with open_https(url) as response, temp.open('wb') as stream:
+                            self._update(last_download_host=response_host(response, url))
                             # Small reads keep visible progress moving, not waiting for an entire MiB.
                             while data := response.read(64*1024):
                                 self._check_stop(); got += len(data); transferred += len(data)
@@ -220,7 +242,7 @@ class ModelHub:
                 self._check_stop()
                 files.append({'name':p.relative_to(stage).as_posix(),'bytes':p.stat().st_size,'sha256':digest(p,cancelled=self.cancelled.is_set)})
                 self._update(stage_done=index,stage_total=len(all_files),file=p.name)
-            save_json(stage/'READY.json', {'id':model_id,'provider':provider,'revision':quote['revision'],'files':files})
+            save_json(stage/'READY.json', {'id':model_id,'provider':provider,'download_route':route_id,'revision':quote['revision'],'files':files})
             self._check_stop(); os.replace(stage,final)
             self.activate(model_id, _installation=True)
             if cache.exists(): shutil.rmtree(cache)
@@ -228,4 +250,4 @@ class ModelHub:
         except Exception as exc:
             if stage.exists(): shutil.rmtree(stage)
             self._update(status='cancelled' if isinstance(exc,InterruptedError) else 'failed',
-                error=f'{type(exc).__name__}: {exc}', message='安装未完成；没有自动更换下载源。', finished_at=time.time(), speed_bps=0)
+                error=f'{type(exc).__name__}: {exc}', message='安装未完成；没有自动更换下载源或线路。', finished_at=time.time(), speed_bps=0)

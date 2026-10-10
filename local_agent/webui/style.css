@@ -28,3 +28,9 @@ html[data-theme="light"]{color-scheme:light;--bg:#fafbf9;--sidebar:#f0f2ef;--pan
 .active-models{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}.active-model-slot{padding:10px;border:1px solid var(--line);border-radius:9px;font-size:11px;color:var(--muted)}.active-model-slot label{display:block;margin-bottom:5px}.active-model-slot select{width:100%;padding:5px;background:var(--card);border:1px solid var(--line);border-radius:6px;color:var(--text);font-size:12px}
 .model-tags{display:flex;gap:5px;flex-wrap:wrap;margin:8px 0}.model-tags .badge{color:var(--accent);background:var(--sidebar)}
 @media(max-width:800px){.generated-images{padding-left:0}.active-models{grid-template-columns:1fr}.image-options small{font-size:9px}.image-parameters{gap:8px}.image-parameters input,.image-parameters select{width:63px;font-size:11px}#image-seed{width:88px}.mode-button{padding:5px 6px;font-size:10px}.mode-switch{gap:1px}}
+
+/* Download source and transport are separate; never overflow a narrow dialog. */
+.source-controls{flex-wrap:wrap}
+.source-controls label{min-width:0}
+#hf-route-control[hidden],#hf-route-note[hidden]{display:none}
+.download-confirmation strong{overflow-wrap:anywhere}

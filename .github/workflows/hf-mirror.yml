@@ -1,0 +1,47 @@
+name: HF mirror downloads
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'local_agent/model_sources.py'
+      - 'local_agent/hf_download_pins.py'
+      - 'local_agent/model_hub.py'
+      - 'scripts/hf_mirror_smoke.py'
+      - 'tests/test_hf_mirror.py'
+      - '.github/workflows/hf-mirror.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'local_agent/model_sources.py'
+      - 'local_agent/hf_download_pins.py'
+      - 'local_agent/model_hub.py'
+      - 'scripts/hf_mirror_smoke.py'
+      - 'tests/test_hf_mirror.py'
+      - '.github/workflows/hf-mirror.yml'
+permissions:
+  contents: read
+concurrency:
+  group: hf-mirror-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  downloads:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with: {persist-credentials: false}
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with: {python-version: '3.13'}
+      - name: Route security and actual local HTTP regressions (network fixtures)
+        run: python -m unittest tests.test_hf_mirror -v
+      - name: Real origin and mirror manifests, configs and small image tensor (no inference)
+        run: python scripts/hf_mirror_smoke.py
+      - name: Preserve checksums and actual final hosts, no weights or secrets
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: hf-mirror-live-${{ github.run_id }}
+          path: reports/hf-mirror-live/
+          retention-days: 14
+          if-no-files-found: error

@@ -113,8 +113,10 @@
   <div id="engine-status" class="setting-note"></div>
   <div id="source-controls" class="source-controls">
     <label>下载来源<select id="model-source" aria-label="模型下载来源"><option value="modelscope">ModelScope 魔搭</option><option value="huggingface">Hugging Face</option><option value="sdu">ncnn 上游镜像（SDU）</option></select></label>
+    <label id="hf-route-control" hidden>HF 下载线路<select id="hf-download-route" aria-label="Hugging Face 下载线路"><option value="direct">Hugging Face 原站</option><option value="hf_mirror">HF-Mirror 镜像（第三方）</option></select></label>
     <label>模型类型<select id="model-filter" aria-label="模型类型"><option value="all">全部模型</option><option value="llm">文本 / 代码</option><option value="image">图像生成</option><option value="code">代码模型</option><option value="light">轻量模型</option><option value="native">ncnn 原生格式</option><option value="installed">已安装</option><option value="pending">待接入能力</option></select></label>
   </div>
+  <p id="hf-route-note" class="setting-note" hidden></p>
   <div class="catalog-search"><input id="model-search" type="search" aria-label="搜索模型" placeholder="搜索 Qwen / MiniCPM / Youtu / 代码…"><span id="model-count"></span></div>
   <div id="active-models" class="active-models"></div>
   <p class="setting-note">“准备下载”先查询所选来源的文件大小，确认后才开始下载。切换来源不会自动替换模型或发起下载。</p>

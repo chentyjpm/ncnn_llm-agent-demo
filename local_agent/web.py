@@ -585,8 +585,15 @@ class Handler(BaseHTTPRequestHandler):
                     if self.app.active:
                         raise WebError('先完成或停止当前任务。', 409)
                 if path.endswith('/prepare'):
-                    return self.respond(hub.prepare(payload.get('id'), payload.get('provider', 'huggingface')))
+                    if set(payload) - {'id', 'provider', 'download_route'}:
+                        raise WebError('仅接受模型、来源和下载线路，不接受代理地址或 Token', 400)
+                    route = payload.get('download_route', 'direct')
+                    if route == 'direct':
+                        return self.respond(hub.prepare(payload.get('id'), payload.get('provider', 'huggingface')))
+                    return self.respond(hub.prepare(payload.get('id'), payload.get('provider', 'huggingface'), download_route_id=route))
                 if path.endswith('/install'):
+                    if set(payload) - {'ticket', 'accept_download'}:
+                        raise WebError('安装只接受已确认的 ticket，不能在此更换下载线路', 400)
                     with self.app.lock:
                         if self.app.active:
                             raise WebError('先完成当前任务。', 409)
