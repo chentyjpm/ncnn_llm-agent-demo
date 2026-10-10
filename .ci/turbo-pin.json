@@ -1,0 +1,12 @@
+{
+  "repository": "nihui-szyl/qwen-image-ncnn",
+  "revision": "86b205ef3d6ecd7387b7796aeceefbffb6bf1883",
+  "files": [
+    {"name":"transformer/blocks.ncnn.bin","remote":"qwenimage21-turbo/transformer/blocks.ncnn.bin","bytes":13958677376,"digest":"2af914fe0088a78fc290e4b56082857a6764002801dc5c03d9641c894ef06628","algorithm":"sha256"},
+    {"name":"transformer/blocks.ncnn.param","remote":"qwenimage21-turbo/transformer/blocks.ncnn.param","bytes":108829,"digest":"2f4601f19cc8c8f0611005126d945a0375ba7a48","algorithm":"git"},
+    {"name":"transformer/input.ncnn.bin","remote":"qwenimage21-turbo/transformer/input.ncnn.bin","bytes":237519384,"digest":"11db1d481a7093385eb9fe8702c8fdbf4feea997217244bf8c084751c900aeca","algorithm":"sha256"},
+    {"name":"transformer/input.ncnn.param","remote":"qwenimage21-turbo/transformer/input.ncnn.param","bytes":1878,"digest":"07d7c85fce89aa02812378b10a2baa5cd2536af3","algorithm":"git"},
+    {"name":"transformer/output.ncnn.bin","remote":"qwenimage21-turbo/transformer/output.ncnn.bin","bytes":34078728,"digest":"1ca6f8a49f118dbf35a6fddfc25304997087e5f6cd8f7501cb61998063ddbbd3","algorithm":"sha256"},
+    {"name":"transformer/output.ncnn.param","remote":"qwenimage21-turbo/transformer/output.ncnn.param","bytes":596,"digest":"ec5b5fcfb49c1917f0653573b77c18c5950923e1","algorithm":"git"}
+  ]
+}

@@ -2,47 +2,67 @@ name: Turbo integration staging
 on:
   push:
     branches: [feat/qwenimage-turbo-20261010]
+    paths: ['.ci/**', '.github/workflows/turbo-stage.yml']
 permissions:
-  contents: read
+  contents: write
 jobs:
-  inspect:
+  assemble-test:
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
+    timeout-minutes: 20
     env:
-      PYTHONPATH: ${{ github.workspace }}
+      PYTHONUTF8: '1'
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
-        with: {persist-credentials: false}
+        with: {persist-credentials: true}
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with: {python-version: '3.13'}
-      - name: Inspect official origin and mirror metadata (no large weights)
+      - name: Apply reviewed exact-match edits on feature branch
+        run: |
+          python .ci/apply_turbo.py
+          python .ci/apply_turbo_browser.py
+          git diff --check
+          python -m compileall -q local_agent scripts tests
+          node --check local_agent/webui/app.js
+          node --check local_agent/webui/workbench.js
+      - name: Install test dependencies
+        run: |
+          python -m pip install -r requirements-office.txt -r requirements-monitor.txt playwright==1.57.0
+          python -m playwright install --with-deps chromium
+      - name: Actual Python and HTTP regressions (models are labelled fixtures)
+        run: python scripts/run_tests.py --output-dir reports/turbo-stage/unit
+      - name: Real browser image controls and approvals (labelled image fixtures)
+        run: python scripts/browser_images.py --output reports/turbo-stage/images
+      - name: Real browser model center and HF route controls (labelled metadata fixtures)
+        run: python scripts/browser_model_center.py --output reports/turbo-stage/model-center
+      - name: Publish verified source to this feature branch only
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add local_agent scripts tests docs README.md ci/dependencies.json upstream-lock.json .github/workflows/qwenimage-turbo.yml
+          git commit -m 'feat: assemble Turbo model integration after source and browser checks'
+          git push origin HEAD:refs/heads/feat/qwenimage-turbo-20261010
+          python - <<'PY'
+          import json,subprocess,hashlib
+          from pathlib import Path
+          paths=['.github/workflows/qwenimage-turbo.yml','README.md','ci/dependencies.json','upstream-lock.json','docs/HF_MIRROR.md','docs/QWEN_IMAGE_TURBO.md','local_agent/hf_download_pins.py','local_agent/image_profiles.py','local_agent/image_tasks.py','local_agent/images.py','local_agent/model_catalog.py','local_agent/model_hub.py','local_agent/model_sources.py','local_agent/tools.py','local_agent/web.py','local_agent/webui/app.js','local_agent/webui/workbench.js','scripts/browser_images.py','scripts/browser_model_center.py','scripts/hf_mirror_smoke.py','scripts/native_regression.py','scripts/qwenimage_turbo_smoke.py','tests/test_ci_regressions.py','tests/test_image_turbo.py']
+          result={'commit':subprocess.check_output(['git','rev-parse','HEAD']).decode().strip(),'files':[]}
+          for p in paths:
+              result['files'].append({'path':p,'mode':'100644','type':'blob','sha':subprocess.check_output(['git','rev-parse','HEAD:'+p]).decode().strip(),'sha256':hashlib.sha256(Path(p).read_bytes()).hexdigest()})
+          Path('reports/turbo-stage/PROMOTION.json').write_text(json.dumps(result,indent=2))
+          PY
+      - name: Preserve exact tested working files even on failure
+        if: always()
         shell: python
         run: |
-          import json, pathlib
-          from local_agent.model_sources import open_https
-          out=pathlib.Path('reports/turbo-inspection'); out.mkdir(parents=True,exist_ok=True)
-          repo='nihui-szyl/qwen-image-ncnn'
-          def get(url):
-              with open_https(url,timeout=45) as r:
-                  data=r.read(8*1024*1024+1)
-                  if len(data)>8*1024*1024: raise RuntimeError('response size limit')
-                  return data,r.geturl().split('?')[0]
-          data,final=get('https://huggingface.co/api/models/'+repo+'/revision/main?blobs=true')
-          meta=json.loads(data);rev=meta['sha'];(out/'origin.json').write_bytes(data)
-          selected=[x for x in meta['siblings'] if x.get('rfilename','').startswith('qwenimage21-turbo/')]
-          if not selected: raise RuntimeError('Official snapshot has no Turbo files')
-          print(json.dumps({'revision':rev,'turbo':selected},indent=2))
-          for x in selected:
-              if x['rfilename'].endswith('.param'):
-                  raw,_=get('https://huggingface.co/'+repo+'/resolve/'+rev+'/'+x['rfilename'])
-                  p=out/x['rfilename'];p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(raw)
-          mirror={'ok':False}
-          try:
-              raw,final=get('https://hf-mirror.com/api/models/'+repo+'/revision/'+rev+'?blobs=true')
-              (out/'mirror.json').write_bytes(raw);mm=json.loads(raw)
-              mirror={'ok':mm.get('sha')==rev,'final_endpoint':final,'same_metadata':mm.get('siblings')==meta.get('siblings')}
-          except Exception as e: mirror['error']=str(e)
-          (out/'inspection.json').write_text(json.dumps({'revision':rev,'mirror':mirror},indent=2));print(mirror)
+          import subprocess,zipfile,pathlib
+          root=pathlib.Path('reports/turbo-stage');root.mkdir(parents=True,exist_ok=True)
+          with zipfile.ZipFile(root/'tested-source.zip','w',zipfile.ZIP_DEFLATED) as archive:
+              for p in subprocess.check_output(['git','ls-files','-z']).decode().split('\0'):
+                  if p and pathlib.Path(p).is_file(): archive.write(p,p)
       - if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
-        with: {name: turbo-origin-inspection, path: reports/turbo-inspection/, if-no-files-found: error, retention-days: 14}
+        with:
+          name: turbo-integration-evidence
+          path: reports/turbo-stage/
+          if-no-files-found: error
+          retention-days: 14
