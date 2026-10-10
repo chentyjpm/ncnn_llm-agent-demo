@@ -1,7 +1,7 @@
-"""Explicit image route and evidence-backed image cards; no model impersonation.
+"""Conservative user-intent routing and evidence-backed image cards.
 
-The dedicated image mode is deterministic orchestration, not LLM planning. In
-Agent mode the registered images.generate tool remains model-selected.
+This is deterministic orchestration, not LLM planning. Only the current user
+message can request a route; file/model/tool text never grants permission.
 """
 from __future__ import annotations
 from pathlib import Path
@@ -16,18 +16,80 @@ MODES = ('chat', 'agent', 'image')
 IMAGE_TOOL = 'images.generate'
 
 
-def route_request(message: str, mode: str) -> tuple[str, str]:
+# Deliberately prefer false negatives over executing an ambiguous request. The
+# explicit Image mode and /image remain available for anything outside this
+# small direct-request grammar. This does not classify arbitrary prose.
+_TEXT_ONLY = re.compile(
+    r"不要|别(?:画|生成|生图)|不用|不需要|不必|只(?:要|需|写|说|解释)|"
+    r"提示词|文案|怎么|如何|怎样|为什么|能否|是否|教程|解释|翻译|引用|示例|代码|方法|技巧|建议|介绍|区别|描述|意思|多久|多长时间|多少|什么|发给|发送|分享|保存为|保存到|邮件|日程|文档|流程图|架构图|统计图|散点图|坐标轴|然后|顺便|再帮我|画饼|画蛇添足|"
+    r"\b(?:don't|do not|never|without|no need|only|just explain|prompt|prompts|"
+    r"copywriting|how|why|whether|tutorial|explain|translate|quote|example|code|description|describe|meaning|email|meeting|document|diagram|chart|flowchart|plot|svg|mermaid|conclusions|attention|lots|better)\b",
+    re.I)
+_PREFIX = r"(?:(?:请|麻烦|帮我|给我|替我|请你|现在|直接|能帮我|可以帮我|我想要你|我想)\s*)*"
+_EN_PREFIX = r"(?:(?:please|now)\s+|(?:can|could|would) you\s+(?:please\s+)?)*"
+_VISUAL = r"(?:图(?:片|像)?|插画|海报|封面|壁纸|头像|照片|漫画|素描|油画|水彩|logo|设计图)"
+_GENERATE = re.compile(
+    r"^(?:" + _PREFIX + r"(?:画|绘制|画出|画个|画一)(?!面|风|质|法)|"
+    + _PREFIX + r"(?:生成|制作|设计|做)(?=.{0,60}" + _VISUAL + r")|"
+    + _EN_PREFIX + r"(?:draw|paint|sketch|illustrate)\s+(?!conclusions?\b|attention\b|lots\b|a blank\b)|"
+    + _EN_PREFIX + r"(?:generate|create|make|design|render)\s+(?=.{0,70}\b"
+    r"(?:image|picture|illustration|poster|cover|wallpaper|avatar|photo|portrait|logo|artwork)\b))", re.I)
+_EDIT = re.compile(
+    r"^(?:" + _PREFIX + r"(?:把|将)(?=.{0,30}(?:背景|前景|颜色|风格|光线|天空|主体|人物|衣服|猫|狗|它|这张|图片|图像)).{1,60}(?:改成|换成|改为|换为|变成)|"
+    + _PREFIX + r"(?:改成|换成|改为|换为|再画|重画|重新生成|再生成)|"
+    + _EN_PREFIX + r"(?:make|change|turn|replace|remove|add)\s+(?=.{0,50}\b(?:it|this|image|picture|background|foreground|color|colour|style|lighting|sky|subject|cat|dog)\b).{1,80}|"
+    + _EN_PREFIX + r"(?:try again|draw another|generate another|regenerate)\b)", re.I)
+
+
+def image_followup(message: str, previous_image: dict | None) -> bool:
+    return bool(previous_image and _safe_image_request(message) and _EDIT.search(message.strip()))
+
+
+def _safe_image_request(message: str) -> bool:
+    # Questions about capabilities, quotations, code and text-only tasks are
+    # not permission to create a file. Question marks may still be polite asks.
+    return not (_TEXT_ONLY.search(message) or any(x in message for x in ('```', '“', '”', '「', '」'))
+                or re.search(r'\band (?:then|send|share|save|write|list|explain|tell|email)\b|draw the line', message, re.I)
+                or message.lstrip().startswith(('>', '{', '[', '"', "'")))
+
+
+def route_request(message: str, mode: str, *, previous_image: dict | None = None) -> tuple[str, str]:
     if mode not in MODES:
         raise PolicyError('mode must be chat, agent or image')
-    # Only a literal top-level user command routes automatically. Text inside
-    # attachments/history/tool output never enters this function as a command.
     command = re.match(r'^/image(?:\s+(.*))?$', message.strip(), re.S)
     if command:
         prompt = (command[1] or '').strip()
         if not prompt:
             raise PolicyError('/image 后需要填写画面描述')
         return 'image', prompt
+    if mode == 'image':
+        return mode, message
+    if image_followup(message, previous_image):
+        # The prior verified raster is the reference; never re-interpret the
+        # assistant's prose or scan old conversation text for instructions.
+        return 'image', message
+    if _safe_image_request(message) and _GENERATE.search(message.strip()):
+        return 'image', message
     return mode, message
+
+
+def previous_image(messages: list[dict], workspace: Workspace) -> dict | None:
+    """Only the immediately preceding completed, single-image turn is eligible."""
+    if not messages:
+        return None
+    last = messages[-1]
+    if last.get('role') != 'assistant' or last.get('state') != 'completed':
+        return None
+    cards = last.get('artifacts', [])
+    if len(cards) != 1 or cards[0].get('source_tool') != IMAGE_TOOL:
+        return None
+    # Reconstruct from successful trace evidence, and revalidate bytes. A stale
+    # card, missing file, or model-invented path cannot become a reference.
+    try:
+        verified = image_artifacts(workspace, last.get('trace', []))
+    except (ValueError, OSError):
+        return None
+    return verified[0] if len(verified) == 1 and verified[0]['path'] == cards[0].get('path') else None
 
 
 def image_ready(config: dict) -> bool:

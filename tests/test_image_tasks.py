@@ -19,10 +19,10 @@ class ImagePlanningTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
         self.ws=Workspace(Path(self.temp.name))
-    def test_only_explicit_image_mode_or_slash_command_routes(self):
+    def test_explicit_routes_and_non_requests(self):
         self.assertEqual(route_request('/image 一只猫','chat'),('image','一只猫'))
         self.assertEqual(route_request('a cat','image'),('image','a cat'))
-        for prompt in ['画一张图片','帮我写海报文案，不要生图','解释 images.generate','/imageevil','文本内 /image 猫']:
+        for prompt in ['帮我写海报文案，不要生图','解释 images.generate','/imageevil','文本内 /image 猫']:
             self.assertEqual(route_request(prompt,'chat'),('chat',prompt))
     def test_invalid_mode_and_empty_command_rejected(self):
         for prompt,mode in [('/image','chat'),('x','shell')]:
@@ -120,7 +120,7 @@ class ImageHttpTests(unittest.TestCase):
         self.enable_image()
         self.fixture=ScriptedBackend([{'tool':'images.generate','arguments':{'prompt':'cat','output':'agent.png','width':256,'height':256,'steps':2,'seed':42}},{'final':'Done'}])
         with patch.object(ImageRunner,'run',autospec=True,side_effect=self.engine_fixture) as engine:
-            rid=self.start(mode='agent',message='画一只猫');a=self.wait_approval(rid);engine.assert_not_called()
+            rid=self.start(mode='agent',message='请完成多步骤任务：先画一只猫，然后列出工作区文件');a=self.wait_approval(rid);engine.assert_not_called()
             self.request(f'/api/runs/{rid}/approve','POST',{'approval_id':a['id'],'allow':True})
             self.assertEqual(self.finish(rid)[0],'completed')
             self.assertEqual(self.app.sessions.get(self.sid)['messages'][-1]['artifacts'][0]['path'],'agent.png')

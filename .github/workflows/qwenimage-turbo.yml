@@ -13,12 +13,16 @@ on:
         default: hosted-cpu
         options: [hosted-cpu, self-hosted-vulkan]
   push:
-    branches: [main]
+    branches: [main, feat/automatic-image-tool]
     paths:
       - '.github/workflows/qwenimage-turbo.yml'
       - 'scripts/qwenimage_turbo_smoke.py'
       - 'local_agent/image_profiles.py'
       - 'local_agent/images.py'
+      - 'local_agent/image_tasks.py'
+      - 'local_agent/web.py'
+      - 'tests/test_auto_image_routing.py'
+      - 'tests/test_turbo_http_acceptance.py'
       - 'local_agent/hf_download_pins.py'
       - 'tests/test_image_turbo.py'
       - 'ci/dependencies.json'
@@ -30,7 +34,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   turbo:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/automatic-image-tool'
     runs-on: ${{ inputs.runner == 'self-hosted-vulkan' && fromJSON('["self-hosted","linux","x64","qwenimage-vulkan"]') || 'ubuntu-24.04' }}
     timeout-minutes: 120
     env:
@@ -46,7 +50,7 @@ jobs:
       - name: Install test-only decoder and resource observer
         run: python -m pip install Pillow==12.0.0 -r requirements-monitor.txt
       - name: Turbo profile, HTTP and dependency regressions (tiny fixtures)
-        run: python -m unittest tests.test_image_turbo -v
+        run: python -m unittest tests.test_image_turbo tests.test_auto_image_routing tests.test_turbo_http_acceptance -v
       - id: pins
         run: python scripts/ci_native.py refs --component image
       - name: Checkout exact Turbo-capable engine and submodules
@@ -62,7 +66,7 @@ jobs:
           python scripts/ci_native.py configure --component image
           python scripts/ci_native.py build --component image
           python scripts/ci_native.py smoke --component image
-      - name: Download verified weights and generate actual eight-step Turbo PNG
+      - name: Download verified weights and verify automatic chat-to-image HTTP generation
         timeout-minutes: 105
         run: python scripts/qwenimage_turbo_smoke.py --binary build/ci-image/qwenimage-ncnn-vulkan --device "$TURBO_DEVICE" --route "$HF_ROUTE" --timeout 3600
       - name: Upload evidence and real PNG, not weights
@@ -75,6 +79,7 @@ jobs:
             reports/turbo-real/*.jsonl
             reports/turbo-real/*.log
             reports/turbo-real/generated.png
+            reports/turbo-real/downloaded.png
             reports/ci/image/
           if-no-files-found: error
           retention-days: 14
