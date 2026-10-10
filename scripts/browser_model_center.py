@@ -23,15 +23,15 @@ class DisplayFixture(ModelHub):
     """Controls ONLY network-job states for visible UI assertions; no weights."""
     def __init__(self,*a,**k):
         super().__init__(*a,**k);self.calls=[];self.query_error=False
-    def prepare(self,model_id,provider='huggingface'):
-        self.calls.append((model_id,provider));time.sleep(.6)
+    def prepare(self,model_id,provider='huggingface',*,download_route_id='direct'):
+        self.calls.append((model_id,provider));self.route=download_route_id;time.sleep(.6)
         if self.query_error:raise OSError('TEST_NETWORK_FAILURE')
-        return {'id':model_id,'provider':provider,'ticket':'UI_FIXTURE_ONLY', 'repository':'Qwen/Fixture', 'revision':'0'*40,
+        return {'id':model_id,'provider':provider,'download_route':download_route_id,'third_party_mirror':download_route_id=='hf_mirror', 'metadata_final_host':'hf-mirror.com' if download_route_id=='hf_mirror' else 'huggingface.co','ticket':'UI_FIXTURE_ONLY', 'repository':'Qwen/Fixture', 'revision':'0'*40,
                 'download_bytes':1024**3,'disk_required_bytes':4*1024**3,'disk_free_bytes':8*1024**3,
                 'installed_estimate_bytes':2*1024**3,'enough_space':True}
     def start(self,ticket,consent):
         if ticket!='UI_FIXTURE_ONLY' or consent is not True:raise ValueError('No consent')
-        self.job={'status':'downloading','model':'qwen05','provider':self.calls[-1][1], 'downloaded':256*1024**2,
+        self.job={'status':'downloading','model':'qwen05','provider':self.calls[-1][1],'download_route':self.route,'last_download_host':'cdn-lfs.hf.co', 'downloaded':256*1024**2,
                   'total':1024**3,'file':'fixture.bin','speed_bps':2*1024**2,'started_at':time.time(),
                   'last_data_at':time.time(),'message':'UI fixture, no model downloaded'}
         return copy.deepcopy(self.job)
@@ -91,6 +91,53 @@ def main():
                 page.locator('#cancel-model').click();expect(page.locator('#model-progress')).to_have_text('安装已取消');expect(page.locator('#model-source')).to_be_enabled();passed('cancelled is not completed and permits source change')
                 page.reload();page.locator('#setup-button').click();expect(page.locator('#model-source')).to_have_value('huggingface');expect(page.locator('#model-progress')).to_have_text('安装已取消');passed('reload retains source choice and server job state')
                 page.set_viewport_size({'width':390,'height':844});assert page.evaluate('document.documentElement.scrollWidth<=innerWidth');page.screenshot(path=str(a.output/'mobile-models.png'),full_page=True);passed('mobile dialog has no horizontal overflow')
+                page.set_viewport_size({'width':1200,'height':900})
+                page.locator('#model-filter').select_option('image')
+                expect(page.locator('#hf-download-route')).to_have_value('direct')
+                page.locator('#hf-download-route').select_option('hf_mirror')
+                expect(page.locator('#hf-route-note')).to_contain_text('第三方')
+                passed('mirror is explicit optional HF route with third-party disclosure')
+                page.locator('[data-model-id="qwenimage21"] button').click()
+                expect(page.locator('#model-progress')).to_contain_text('HF-Mirror')
+                expect(page.locator('.download-confirmation')).to_contain_text('HF-Mirror')
+                expect(page.locator('.download-confirmation')).to_contain_text('清单响应主机')
+                assert hub.route=='hf_mirror'
+                page.screenshot(path=str(a.output/'hf-mirror-confirmation.png'),full_page=True)
+                passed('image mirror metadata query reaches backend and quote identifies route/host')
+                page.locator('#hf-download-route').select_option('direct')
+                expect(page.locator('.download-confirmation')).to_have_count(0)
+                passed('route change invalidates old download confirmation')
+                page.locator('[data-model-id="qwenimage21"] button').click()
+                page.locator('#hf-download-route').select_option('hf_mirror')
+                page.wait_for_timeout(900)
+                expect(page.locator('.download-confirmation')).to_have_count(0)
+                passed('cancelled slow query cannot redisplay a stale route quote')
+                hub.query_error=True;page.locator('[data-model-id="qwenimage21"] button').click()
+                expect(page.locator('#model-error')).to_contain_text('HF-Mirror')
+                expect(page.locator('#hf-download-route')).to_have_value('hf_mirror')
+                passed('mirror failure stays on chosen route without hidden origin retry')
+                hub.query_error=False;page.locator('[data-model-id="qwenimage21"] button').click()
+                page.get_by_role('button',name='确认下载并安装').click()
+                expect(page.locator('#hf-download-route')).to_be_disabled()
+                expect(page.locator('#model-progress-extra')).to_contain_text('HF-Mirror')
+                expect(page.locator('#model-progress-extra')).to_contain_text('cdn-lfs.hf.co')
+                page.screenshot(path=str(a.output/'hf-mirror-progress.png'),full_page=True)
+                page.reload();page.locator('#setup-button').click()
+                expect(page.locator('#hf-download-route')).to_have_value('hf_mirror')
+                expect(page.locator('#hf-download-route')).to_be_disabled()
+                passed('ongoing mirror download restores actual route, progress and final host')
+                page.locator('#cancel-model').click();expect(page.locator('#hf-download-route')).to_be_enabled()
+                page.locator('#model-source').select_option('modelscope')
+                expect(page.locator('#hf-route-control')).to_be_hidden()
+                page.locator('#model-source').select_option('sdu')
+                expect(page.locator('#hf-route-control')).to_be_hidden()
+                page.locator('#model-source').select_option('huggingface')
+                expect(page.locator('#hf-download-route')).to_have_value('hf_mirror')
+                passed('mirror route hidden for MS/SDU and HF preference retained')
+                page.set_viewport_size({'width':390,'height':844})
+                assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+                page.screenshot(path=str(a.output/'hf-mirror-mobile.png'),full_page=True)
+                passed('mirror selector on narrow screens has no horizontal overflow')
                 assert not errors,errors;assert not requests,requests;passed('no page errors or browser external requests');browser.close()
         except Exception as exc:
             result['cases'].append({'name':'browser execution','passed':False,'error':f'{type(exc).__name__}: {exc}'})

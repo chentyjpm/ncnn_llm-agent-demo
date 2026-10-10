@@ -16,8 +16,11 @@ $('doc-template').onchange=()=>{const key=$('doc-template').value;if(!key)return
 $('doc-preview-toggle').onclick=()=>{const show=$('doc-render').hidden;$('doc-render').replaceChildren(markdown($('doc-editor').value));$('doc-render').hidden=!show;$('doc-editor').hidden=show;};
 $('doc-export').onclick=safe(async()=>{if(state.run)return toast('请先完成或停止正在运行的任务');const content=$('doc-editor').value;if(!content.trim())return toast('请先填写文档内容');const s=await ensureSession();$('doc-export').disabled=true;try{const made=await api(`/api/sessions/${s.id}/export`,'POST',{format:$('doc-format').value,title:$('doc-title').value||'Document',content,confirm:true});saveBlob(await getFile(made.path),made.path.split('/').pop());toast('新文档已生成；原文件没有被覆盖');if(!$('file-panel').hidden)await showFiles();}finally{$('doc-export').disabled=false;}});
 // Model center: all changing UI labels reflect a request phase or real server bytes.
-const setup = {data:null, provider:storage.get('model-provider')||'modelscope', filter:'all', search:'', quote:null, query:null, error:'', seq:0, completed:null, controller:null};
+const setup = {data:null, provider:storage.get('model-provider')||'modelscope', route:storage.get('hf-download-route')||'direct', filter:'all', search:'', quote:null, query:null, error:'', seq:0, completed:null, controller:null};
 if(!['modelscope','huggingface','sdu'].includes(setup.provider))setup.provider='modelscope';
+if(!['direct','hf_mirror'].includes(setup.route))setup.route='direct';
+function routeName(route){return route==='hf_mirror'?'HF-Mirror 镜像（第三方）':'Hugging Face 原站';}
+function selectedRoute(){return setup.provider==='huggingface'?setup.route:'direct';}
 const installBusy = job => ['downloading','verifying','converting','activating'].includes(job?.status);
 function amount(bytes){if(!Number.isFinite(bytes))return '待查询';for(const [unit,n] of [['GiB',1024**3],['MiB',1024**2],['KiB',1024]])if(bytes>=n)return (bytes/n).toFixed(2)+' '+unit;return bytes+' B';}
 function duration(seconds){if(!Number.isFinite(seconds))return '正在估算';return seconds<60?Math.max(1,Math.ceil(seconds))+' 秒':seconds<3600?Math.ceil(seconds/60)+' 分钟':(seconds/3600).toFixed(1)+' 小时';}
@@ -51,11 +54,17 @@ function renderSetup(){
  $('engine-status').textContent=`文本引擎：${data.engines.llm?'已内置':'缺失'} · 图像引擎：${data.engines.image?'已内置':'缺失'} · 权重不随应用默认安装`;
  $('model-home').textContent='保存位置：'+data.home;
  const job=data.job||{status:'idle'},busy=installBusy(job),querying=!!setup.query;
+ // On refresh/another tab, show the actual running job's bound source/route.
+ if(busy&&['modelscope','huggingface','sdu'].includes(job.provider)){setup.provider=job.provider;if(job.provider==='huggingface')setup.route=job.download_route||'direct';}
+ $('hf-route-control').hidden=setup.provider!=='huggingface';
+ $('hf-download-route').value=setup.route;$('hf-download-route').disabled=busy||!!setup.starting;
+ $('hf-route-note').hidden=setup.provider!=='huggingface';
+ $('hf-route-note').textContent=setup.route==='hf_mirror'?'HF-Mirror 是第三方下载镜像，不是模型来源。清单与文件均从镜像入口请求，可能重定向到 HF 原站或 CDN；速度不保证。不传递 HF Token，不自动换线。':'直接从 Hugging Face 请求。原站连接困难时，可手动选择 HF-Mirror；不会修改系统代理。';
  $('model-source').value=setup.provider;$('model-source').disabled=busy||!!setup.starting;
  $('model-filter').value=setup.filter;
  const visible=filteredModels(data.models);$('model-count').textContent=`${visible.length} / ${data.models.length} 项`;
  activeModels(data,busy||querying||!!setup.starting);
- const cardsKey=JSON.stringify([data.models,setup.provider,setup.filter,setup.search,setup.quote,setup.query,!!setup.starting,busy,job.model]);
+ const cardsKey=JSON.stringify([data.models,setup.provider,setup.route,setup.filter,setup.search,setup.quote,setup.query,!!setup.starting,busy,job.model]);
  if(setup.cardsKey!==cardsKey){setup.cardsKey=cardsKey;$('model-cards').replaceChildren();
  if(!visible.length)$('model-cards').append(el('p','setting-note','没有匹配的模型，请调整分类或搜索词。'));
  for(const model of visible){
@@ -74,7 +83,8 @@ function renderSetup(){
   action.disabled=model.installable===false||model.active||busy||querying||!!setup.starting||(!supported&&!model.installed);card.append(action);
   if(setup.quote?.id===model.id){
    const q=setup.quote,box=el('div','download-confirmation');box.append(el('strong','','确认下载信息'));
-   for(const [label,value] of [['下载源',providerName(q.provider)],['需要下载',amount(q.download_bytes)],['安装后预计占用',amount(q.installed_estimate_bytes)],['安装时至少预留',amount(q.disk_required_bytes)],['当前可用磁盘',amount(q.disk_free_bytes)]]){const row=el('div','runtime-row');row.append(el('span','',label),el('strong','',value));box.append(row);}
+   for(const [label,value] of [['下载源',providerName(q.provider)],...(q.provider==='huggingface'?[['下载线路',routeName(q.download_route)],['模型版本',q.revision||'待确认'],['清单响应主机',q.metadata_final_host||'等待服务器报告']]:[]),['需要下载',amount(q.download_bytes)],['安装后预计占用',amount(q.installed_estimate_bytes)],['安装时至少预留',amount(q.disk_required_bytes)],['当前可用磁盘',amount(q.disk_free_bytes)]]){const row=el('div','runtime-row');row.append(el('span','',label),el('strong','',value));box.append(row);}
+   if(q.third_party_mirror)box.append(el('p','source-unavailable','你将通过第三方 HF-Mirror 获取公开模型；逐文件比对应用内独立核实的原站清单。仅校验通过的文件才能启用。'));
    box.append(el('p','setting-note','下载的是所选模型的文件，不是下载次数。下载完成后还需校验和准备，全部完成才会启用。'));
    if(q.enough_space===false)box.append(el('p','error-text','可用磁盘空间不足，请清理后重新查询。'));
    const buttons=el('div','dialog-actions');buttons.append(button('取消',null,()=>{setup.quote=null;renderSetup();},'soft-button'));
@@ -88,18 +98,18 @@ function renderSetup(){
  $('cancel-model').hidden=!(querying||busy);$('cancel-model').disabled=!!job.cancel_requested&&busy;
  $('cancel-model').textContent=querying?'取消查询':job.cancel_requested?'正在取消…':'取消安装';
  const errors=setup.error||(job.status==='failed'||job.status==='interrupted'?job.error:'');
- $('model-error').hidden=!errors;$('model-error').textContent=errors?errors+'\n可手动选择另一个下载源并重新查询。不会自动改用其他源。':'';
+ $('model-error').hidden=!errors;$('model-error').textContent=errors?errors+'\n可手动选择其他下载源或线路并重新查询。不会自动改用其他源或线路。':'';
  if(setup.starting){$('model-progress').textContent='正在提交安装请求…';$('model-progress-extra').textContent='等待服务器确认；请求中断时会重新查询状态，不会自动重复下载。';}
- else if(querying){$('model-progress').textContent='正在连接 '+providerName(setup.provider)+'，查询文件大小…';$('model-progress-extra').textContent='尚未下载模型。通常需要几秒；超过 30 秒会显示超时提示。';}
+ else if(querying){$('model-progress').textContent='正在连接 '+providerName(setup.provider)+(setup.provider==='huggingface'?' / '+routeName(setup.route):'')+'，查询文件大小…';$('model-progress-extra').textContent='尚未下载模型。通常需要几秒；超过 30 秒会显示超时提示。';}
  else if(busy){const stages={downloading:'正在下载',verifying:'正在校验文件',converting:'正在转换／准备模型',activating:'正在校验并启用'};
   const label=data.models.find(m=>m.id===job.model)?.name||job.model;
   $('model-progress').textContent=stages[job.status]+' · '+label;
   if(job.status==='downloading'&&job.total>0){bar.value=Math.min(100,(job.downloaded||0)/job.total*100);$('model-progress-metrics').textContent=`${bar.value.toFixed(1)}% · ${amount(job.downloaded||0)} / ${amount(job.total)} · ${job.speed_bps>0?amount(job.speed_bps)+'/s':'等待数据'} · 剩余 ${duration(job.eta_seconds)}`;}
   else if(job.stage_total>0){bar.value=job.stage_done/job.stage_total*100;$('model-progress-metrics').textContent=`准备步骤 ${job.stage_done} / ${job.stage_total}（不是耗时百分比）`;}
   else $('model-progress-metrics').textContent=`已下载 ${amount(job.downloaded||0)} / ${amount(job.total)} · 校验 ${job.verified_files||0} / ${job.total_files||'?'} 个文件`;
-  $('model-progress-extra').textContent=`来源：${providerName(job.provider)}\n${job.file||job.message||''}\n`+(job.cancel_requested?'正在取消，等待当前读取／转换步骤结束。':job.waiting_for_data?'暂未收到新数据，请检查网络；也可取消后换源。':job.status!=='downloading'?'下载 100% 不代表安装完成，请等待校验、转换和启用。':job.message||'');
+  $('model-progress-extra').textContent=`来源：${providerName(job.provider)}${job.provider==='huggingface'?' · '+routeName(job.download_route):''}\n${job.last_download_host?'当前文件响应主机：'+job.last_download_host+'\n':''}${job.file||job.message||''}\n`+(job.cancel_requested?'正在取消，等待当前读取／转换步骤结束。':job.waiting_for_data?'暂未收到新数据，请检查网络；也可取消后换源。':job.status!=='downloading'?'下载 100% 不代表安装完成，请等待校验、转换和启用。':job.message||'');
  }else if(job.status==='completed'){bar.value=100;$('model-progress').textContent='模型已安装并启用';$('model-progress-extra').textContent='现在可以关闭此窗口，返回聊天。';}
- else if(job.status==='cancelled'||job.status==='interrupted'){$('model-progress').textContent=job.status==='cancelled'?'安装已取消':'上次安装已中断';$('model-progress-extra').textContent='重试会复用同一来源、同一版本中完整且通过校验的文件；未完成的单个文件重新下载。';}
+ else if(job.status==='cancelled'||job.status==='interrupted'){$('model-progress').textContent=job.status==='cancelled'?'安装已取消':'上次安装已中断';$('model-progress-extra').textContent='重试会复用同一来源、线路、版本中完整且通过校验的文件；未完成的单个文件重新下载。';}
  else if(job.status==='failed'){$('model-progress').textContent='安装失败';$('model-progress-extra').textContent='详细原因见下方；没有启用未完成的模型。';}
  else $('model-progress').textContent='选择模型后，先查询大小，再确认下载。';
 }
@@ -108,8 +118,8 @@ async function chooseModel(model){
  setup.error='';setup.quote=null;
  if(model.installed){try{await setupRequest('/api/setup/activate',{id:model.id});await refreshRuntime();await updateSetup();}catch(e){setup.error=e.message;renderSetup();}return;}
  const seq=++setup.seq;setup.query=model.id;renderSetup();
- try{const q=await setupRequest('/api/setup/prepare',{id:model.id,provider:setup.provider});if(seq===setup.seq)setup.quote=q;}
- catch(e){if(seq===setup.seq)setup.error=e.message;}
+ try{const q=await setupRequest('/api/setup/prepare',{id:model.id,provider:setup.provider,download_route:selectedRoute()});if(seq===setup.seq)setup.quote=q;}
+ catch(e){if(seq===setup.seq)setup.error=(setup.provider==='huggingface'?routeName(setup.route)+'：':'')+e.message;}
  finally{if(seq===setup.seq)setup.query=null;renderSetup();}
 }
 async function installQuoted(){
@@ -132,7 +142,14 @@ async function refreshRuntime(){state.runtime=await api('/api/runtime');$('model
 $('setup-button').onclick=safe(async()=>{$('setup-dialog').showModal();await updateSetup();});
 $('close-setup').onclick=()=>{$('setup-dialog').close();clearTimeout(setupTimer);};
 $('setup-dialog').addEventListener('close',()=>clearTimeout(setupTimer));
-$('model-source').onchange=()=>{setup.seq++;setup.controller?.abort();setup.query=null;setup.quote=null;setup.error='';setup.provider=$('model-source').value;storage.set('model-provider',setup.provider);renderSetup();};
+function changeDownloadSelection(){
+ if(installBusy(setup.data?.job)||setup.starting){renderSetup();return;}
+ setup.seq++;setup.controller?.abort();setup.query=null;setup.quote=null;setup.error='';
+ setup.provider=$('model-source').value;setup.route=$('hf-download-route').value;
+ storage.set('model-provider',setup.provider);storage.set('hf-download-route',setup.route);renderSetup();
+}
+$('model-source').onchange=changeDownloadSelection;
+$('hf-download-route').onchange=changeDownloadSelection;
 $('model-filter').onchange=()=>{setup.filter=$('model-filter').value;renderSetup();};
 $('model-search').oninput=()=>{setup.search=$('model-search').value;renderSetup();};
 $('cancel-model').onclick=safe(async()=>{if(setup.query){setup.seq++;setup.controller?.abort();setup.query=null;setup.quote=null;setup.error='';renderSetup();return;}await api('/api/setup/cancel','POST',{});await updateSetup();});

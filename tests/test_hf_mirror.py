@@ -1,0 +1,250 @@
+"""Transport, HTTP and installer regressions. Explicit tiny fixtures, not inference."""
+import copy
+import hashlib
+import http.client
+import io
+import json
+import os
+from pathlib import Path
+import ssl
+import tempfile
+import threading
+import unittest
+from unittest.mock import patch, Mock
+from urllib.request import Request, HTTPRedirectHandler, HTTPSHandler
+from urllib.parse import urlsplit
+from local_agent.hf_download_pins import PINNED_HF
+from local_agent.model_sources import (resolve_manifest, file_url, source_for, open_https,
+    download_route, verify_mirror_manifest, response_host)
+from local_agent.model_hub import ModelHub, BUSY
+from local_agent.web import LocalServer, WebApp
+
+
+class Reply(io.BytesIO):
+    def __init__(self, data, url): super().__init__(data); self.url = url
+    def geturl(self): return self.url
+
+
+def metadata(model='qwenimage21'):
+    pin=PINNED_HF[model]; rows=[]
+    for f in pin['files']:
+        e={'rfilename':f['remote'],'size':f['bytes']}
+        if f['algorithm']=='git': e['blobId']=f['digest']
+        else: e['lfs']={'sha256':f['digest'],'size':f['bytes']}
+        rows.append(e)
+    return {'sha':pin['revision'],'siblings':rows}
+
+
+def resolve(model='qwenimage21', route='hf_mirror', data=None, seen=None, final_host=None):
+    def fixture(url, **kwargs):
+        if seen is not None: seen.append(url)
+        final=url.replace('hf-mirror.com', final_host) if final_host else url
+        return Reply(json.dumps(data or metadata(model)).encode(), final)
+    return resolve_manifest(model,'huggingface',download_route_id=route,opener=fixture)
+
+
+class RouteTests(unittest.TestCase):
+    def test_direct_remains_default(self):
+        urls=[]; q=resolve(route='direct',seen=urls)
+        self.assertEqual(q['download_route'],'direct');self.assertFalse(q['third_party_mirror'])
+        self.assertTrue(urls[0].startswith('https://huggingface.co/'))
+    def test_mirror_queries_only_selected_entry(self):
+        for model in PINNED_HF:
+            with self.subTest(model=model):
+                urls=[];q=resolve(model,seen=urls)
+                self.assertEqual(len(urls),1);self.assertTrue(urls[0].startswith('https://hf-mirror.com/api/'))
+                self.assertEqual(q['provider'],'huggingface');self.assertTrue(q['third_party_mirror'])
+                self.assertTrue(all(file_url(q,f).startswith('https://hf-mirror.com/') for f in q['files']))
+    def test_routes_use_same_snapshot_and_members(self):
+        for model in PINNED_HF:
+            a=resolve(model,'direct');b=resolve(model)
+            for k in ('revision','repository','files','download_bytes'):self.assertEqual(a[k],b[k])
+    def test_mirror_is_not_a_new_provider_or_model(self):
+        with self.assertRaises(ValueError):source_for('qwenimage21','hf_mirror')
+        self.assertEqual(source_for('qwenimage21','huggingface')['revision'],PINNED_HF['qwenimage21']['revision'])
+    def test_unknown_or_url_routes_rejected_before_network(self):
+        for route in ('https://evil.test','hf-mirror.com','../direct',None,True,[],{}):
+            calls=[]
+            with self.assertRaises(ValueError):resolve(route=route,seen=calls)
+            self.assertEqual(calls,[])
+    def test_other_sources_cannot_use_mirror(self):
+        for provider in ('modelscope','sdu'):
+            with self.assertRaises(ValueError):download_route(provider,'hf_mirror')
+    def test_mirror_failure_does_not_retry_origin(self):
+        calls=[]
+        def fail(url,**_):calls.append(url);raise OSError('network fixture failure')
+        with self.assertRaises(OSError):resolve_manifest('qwenimage21','huggingface',download_route_id='hf_mirror',opener=fail)
+        self.assertEqual(len(calls),1);self.assertEqual(urlsplit(calls[0]).hostname,'hf-mirror.com')
+    def test_mirror_checksum_change_rejected(self):
+        m=metadata();m['siblings'][0]['lfs']['sha256']='a'*64
+        with self.assertRaisesRegex(ValueError,'独立核实'):resolve(data=m)
+    def test_mirror_small_file_change_rejected(self):
+        m=metadata();e=next(e for e in m['siblings'] if 'blobId' in e);e['blobId']='b'*40
+        with self.assertRaisesRegex(ValueError,'独立核实'):resolve(data=m)
+    def test_mirror_size_change_rejected(self):
+        m=metadata();m['siblings'][0]['size']+=1
+        with self.assertRaises(ValueError):resolve(data=m)
+    def test_missing_optional_image_file_also_rejected(self):
+        m=metadata();m['siblings']=[e for e in m['siblings'] if 'controlnet.ncnn.param' not in e['rfilename']]
+        with self.assertRaises(ValueError):resolve(data=m)
+    def test_extra_image_file_rejected(self):
+        m=metadata();m['siblings'].append({'rfilename':'qwenimage21/extra.txt','size':10,'blobId':'a'*40})
+        with self.assertRaises(ValueError):resolve(data=m)
+    def test_duplicate_rejected(self):
+        m=metadata();m['siblings'].append(m['siblings'][0])
+        with self.assertRaises(ValueError):resolve(data=m)
+    def test_stale_mirror_revision_rejected(self):
+        m=metadata();m['sha']='0'*40
+        with self.assertRaises(ValueError):resolve(data=m)
+    def test_download_item_cannot_escape_manifest(self):
+        q=resolve();f=dict(q['files'][0],remote='other-model/file.bin')
+        with self.assertRaises(ValueError):file_url(q,f)
+    def test_download_rejects_modified_manifest(self):
+        q=resolve();q['files'][0]['digest']='a'*64
+        with self.assertRaises(ValueError):file_url(q,q['files'][0])
+    def test_hf_endpoint_env_cannot_inject_host(self):
+        with patch.dict(os.environ,{'HF_ENDPOINT':'https://evil.test'}):
+            q=resolve();self.assertTrue(file_url(q,q['files'][0]).startswith('https://hf-mirror.com/'))
+    def test_final_host_visible_and_query_not_leaked(self):
+        q=resolve(final_host='huggingface.co');self.assertEqual(q['metadata_final_host'],'huggingface.co')
+        self.assertEqual(response_host(Reply(b'x','https://cdn-lfs.hf.co/file?Signature=SECRET'),'https://hf-mirror.com/file'),'cdn-lfs.hf.co')
+    def test_returned_route_is_copy_not_global_mutation(self):
+        r=download_route('huggingface','hf_mirror');r['endpoint']='https://evil.test'
+        self.assertEqual(download_route('huggingface','hf_mirror')['endpoint'],'https://hf-mirror.com')
+
+
+class NetworkPolicyTests(unittest.TestCase):
+    def handler(self, url='https://hf-mirror.com/api/models/test'):
+        found={}; opener=Mock(); opener.open.return_value=Reply(b'{}',url)
+        def build(*handlers):
+            found['redirect']=next(h for h in handlers if isinstance(h,HTTPRedirectHandler))
+            found['tls']=next(h for h in handlers if isinstance(h,HTTPSHandler))
+            return opener
+        with patch('local_agent.model_sources.urllib.request.build_opener',side_effect=build):open_https(url)
+        return found, opener.open.call_args.args[0]
+    def test_no_token_or_cookie_and_tls_verified(self):
+        with patch.dict(os.environ,{'HF_TOKEN':'fake-private-token','HUGGING_FACE_HUB_TOKEN':'secret'}):h,req=self.handler()
+        self.assertNotIn('Authorization',req.headers);self.assertNotIn('Cookie',req.headers)
+        self.assertTrue(h['tls']._context.check_hostname);self.assertEqual(h['tls']._context.verify_mode,ssl.CERT_REQUIRED)
+    def test_mirror_can_follow_reviewed_cdn_and_reports_origin_redirect(self):
+        h,req=self.handler()
+        for dest in ('https://hf-mirror.com/file','https://cdn-lfs.hf-mirror.com/file','https://huggingface.co/file','https://cas-bridge.xethub.hf.co/file'):
+            self.assertIsNotNone(h['redirect'].redirect_request(req,None,302,'',{},dest))
+    def test_redirect_does_not_relax_host_tls_or_port(self):
+        h,req=self.handler()
+        for dest in ('http://hf-mirror.com/x','https://hf-mirror.com.evil.test/x','https://evil.test/x','https://127.0.0.1/x','https://user:pass@hf-mirror.com/x','https://hf-mirror.com:444/x','file:///tmp/file'):
+            with self.subTest(dest=dest),self.assertRaises(ValueError):h['redirect'].redirect_request(req,None,302,'',{},dest)
+    def test_direct_and_modelscope_do_not_jump_to_mirror(self):
+        for host in ('huggingface.co','modelscope.cn'):
+            h,req=self.handler('https://'+host+'/file')
+            with self.assertRaises(ValueError):h['redirect'].redirect_request(req,None,302,'',{},'https://hf-mirror.com/file')
+    def test_unreviewed_initial_mirror_subdomain_rejected(self):
+        with self.assertRaises(ValueError):open_https('https://evil.hf-mirror.com/api/test')
+
+
+class HubTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
+        self.root=Path(self.tmp.name);self.engine=self.root/'engine';self.engine.write_bytes(b'NONEXECUTABLE_FIXTURE')
+        self.hub=ModelHub(self.root,{'llm':str(self.engine),'image':str(self.engine)})
+    def test_ticket_binds_route_and_source(self):
+        with patch('local_agent.model_hub.resolve_files',return_value=resolve()) as f:
+            q=self.hub.prepare('qwenimage21','huggingface',download_route_id='hf_mirror')
+        f.assert_called_once_with('qwenimage21','huggingface',download_route_id='hf_mirror')
+        stored=self.hub.quotes[q['ticket']][1]
+        self.assertEqual(stored['provider'],'huggingface');self.assertEqual(stored['download_route'],'hf_mirror')
+        self.assertEqual(self.hub.job['status'],'idle')
+    def test_new_route_query_invalidates_old_ticket(self):
+        with patch('local_agent.model_hub.resolve_files',return_value=resolve()):
+            old=self.hub.prepare('qwenimage21','huggingface',download_route_id='hf_mirror')
+            self.hub.prepare('qwenimage21','huggingface')
+        with self.assertRaisesRegex(ValueError,'过期'):self.hub.start(old['ticket'],True)
+    def test_busy_cannot_start_new_query(self):
+        for status in BUSY:
+            self.hub.job['status']=status
+            with self.assertRaises(ValueError):self.hub.prepare('qwenimage21','huggingface',download_route_id='hf_mirror')
+    def test_stale_slow_query_cannot_replace_new_ticket(self):
+        started=threading.Event();release=threading.Event();errors=[]
+        def fake(_id,_provider,**kw):
+            if kw.get('download_route_id')=='hf_mirror':started.set();release.wait(3)
+            return resolve(route=kw.get('download_route_id','direct'))
+        def slow():
+            try:self.hub.prepare('qwenimage21','huggingface',download_route_id='hf_mirror')
+            except ValueError as e:errors.append(str(e))
+        with patch('local_agent.model_hub.resolve_files',side_effect=fake):
+            t=threading.Thread(target=slow);t.start();self.assertTrue(started.wait(2))
+            newest=self.hub.prepare('qwenimage21','huggingface');release.set();t.join(3)
+        self.assertFalse(t.is_alive());self.assertTrue(errors);self.assertIn(newest['ticket'],self.hub.quotes)
+    def test_explicit_consent_still_required(self):
+        with self.assertRaises(ValueError):self.hub.start('ticket',False)
+    def tiny(self):
+        data=b'EXPLICIT SMALL INSTALL FIXTURE, NOT WEIGHTS'
+        return {'id':'qwenimage21','provider':'huggingface','download_route':'hf_mirror','revision':'a'*40,
+                'download_bytes':len(data),'disk_required_bytes':100,'files':[{'name':'fixture.bin','remote':'qwenimage21/fixture.bin','bytes':len(data),'algorithm':'sha256','digest':hashlib.sha256(data).hexdigest()}]},data
+    def test_actual_small_file_install_records_route_and_host(self):
+        q,data=self.tiny()
+        with patch('local_agent.model_hub.file_url',return_value='https://hf-mirror.com/FIXTURE'),patch('local_agent.model_hub.open_https',side_effect=lambda *a,**k:Reply(data,'https://cdn-lfs.hf.co/FIXTURE')):
+            self.hub._install(q)
+        self.assertEqual(self.hub.job['status'],'completed')
+        ready=json.loads((self.hub.models/'qwenimage21/READY.json').read_text())
+        self.assertEqual(ready['download_route'],'hf_mirror');self.assertEqual(self.hub.job['last_download_host'],'cdn-lfs.hf.co')
+        self.assertEqual((self.hub.models/'qwenimage21/fixture.bin').read_bytes(),data)
+    def test_partial_or_bad_hash_still_never_activates(self):
+        q,data=self.tiny()
+        with patch('local_agent.model_hub.file_url',return_value='https://hf-mirror.com/FIXTURE'),patch('local_agent.model_hub.open_https',return_value=Reply(data[:-1],'https://hf-mirror.com/FIXTURE')):
+            self.hub._install(q)
+        self.assertEqual(self.hub.job['status'],'failed');self.assertFalse(self.hub.active());self.assertFalse(list(self.hub.models.rglob('*.part')))
+    def test_mirror_error_has_no_auto_retry(self):
+        q,_=self.tiny();urls=[]
+        def fail(url,**_):urls.append(url);raise OSError('offline fixture')
+        with patch('local_agent.model_hub.file_url',return_value='https://hf-mirror.com/FIXTURE'),patch('local_agent.model_hub.open_https',side_effect=fail):self.hub._install(q)
+        self.assertEqual(len(urls),1);self.assertEqual(self.hub.job['status'],'failed')
+    def test_start_and_restart_remember_actual_route(self):
+        with patch('local_agent.model_hub.resolve_files',return_value=resolve()):q=self.hub.prepare('qwenimage21','huggingface',download_route_id='hf_mirror')
+        with patch('local_agent.model_hub.threading.Thread'), patch('local_agent.model_hub.shutil.disk_usage', return_value=Mock(free=100*1024**3)):
+            self.hub.start(q['ticket'],True)
+        saved=ModelHub(self.root,{'image':str(self.engine)}).status()['job']
+        self.assertEqual(saved['download_route'],'hf_mirror');self.assertEqual(saved['status'],'interrupted')
+    def test_mirror_and_direct_cache_locations_are_separate(self):
+        q,_=self.tiny()
+        with patch('local_agent.model_hub.open_https',side_effect=OSError('fixture')),patch('local_agent.model_hub.file_url',return_value='https://hf-mirror.com/FIXTURE'):
+            self.hub._install(q);self.hub._install(dict(q,download_route='direct'))
+        self.assertEqual(len(list(self.hub.models.glob('.download-*'))),2)
+
+
+class HTTPTests(HubTests):
+    # Use only the setup helper, not inherited tests (load_tests below filters it).
+    def setUp(self):
+        super().setUp()
+        self.app=WebApp({'workspace':str(self.root/'workspace'),'llm':{}},self.root/'state')
+        self.app.model_hub=self.hub;self.server=LocalServer(self.app,0)
+        self.thread=threading.Thread(target=lambda:self.server.serve_forever(poll_interval=.01),daemon=True);self.thread.start()
+    def tearDown(self):self.server.shutdown();self.server.server_close();self.thread.join(2)
+    def request(self,data,path='/api/setup/prepare',auth=True):
+        c=http.client.HTTPConnection('127.0.0.1',self.server.server_port,timeout=5)
+        try:
+            c.request('POST',path,json.dumps(data),{'Content-Type':'application/json',**({'X-Agent-Token':self.app.token} if auth else {})})
+            r=c.getresponse();return r.status,json.loads(r.read())
+        finally:c.close()
+    def test_http_route_reaches_bound_quote(self):
+        with patch('local_agent.model_hub.resolve_files',return_value=resolve()):status,q=self.request({'id':'qwenimage21','provider':'huggingface','download_route':'hf_mirror'})
+        self.assertEqual(status,200,q);self.assertEqual(q['download_route'],'hf_mirror');self.assertTrue(q['third_party_mirror'])
+    def test_http_token_is_required(self):self.assertEqual(self.request({'id':'qwenimage21'},auth=False)[0],403)
+    def test_http_rejects_arbitrary_endpoint_or_token(self):
+        for k in ('endpoint','HF_ENDPOINT','token','proxy'):
+            self.assertEqual(self.request({'id':'qwenimage21',k:'BAD'})[0],400)
+    def test_http_unknown_route_and_wrong_provider_fail(self):
+        for data in ({'id':'qwenimage21','download_route':'https://evil.test'},{'id':'qwen05','provider':'modelscope','download_route':'hf_mirror'}):self.assertEqual(self.request(data)[0],400)
+    def test_http_install_cannot_override_ticket_route(self):self.assertEqual(self.request({'ticket':'fake','accept_download':True,'download_route':'direct'},'/api/setup/install')[0],400)
+    def test_http_old_client_still_uses_direct(self):
+        with patch('local_agent.model_hub.resolve_files',return_value=resolve(route='direct')):status,q=self.request({'id':'qwenimage21','provider':'huggingface'})
+        self.assertEqual(status,200,q);self.assertEqual(q['download_route'],'direct')
+
+
+def load_tests(loader, tests, pattern):
+    # Do not double-count HubTests inherited to reuse its setup.
+    suite=unittest.TestSuite()
+    for cls in (RouteTests,NetworkPolicyTests,HubTests,HTTPTests):
+        for name in sorted(cls.__dict__):
+            if name.startswith('test_'):suite.addTest(cls(name))
+    return suite
