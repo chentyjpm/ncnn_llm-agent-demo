@@ -78,11 +78,14 @@ function renderSetup(){
   card.append(meta);
   const supported=!!model.sources?.[setup.provider];
   if(!supported&&!model.installed)card.append(el('p','source-unavailable',model.unavailable_sources?.[setup.provider]||'此来源暂无匹配的 ncnn 模型，需手动选择其他来源。'));
+  const dependency=(model.missing_dependencies||[])[0];
+  if(dependency)card.append(el('p','source-unavailable','先安装 Qwen Image 2.1 基础模型，再安装 Turbo 独立权重。共享组件不重复下载或复制。'));
   const activeJob=busy&&job.model===model.id;
-  const action=button(model.installable===false?'专用接口待接入':model.active?'当前使用':model.installed?'启用此模型':setup.query===model.id?'正在查询大小…':activeJob?'正在安装…':'准备下载',null,()=>chooseModel(model),'primary-button');
+  const action=button(model.installable===false?'专用接口待接入':model.active?'当前使用':model.installed?'启用此模型':setup.query===model.id?'正在查询大小…':activeJob?'正在安装…':dependency?'先准备基础模型':'准备下载',null,()=>chooseModel(dependency?data.models.find(m=>m.id===dependency):model),'primary-button');
   action.disabled=model.installable===false||model.active||busy||querying||!!setup.starting||(!supported&&!model.installed);card.append(action);
   if(setup.quote?.id===model.id){
    const q=setup.quote,box=el('div','download-confirmation');box.append(el('strong','','确认下载信息'));
+   if(q.base_dependency)box.append(el('p','setting-note','复用已安装基础组件 '+amount(q.base_dependency.shared_bytes)+'；本次只下载 Turbo Transformer。不要删除 qwenimage21 基础目录。'));
    for(const [label,value] of [['下载源',providerName(q.provider)],...(q.provider==='huggingface'?[['下载线路',routeName(q.download_route)],['模型版本',q.revision||'待确认'],['清单响应主机',q.metadata_final_host||'等待服务器报告']]:[]),['需要下载',amount(q.download_bytes)],['安装后预计占用',amount(q.installed_estimate_bytes)],['安装时至少预留',amount(q.disk_required_bytes)],['当前可用磁盘',amount(q.disk_free_bytes)]]){const row=el('div','runtime-row');row.append(el('span','',label),el('strong','',value));box.append(row);}
    if(q.third_party_mirror)box.append(el('p','source-unavailable','你将通过第三方 HF-Mirror 获取公开模型；逐文件比对应用内独立核实的原站清单。仅校验通过的文件才能启用。'));
    box.append(el('p','setting-note','下载的是所选模型的文件，不是下载次数。下载完成后还需校验和准备，全部完成才会启用。'));

@@ -33,7 +33,8 @@ def run(output: Path):
                 case.update(revision=m['revision'],metadata_requested_host=m['metadata_requested_host'],
                             metadata_final_host=m['metadata_final_host'],manifest_matches_origin_pin=True)
                 (output/(model+'-'+route+'-manifest.json')).write_text(json.dumps(m,indent=2),encoding='utf-8')
-                wanted=('vae/decoder.ncnn.param','transformer/output.ncnn.bin') if model=='qwenimage21' else ('config.json',)
+                wanted=(('transformer/output.ncnn.param','transformer/output.ncnn.bin') if model=='qwenimage21-turbo' else
+                        ('vae/decoder.ncnn.param','transformer/output.ncnn.bin') if model=='qwenimage21' else ('config.json',))
                 with tempfile.TemporaryDirectory(prefix='hf-route-check-') as tmp:
                     for name in wanted:
                         item=next(f for f in m['files'] if f['name']==name)
@@ -54,7 +55,7 @@ def run(output: Path):
             case['seconds']=round(time.monotonic()-started,3);report['cases'].append(case)
             (output/'result.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
             print(json.dumps(case,ensure_ascii=False),flush=True)
-    report['ok']=all(c['ok'] for c in report['cases']) and len(report['cases'])==8
+    report['ok']=all(c['ok'] for c in report['cases']) and len(report['cases'])==2*len(PINNED_HF)
     (output/'result.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
     if os.getenv('GITHUB_STEP_SUMMARY'):
         lines=['## HF download routes','Metadata + checksummed samples only; no inference or guaranteed acceleration.',

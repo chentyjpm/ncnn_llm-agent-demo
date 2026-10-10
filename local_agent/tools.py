@@ -113,11 +113,19 @@ def make_registry(ws: Workspace, python_runner=None, command_runner=None, image_
         r.add(Tool("system.run", "Run a fixed administrator-configured command, with no model-supplied arguments.",
                    schema({"name": {"type": "string", "enum": list(command_runner.commands)}}, ["name"]), command_runner.run))
     if image_runner and image_runner.config.get("enabled", False):
-        r.add(Tool("images.generate", "Create an actual picture/illustration/poster using Qwen Image (生图/画图). Not for text-only image advice. references edits existing images. Default 40 steps, no overwrite.",
+        from .image_profiles import image_profile
+        profile = image_profile(image_runner.config)
+        step_schema = {"type": "integer", "minimum": 1, "maximum": 100, "default": profile['default_steps']}
+        if profile['fixed_steps'] is not None:
+            step_schema['enum'] = [profile['fixed_steps']]
+        description = ("Create an actual picture/illustration/poster using Qwen Image (生图/画图). "
+                       "Not for text-only advice. references edits existing images. No overwrite. "
+                       + ("Active Turbo model: exactly 8 steps, fixed scheduler." if profile['fixed_steps'] else "Base model: default 40 steps."))
+        r.add(Tool("images.generate", description,
             schema({"prompt": TEXT, "output": TEXT,
                     "width": {"type": "integer", "minimum": 64, "maximum": 2048},
                     "height": {"type": "integer", "minimum": 64, "maximum": 2048},
-                    "steps": {"type": "integer", "minimum": 1, "maximum": 100},
+                    "steps": step_schema,
                     "seed": {"type": "integer", "minimum": 0, "maximum": 2147483647},
                     "references": {"type": "array", "items": TEXT, "maxItems": 10}}, ["prompt", "output"]), image_runner.run))
     return r

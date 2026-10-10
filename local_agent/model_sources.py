@@ -11,6 +11,7 @@ from urllib.parse import quote, urlencode, urlsplit
 import urllib.request
 from .model_catalog import CATALOG, PROFILES, PROVIDERS
 from .hf_download_pins import PINNED_HF
+from .image_profiles import TURBO_IMAGE, TURBO_FILES
 
 QWEN_FILES = {'config.json', 'model.safetensors', 'tokenizer.json', 'tokenizer_config.json', 'LICENSE'}
 IMAGE_REQUIRED = {'processor/vocab.txt', 'processor/merges.txt', 'text_encoder/text_encoder.ncnn.param',
@@ -81,7 +82,7 @@ def source_for(model_id, provider):
     if provider not in item['sources']:
         raise ValueError(item.get('unavailable_sources', {}).get(provider, '此模型暂无该来源'))
     source = dict(item['sources'][provider])
-    if provider == 'huggingface' and model_id == 'qwenimage21':
+    if provider == 'huggingface' and model_id in ('qwenimage21', TURBO_IMAGE):
         # Same already-tested image snapshot for direct and mirror routes.
         source['revision'] = PINNED_HF[model_id]['revision']
     return source
@@ -164,8 +165,9 @@ def resolve_manifest(model_id: str, provider='huggingface', *, download_route_id
             if remote not in QWEN_FILES: continue
             name = remote
         else:
-            if not isinstance(remote, str) or not remote.startswith('qwenimage21/'): continue
-            name = remote[len('qwenimage21/'):]
+            prefix = (TURBO_IMAGE if model_id == TURBO_IMAGE else 'qwenimage21') + '/'
+            if not isinstance(remote, str) or not remote.startswith(prefix): continue
+            name = remote[len(prefix):]
             if not name.endswith(('.bin', '.param', '.txt', '.f32')): continue
         safe_name(name)
         if provider == 'huggingface':
@@ -183,10 +185,10 @@ def resolve_manifest(model_id: str, provider='huggingface', *, download_route_id
             raise ValueError('权重版本与已适配模型不匹配，已停止；不会下载其他模型替代')
         files.append({'name':name, 'remote':safe_name(remote), 'bytes':size, 'digest':checksum, 'algorithm':algorithm})
     names = {f['name'] for f in files}
-    required = QWEN_FILES if model_id in PROFILES else IMAGE_REQUIRED
+    required = QWEN_FILES if model_id in PROFILES else TURBO_FILES if model_id == TURBO_IMAGE else IMAGE_REQUIRED
     if not required.issubset(names) or len(names) != len(files) or len(files) > 128:
         raise ValueError('Required model files missing or duplicated')
-    if download_route_id == 'hf_mirror':
+    if download_route_id == 'hf_mirror' or model_id == TURBO_IMAGE:
         verify_mirror_manifest(model_id, repo, revision, files)
     total = sum(f['bytes'] for f in files)
     return {'id':model_id, 'provider':provider, 'provider_name':PROVIDERS[provider], 'repository':repo, 'revision':revision,
@@ -202,7 +204,7 @@ def file_url(manifest, item):
     source = source_for(manifest['id'], provider)
     route_id = manifest.get('download_route', 'direct')
     route = download_route(provider, route_id)
-    if route_id == 'hf_mirror':
+    if route_id == 'hf_mirror' or manifest['id'] == TURBO_IMAGE:
         verify_mirror_manifest(manifest['id'], manifest['repository'], manifest['revision'], manifest['files'])
         if item not in manifest['files']: raise ValueError('文件不属于已确认的镜像清单')
     if provider == 'sdu':

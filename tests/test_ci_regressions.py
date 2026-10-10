@@ -209,7 +209,7 @@ class NativeHarnessTests(FixtureCase):
             native.validate_binary(path)
 
     def test_native_cases_are_unique_and_have_expected_scope(self):
-        for component, count in [('bridge', 22), ('image', 9)]:
+        for component, count in [('bridge', 22), ('image', 13)]:
             with self.subTest(component=component):
                 cases = native.cases(component, self.root)
                 self.assertEqual(len(cases), count)

@@ -26,6 +26,7 @@ from .cli import doctor, make_runtime
 from .paths import Workspace, PolicyError
 from .process import kill_tree
 from .image_tasks import route_request, image_ready, plan_image, image_artifacts
+from .image_profiles import image_profile
 from .images import ImageRunner
 from .tools import make_registry, Registry
 from .activity import Activity, visible_answer, interrupted
@@ -239,6 +240,7 @@ class WebApp:
         if self.model_hub is not None:
             result['image_ready'] = result['image_ready'] and 'image' in self.model_hub.active()
         result['image_model'] = Path(self.config.get('image', {}).get('model', '')).name or '未配置'
+        result['image_profile'] = image_profile(self.config.get('image', {}))
         result['features'] = {'python': self.config.get('python', {}).get('mode', 'disabled'),
                               'commands': bool(self.flags.allow_commands), 'mcp': bool(self.flags.trust_mcp),
                               'images': bool(self.config.get('image', {}).get('enabled'))}
@@ -279,7 +281,7 @@ class WebApp:
             if mode != 'image' and not runtime['ready']:
                 raise WebError('模型未就绪。请在安装与模型中安装文字模型；源码模式请检查 llm.command 和 llm.model。不会使用假模型兜底。', 503)
             ws = self.ws(sid)
-            image_plan = plan_image(ws, image_prompt, payload.get('image_options'), attachments) if mode == 'image' else None
+            image_plan = plan_image(ws, image_prompt, payload.get('image_options'), attachments, image_config=self.config.get('image', {})) if mode == 'image' else None
             context = ''
             for attachment in attachments:
                 p = ws.path(attachment)

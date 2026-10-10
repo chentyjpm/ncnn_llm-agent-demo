@@ -5,7 +5,7 @@
   },
   "qwenimage": {
     "repository": "nihui/qwenimage-ncnn-vulkan",
-    "commit": "128530a5e8541d85ae516727314eb5dcf0109157"
+    "commit": "14953559f39c7658e5a6cc117481e1922660cc9e"
   },
   "ncnn": {
     "repository": "Tencent/ncnn",
