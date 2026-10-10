@@ -8,6 +8,8 @@ jobs:
   inspect:
     runs-on: ubuntu-24.04
     timeout-minutes: 8
+    env:
+      PYTHONPATH: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with: {persist-credentials: false}
@@ -16,67 +18,31 @@ jobs:
       - name: Inspect official origin and mirror metadata (no large weights)
         shell: python
         run: |
-          import json, hashlib, urllib.request, pathlib, time
+          import json, pathlib
           from local_agent.model_sources import open_https
-          out = pathlib.Path('reports/turbo-inspection'); out.mkdir(parents=True, exist_ok=True)
-          repo = 'nihui-szyl/qwen-image-ncnn'
+          out=pathlib.Path('reports/turbo-inspection'); out.mkdir(parents=True,exist_ok=True)
+          repo='nihui-szyl/qwen-image-ncnn'
           def get(url):
-              with open_https(url, timeout=45) as r:
-                  data = r.read(8*1024*1024+1)
+              with open_https(url,timeout=45) as r:
+                  data=r.read(8*1024*1024+1)
                   if len(data)>8*1024*1024: raise RuntimeError('response size limit')
-                  return data, r.geturl().split('?')[0]
-          data, final = get('https://huggingface.co/api/models/'+repo+'/revision/main?blobs=true')
-          meta = json.loads(data); rev = meta['sha']
-          (out/'origin.json').write_bytes(data)
-          selected = [x for x in meta['siblings'] if x.get('rfilename','').startswith('qwenimage21-turbo/')]
+                  return data,r.geturl().split('?')[0]
+          data,final=get('https://huggingface.co/api/models/'+repo+'/revision/main?blobs=true')
+          meta=json.loads(data);rev=meta['sha'];(out/'origin.json').write_bytes(data)
+          selected=[x for x in meta['siblings'] if x.get('rfilename','').startswith('qwenimage21-turbo/')]
           if not selected: raise RuntimeError('Official snapshot has no Turbo files')
           print(json.dumps({'revision':rev,'turbo':selected},indent=2))
           for x in selected:
               if x['rfilename'].endswith('.param'):
-                  raw, _ = get('https://huggingface.co/'+repo+'/resolve/'+rev+'/'+x['rfilename'])
+                  raw,_=get('https://huggingface.co/'+repo+'/resolve/'+rev+'/'+x['rfilename'])
                   p=out/x['rfilename'];p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(raw)
-          mirror = {'ok':False}
+          mirror={'ok':False}
           try:
-              raw, final = get('https://hf-mirror.com/api/models/'+repo+'/revision/'+rev+'?blobs=true')
-              (out/'mirror.json').write_bytes(raw)
-              mm=json.loads(raw)
+              raw,final=get('https://hf-mirror.com/api/models/'+repo+'/revision/'+rev+'?blobs=true')
+              (out/'mirror.json').write_bytes(raw);mm=json.loads(raw)
               mirror={'ok':mm.get('sha')==rev,'final_endpoint':final,'same_metadata':mm.get('siblings')==meta.get('siblings')}
           except Exception as e: mirror['error']=str(e)
-          (out/'inspection.json').write_text(json.dumps({'revision':rev,'mirror':mirror},indent=2))
-          print(mirror)
+          (out/'inspection.json').write_text(json.dumps({'revision':rev,'mirror':mirror},indent=2));print(mirror)
       - if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with: {name: turbo-origin-inspection, path: reports/turbo-inspection/, if-no-files-found: error, retention-days: 14}
-  image:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
-        with: {persist-credentials: false}
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
-        with: {python-version: '3.13'}
-      - id: pins
-        run: python scripts/ci_native.py refs --component image
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
-        with:
-          repository: nihui/qwenimage-ncnn-vulkan
-          ref: ${{ steps.pins.outputs.qwenimage }}
-          path: .ci-src/qwenimage
-          submodules: recursive
-          persist-credentials: false
-      - run: |
-          git -C .ci-src/qwenimage archive --format=zip --output="$GITHUB_WORKSPACE/upstream-turbo-source.zip" HEAD
-          python scripts/ci_native.py configure --component image
-          python scripts/ci_native.py build --component image
-          python scripts/ci_native.py smoke --component image
-          python scripts/ci_native.py package --component image
-      - if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
-        with:
-          name: turbo-engine-linux
-          path: |
-            dist/ci/*.tar.gz
-            reports/ci/image/
-            upstream-turbo-source.zip
-          if-no-files-found: error
-          retention-days: 14
