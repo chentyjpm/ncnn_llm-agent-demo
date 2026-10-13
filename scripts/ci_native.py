@@ -33,6 +33,11 @@ def read_pins(root: Path = ROOT) -> dict:
     for name, repo in REPOSITORIES.items():
         if pins[name]['repository'] != repo or not re.fullmatch(r'[0-9a-f]{40}', pins[name]['commit']):
             raise ValueError(f'Invalid pinned dependency: {name}')
+    if not re.fullmatch(r'[0-9a-f]{40}', pins['qwenimage'].get('ncnn_commit', '')):
+        raise ValueError('Invalid Qwen Image embedded ncnn pin')
+    unused = pins['ncnn_llm'].get('unused_submodules', {})
+    if set(unused) != {'ncnn'} or not re.fullmatch(r'[0-9a-f]{40}', unused['ncnn']):
+        raise ValueError('Invalid unused ncnn_llm submodule pin')
     original = json.loads((root / 'upstream-lock.json').read_text(encoding='utf-8'))
     for name in ('ncnn_llm', 'qwenimage'):
         match = next(r for r in original['repositories'] if r['name'] == REPOSITORIES[name])
@@ -91,12 +96,18 @@ def run_logged(argv: list[str], log: Path, *, codes: tuple[int, ...] = (0,),
     return {'argv': argv, 'returncode': proc.returncode, 'elapsed_seconds': round(time.monotonic() - started, 3)}
 
 
-def validate_submodules(output: str) -> list[str]:
+def validate_submodules(output: str, unused: dict[str, str] | None = None) -> list[str]:
     lines = [line for line in output.splitlines() if line.strip()]
+    unused = unused or {}
     for line in lines:
+        match = re.fullmatch(r'-([0-9a-f]{40}) ([^ ]+)(?: \(.*\))?', line)
+        if match and unused.get(match[2]) == match[1]:
+            # This exact gitlink is deliberately unused: the bridge builds the
+            # independently pinned .ci-src/ncnn, never ncnn_llm/ncnn.
+            continue
         if not re.fullmatch(r' [0-9a-f]{40} .+', line):
             raise RuntimeError(f'Uninitialized, mismatched, conflicted or malformed submodule: {line}')
-    return lines
+    return [line for line in lines if not line.startswith("-")]
 
 
 def load_state(path: Path, component: str, stage: str, env: dict | None = None) -> dict:
@@ -152,15 +163,17 @@ def verify_sources(component: str, pins: dict, evidence: Path) -> dict:
         run_logged(['git', '-C', str(directory), 'submodule', 'status', '--recursive'],
                    evidence / f'submodules-{name}.log', timeout=60)
         status_text = (evidence / f'submodules-{name}.log').read_text(encoding='utf-8').partition('\n')[2]
-        result[name]['submodules_verified'] = len(validate_submodules(status_text))
+        result[name]['submodules_verified'] = len(validate_submodules(status_text, pins[name].get('unused_submodules')))
+        if pins[name].get('unused_submodules'):
+            result[name]['unused_submodules'] = pins[name]['unused_submodules']
         dirty = subprocess.check_output(['git', '-C', str(directory), 'status', '--porcelain',
                                          '--untracked-files=no', '--ignore-submodules=none'], text=True, timeout=60).strip()
         if dirty:
             raise RuntimeError(f'Modified dependency checkout: {name}: {dirty}')
     if component == 'image':
         got = subprocess.check_output(['git', '-C', str(ROOT / '.ci-src/qwenimage/src/ncnn'), 'rev-parse', 'HEAD'], text=True, timeout=30).strip()
-        if got != pins['ncnn']['commit']:
-            raise RuntimeError('Qwen Image embedded ncnn does not match CI dependency lock')
+        if got != pins['qwenimage']['ncnn_commit']:
+            raise RuntimeError('Qwen Image embedded ncnn does not match its dedicated dependency lock')
         result['ncnn'] = {'repository': REPOSITORIES['ncnn'], 'commit': got}
     return result
 
@@ -203,7 +216,7 @@ def main() -> int:
             run_logged(configure_command(component, platform.system()), evidence / 'configure.log', timeout=600)
         elif stage == 'build':
             run_logged(['cmake', '--build', str(build), '--config', 'Release', '--parallel', '2', '--target'] +
-                       (['bridge_cli_tests', 'bridge_exception_tests'] if component == 'bridge' else []) + [TARGETS[component]],
+                       (['bridge_cli_tests', 'bridge_exception_tests', 'bridge_gemv_tests', 'bridge_lm_head_precision_tests'] if component == 'bridge' else []) + [TARGETS[component]],
                        evidence / 'build.log')
             state['binary'] = str(find_binary(component))
             state['built_binary_sha256'] = hashlib.sha256(Path(state['binary']).read_bytes()).hexdigest()

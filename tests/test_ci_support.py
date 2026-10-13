@@ -1,6 +1,7 @@
 """CI helper regressions, not a substitute for native compilation."""
 from pathlib import Path
 import sys
+import json
 import tempfile
 import unittest
 from scripts.ci_native import configure_command, find_binary, read_pins, run_logged
@@ -14,6 +15,19 @@ class CISupportTests(unittest.TestCase):
 
     def test_dependency_pins_are_full_shas_and_match_upstream(self):
         self.assertEqual(set(read_pins()), {'ncnn_llm', 'qwenimage', 'ncnn', 'json'})
+
+    def test_image_pin_is_independent_and_required(self):
+        original = Path(__file__).resolve().parents[1]
+        (self.root / 'ci').mkdir()
+        pins = read_pins()
+        pins['ncnn']['commit'] = 'a' * 40
+        (self.root / 'upstream-lock.json').write_text((original / 'upstream-lock.json').read_text())
+        (self.root / 'ci/dependencies.json').write_text(json.dumps(pins))
+        self.assertEqual(read_pins(self.root)['ncnn']['commit'], 'a' * 40)
+        del pins['qwenimage']['ncnn_commit']
+        (self.root / 'ci/dependencies.json').write_text(json.dumps(pins))
+        with self.assertRaisesRegex(ValueError, 'embedded ncnn'):
+            read_pins(self.root)
 
     def test_windows_uses_x64_and_utf8(self):
         cmd = configure_command('bridge', 'Windows', self.root)

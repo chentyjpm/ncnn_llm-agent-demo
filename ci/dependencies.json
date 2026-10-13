@@ -1,15 +1,19 @@
 {
   "ncnn_llm": {
     "repository": "futz12/ncnn_llm",
-    "commit": "301d60a1498f3be3ecef8bbcf233841e00e766ec"
+    "commit": "0538ae8b9e2d47f597ba3491e35d2f610c3a3114",
+    "unused_submodules": {
+      "ncnn": "ab44b9012ab510309b63a55d30784c1eda0ac4ec"
+    }
   },
   "qwenimage": {
     "repository": "nihui/qwenimage-ncnn-vulkan",
-    "commit": "14953559f39c7658e5a6cc117481e1922660cc9e"
+    "commit": "14953559f39c7658e5a6cc117481e1922660cc9e",
+    "ncnn_commit": "c6b351b56fbe32e0381ae00331e3df649b20d7b7"
   },
   "ncnn": {
     "repository": "Tencent/ncnn",
-    "commit": "c6b351b56fbe32e0381ae00331e3df649b20d7b7"
+    "commit": "b0f97f43f266617ff5e5096d440dbe3f9a4c35b8"
   },
   "json": {
     "repository": "nlohmann/json",

@@ -38,6 +38,15 @@ class SubmoduleStatusTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             ci.validate_submodules(f'-{self.sha} vendor/child')
 
+    def test_exact_unused_gitlink_can_remain_uninitialized(self):
+        self.assertEqual(ci.validate_submodules(f'-{self.sha} ncnn', {'ncnn': self.sha}), [])
+
+    def test_unused_gitlink_exception_cannot_hide_other_failures(self):
+        for line in [f'-{"b" * 40} ncnn', f'-{self.sha} other',
+                     f'+{self.sha} ncnn', f'U{self.sha} ncnn']:
+            with self.subTest(line=line), self.assertRaises(RuntimeError):
+                ci.validate_submodules(line, {'ncnn': self.sha})
+
     def test_mismatched_submodule_rejected(self):
         with self.assertRaises(RuntimeError):
             ci.validate_submodules(f'+{self.sha} vendor/child (heads/main)')
@@ -94,6 +103,32 @@ class SourcePinTests(FixtureCase):
             result = ci.verify_sources('bridge', pins, self.root / 'evidence')
         self.assertEqual(set(result), {'ncnn_llm', 'ncnn', 'json'})
         self.assertTrue(all(value['submodules_verified'] == 0 for value in result.values()))
+
+
+    def test_image_uses_its_embedded_pin_not_the_bridge_pin(self):
+        pins = {
+            'qwenimage': {'commit': 'a' * 40, 'ncnn_commit': 'b' * 40},
+            'ncnn': {'commit': 'c' * 40},
+        }
+        with mock.patch.object(ci, 'ROOT', self.root), \
+             mock.patch.object(ci, 'run_logged') as logged, \
+             mock.patch.object(ci.subprocess, 'check_output', side_effect=['a' * 40, '', 'b' * 40]):
+            evidence = self.root / 'evidence'
+            evidence.mkdir()
+            (evidence / 'submodules-qwenimage.log').write_text('ARGV: fixture\n')
+            result = ci.verify_sources('image', pins, evidence)
+            self.assertEqual(result['ncnn']['commit'], 'b' * 40)
+
+    def test_image_rejects_a_different_embedded_pin(self):
+        pins = {'qwenimage': {'commit': 'a' * 40, 'ncnn_commit': 'b' * 40}}
+        evidence = self.root / 'evidence'
+        evidence.mkdir()
+        (evidence / 'submodules-qwenimage.log').write_text('ARGV: fixture\n')
+        with mock.patch.object(ci, 'ROOT', self.root), \
+             mock.patch.object(ci, 'run_logged'), \
+             mock.patch.object(ci.subprocess, 'check_output', side_effect=['a' * 40, '', 'c' * 40]), \
+             self.assertRaisesRegex(RuntimeError, 'dedicated dependency lock'):
+            ci.verify_sources('image', pins, evidence)
 
 
 class EvidenceTests(FixtureCase):
