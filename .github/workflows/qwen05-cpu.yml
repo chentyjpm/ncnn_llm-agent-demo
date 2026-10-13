@@ -2,7 +2,7 @@ name: Real Qwen 0.5B CPU
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, "upgrade/upstream-*"]
     paths:
       - '.github/workflows/qwen05-cpu.yml'
       - 'scripts/qwen05_*.py'

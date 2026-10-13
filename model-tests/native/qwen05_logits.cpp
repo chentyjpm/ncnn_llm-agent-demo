@@ -1,6 +1,8 @@
 // Numerical validation of the exported real model, including incremental KV decoding.
 #include "ncnn_text_runtime.h"
+#include "kernel/lm_head.h"
 #include "utils/rope_embed.h"
+#include <embed.h>
 #include <nlohmann/json.hpp>
 #include <algorithm>
 #include <cmath>
@@ -20,14 +22,23 @@ static void load(ncnn::Net& net, const std::string& param, const std::string& bi
     if (net.load_param(param.c_str()) || net.load_model(bin.c_str())) throw std::runtime_error("ncnn model load failed");
 }
 int main(int argc, char** argv) {
-    J report = {{"backend", "ncnn CPU FP32"}, {"ok", false}, {"cases", J::array()}};
+    J report = {{"backend", "ncnn CPU FP32"}, {"lm_head", "shared embedding projection"}, {"ok", false}, {"cases", J::array()}};
     if (argc != 4) { std::cerr << "usage: qwen05_logits model_dir reference.json report.json\n"; return 2; }
     try {
         const std::string dir = argv[1];
-        ncnn::Net embed, decoder, head;
+        ncnn::Net embed, decoder;
         load(embed, dir + "/embed.param", dir + "/embed.bin");
         load(decoder, dir + "/decoder.param", dir + "/decoder.bin");
-        load(head, dir + "/head.param", dir + "/embed.bin");
+        ncnn::Mat embed_weight;
+        for (const auto* layer : embed.layers()) {
+            if (layer && layer->type == "Embed") {
+                embed_weight = static_cast<const ncnn::Embed*>(layer)->weight_data;
+                break;
+            }
+        }
+        ncnn_llm::LlmHead head;
+        if (embed_weight.empty() || head.init_shared(dir + "/head.param", embed_weight, embed.opt) != 0 || !head.is_shared())
+            throw std::runtime_error("shared embedding LM-head initialization failed");
         J refs; std::ifstream(argv[2]) >> refs;
         bool ok = true;
         for (const auto& test : refs.at("vectors")) {
@@ -48,7 +59,7 @@ int main(int argc, char** argv) {
                 auto hidden = llm_run_decoder_with_kv(decoder, embeddings, mask, cos, sin, cache, 24, position == 0, &allocator, 512);
                 if (hidden.empty() || hidden.w != 896) throw std::runtime_error("invalid decoder output");
                 ncnn::Mat last(hidden.w, 1, (void*)hidden.row(hidden.h - 1));
-                auto logits = llm_run_lm_head(head, last);
+                auto logits = llm_run_lm_head(head, last, embed.opt);
                 if (logits.empty() || logits.w != 151936) throw std::runtime_error("invalid logits shape");
                 const float* data = logits;
                 const int next = static_cast<int>(std::max_element(data, data + logits.w) - data);

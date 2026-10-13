@@ -38,7 +38,7 @@
 
 Vulkan 编译开启；使用 ncnn SIMPLEVK 和源码自带的 shader 编译依赖，不要求安装独立 Vulkan SDK。为减少 runner 差异，CI 关闭 OpenMP，单次构建并行度为 2。**不下载模型，不运行 GPU 推理，不验证画质、速度、Agent 自主规划或 Docker 隔离。** 编译成功只证明对应源码/工具链的构建与启动检查通过。
 
-依赖锁位于 `ci/dependencies.json`，两个业务上游 SHA 必须与 `upstream-lock.json` 一致；ncnn 固定到 Qwen Image 的子模块提交，JSON 固定到 v3.12.0 对应提交。所有 Actions 使用完整 commit SHA。更新依赖时明确修改锁文件，重新执行矩阵，不浮动跟随 master。
+依赖锁位于 `ci/dependencies.json`，两个业务上游 SHA 必须与 `upstream-lock.json` 一致；文字 bridge 的 ncnn 与 Qwen Image 内嵌 ncnn 分别锁定：`ncnn.commit` 用于 bridge，`qwenimage.ncnn_commit` 必须匹配图像上游 gitlink。ncnn_llm 新增的 `ncnn` 子模块不参与 bridge 构建；只允许锁文件列明的完整 SHA 保持未初始化，其他缺失/不匹配子模块仍拒绝。JSON 固定到 v3.12.0 对应提交。所有 Actions 使用完整 commit SHA。更新依赖时明确修改锁文件，重新执行矩阵，不浮动跟随 master。
 
 ## 产物与故障定位
 
@@ -66,3 +66,13 @@ python scripts/ci_native.py package --component bridge
 ```
 
 Qwen Image 将 `bridge` 换成 `image`。脚本不会自行联网下载依赖；缺少源码/工具链就明确失败。原有 `native/CMakeLists.txt` 的已安装 ncnn SDK 接入方式仍保留；新增 `AGENT_NCNN_SOURCE_DIR` 与 `AGENT_JSON_SOURCE_DIR` 是可选的源码构建入口。
+
+## 上游升级分支
+
+`upgrade/upstream-*` 推送会运行现有真实 Qwen CPU 与安装包工作流；PR 仍运行工具测试与跨平台原生矩阵。升级分支不自动合并、不发布 release。以该分支的准确提交与每个 job 的结果为准，不能复用 main 的历史绿色状态。
+
+2026-10-13 升级将文字运行时固定到 `futz12/ncnn_llm@0538ae8b9e2d47f597ba3491e35d2f610c3a3114`、文字 ncnn 固定到 `Tencent/ncnn@b0f97f43f266617ff5e5096d440dbe3f9a4c35b8`。Qwen Image 上游、其嵌入的 ncnn 和所有模型/镜像文件的版本与校验保持不变。
+
+新运行时将自定义算子移至 `src/kernel/`。bridge 显式接入这些源码与同一 ncnn checkout 的内部头文件；安装 SDK 模式必须额外指定匹配源码路径，不能猜测头文件版本。上游 x86 LM-head 的 AVX2/FMA 代码独立编译，通过 ncnn 的 CPU/OS 能力检测分派，旧 CPU 使用标量回退；关闭 OpenMP 时不要求 `omp.h`。共享 embedding 的裸 Gemm 统一使用 FP32 pipeline 与 forward 选项，避免 ARM/RISC-V 低精度 pipeline 和 FP32 extractor 输出不一致。
+
+`bridge_gemv_dispatch` 检查 FP32/BF16、非整齐维度、标量与可用 AVX2 路径；`bridge_lm_head_precision` 用合成小权重检查共享投影数值。它们是原生算子回归，不是真实大模型推理。真实 Qwen CPU 工作流的数值比较改为使用与 bridge 相同的共享 LM-head，再执行生成、文件工具与 HTTP 验证。适配生成文件只写入 build 目录，原始上游 checkout 保持干净；共享投影源码校验不符时停止构建，要求重新审查。

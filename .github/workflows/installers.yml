@@ -2,7 +2,7 @@ name: Application installers
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, "upgrade/upstream-*"]
     paths:
       - 'packaging/**'
       - 'local_agent/**'
