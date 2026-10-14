@@ -41,7 +41,7 @@ class LocalVisionTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'切换'):self.hub.import_vision(str(self.model),True)
         restarted=ModelHub(self.root/'home',self.hub.engines)
         cfg=automatic_config(self.root/'home',restarted)
-        self.assertEqual(cfg['llm']['model'],str(self.model));self.assertEqual(cfg['llm']['device'],'cpu')
+        self.assertEqual(cfg['llm']['model'],str(self.model.resolve()));self.assertEqual(cfg['llm']['device'],'cpu')
         self.assertTrue(cfg['llm']['experimental_vision']);self.assertFalse(cfg['llm']['agent_enabled'])
         card=next(m for m in restarted.status()['models'] if m['id']==MODEL_ID)
         self.assertTrue(card['active']);self.assertNotIn('agent-experimental',card['capabilities'])

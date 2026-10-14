@@ -113,8 +113,10 @@ class DependencyPullRequestTests(unittest.TestCase):
              patch('sys.argv', ['fetch_upstream.py', 'ncnn_llm', '--directory', str(destination)]):
             with self.assertRaisesRegex(SystemExit, 'Commit mismatch'): fetch_upstream.main()
         commands = [call.args[0] for call in run.call_args_list]
-        self.assertIn(['git', '-C', str(destination), 'remote', 'add', 'origin', 'https://github.com/futz12/ncnn_llm.git'], commands)
-        self.assertIn(['git', '-C', str(destination), 'fetch', '--depth', '1', 'origin', 'refs/pull/58/head'], commands)
+        # The fetch helper canonicalizes macOS /var aliases and Windows
+        # short paths before constructing argv.
+        self.assertIn(['git', '-C', str(destination.resolve()), 'remote', 'add', 'origin', 'https://github.com/futz12/ncnn_llm.git'], commands)
+        self.assertIn(['git', '-C', str(destination.resolve()), 'fetch', '--depth', '1', 'origin', 'refs/pull/58/head'], commands)
 
     def test_source_evidence_names_official_pr_and_reviewed_base(self):
         def output(argv, **kwargs):
