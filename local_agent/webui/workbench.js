@@ -50,6 +50,7 @@ function renderSetup(){
  const data=setup.data;if(!data)return;
  $('quit-desktop').hidden=!data.managed;
  $('source-controls').hidden=!data.managed;
+ $('local-vision-import').hidden=!data.managed;
  if(!data.managed){$('engine-status').textContent='当前为源码启动方式，模型中心仅在桌面安装版或 packaging/launch.py 中启用。';return;}
  $('engine-status').textContent=`文本引擎：${data.engines.llm?'已内置':'缺失'} · 图像引擎：${data.engines.image?'已内置':'缺失'} · 权重不随应用默认安装`;
  $('model-home').textContent='保存位置：'+data.home;
@@ -77,12 +78,12 @@ function renderSetup(){
   if(model.estimated_download_bytes)meta.append(el('span','','约 '+amount(model.estimated_download_bytes)+' 下载'));
   card.append(meta);
   const supported=!!model.sources?.[setup.provider];
-  if(!supported&&!model.installed)card.append(el('p','source-unavailable',model.unavailable_sources?.[setup.provider]||'此来源暂无匹配的 ncnn 模型，需手动选择其他来源。'));
+  if(!supported&&!model.installed&&!model.import_only)card.append(el('p','source-unavailable',model.unavailable_sources?.[setup.provider]||'此来源暂无匹配的 ncnn 模型，需手动选择其他来源。'));
   const dependency=(model.missing_dependencies||[])[0];
   if(dependency)card.append(el('p','source-unavailable','先安装 Qwen Image 2.1 基础模型，再安装 Turbo 独立权重。共享组件不重复下载或复制。'));
   const activeJob=busy&&job.model===model.id;
-  const action=button(model.installable===false?'专用接口待接入':model.active?'当前使用':model.installed?'启用此模型':setup.query===model.id?'正在查询大小…':activeJob?'正在安装…':dependency?'先准备基础模型':'准备下载',null,()=>chooseModel(dependency?data.models.find(m=>m.id===dependency):model),'primary-button');
-  action.disabled=model.installable===false||model.active||busy||querying||!!setup.starting||(!supported&&!model.installed);card.append(action);
+  const action=button(model.installable===false?'专用接口待接入':model.active?'当前使用':model.installed?'启用此模型':model.import_only?'导入本地转换目录':setup.query===model.id?'正在查询大小…':activeJob?'正在安装…':dependency?'先准备基础模型':'准备下载',null,()=>chooseModel(dependency?data.models.find(m=>m.id===dependency):model),'primary-button');
+  action.disabled=model.installable===false||model.active||busy||querying||!!setup.starting||(!supported&&!model.installed&&!model.import_only);card.append(action);
   if(setup.quote?.id===model.id){
    const q=setup.quote,box=el('div','download-confirmation');box.append(el('strong','','确认下载信息'));
    if(q.base_dependency)box.append(el('p','setting-note','复用已安装基础组件 '+amount(q.base_dependency.shared_bytes)+'；本次只下载 Turbo Transformer。不要删除 qwenimage21 基础目录。'));
@@ -120,6 +121,7 @@ async function chooseModel(model){
  if(setup.query||setup.starting||installBusy(setup.data?.job))return;
  setup.error='';setup.quote=null;
  if(model.installed){try{await setupRequest('/api/setup/activate',{id:model.id});await refreshRuntime();await updateSetup();}catch(e){setup.error=e.message;renderSetup();}return;}
+ if(model.import_only){$('local-vision-import').hidden=false;$('local-vision-directory').focus();return;}
  const seq=++setup.seq;setup.query=model.id;renderSetup();
  try{const q=await setupRequest('/api/setup/prepare',{id:model.id,provider:setup.provider,download_route:selectedRoute()});if(seq===setup.seq)setup.quote=q;}
  catch(e){if(seq===setup.seq)setup.error=(setup.provider==='huggingface'?routeName(setup.route)+'：':'')+e.message;}
@@ -162,3 +164,13 @@ const originalSettings=showSettings;
 showSettings=function(){originalSettings();const r=state.runtime||{};const root=$('runtime-details');const last=[...(state.session?.messages||[])].reverse().find(m=>m.device_selection)?.device_selection;
 for(const [label,value] of [['默认策略','Vulkan 优先；不可用回退 CPU'],['文本预检',r.devices?.llm?.name||'未检测'],['文本选择原因',r.devices?.llm?.reason||'未检测'],['生图预检',r.devices?.image?.name||'未检测'],['生图选择原因',r.devices?.image?.reason||'未检测'],['最近任务设备',last?last.name+' · '+last.reason:'尚无真实任务记录']]){const row=el('div','runtime-row');row.append(el('span','',label),el('strong','',value));root.append(row);}};
 $('settings-button').onclick=showSettings;$('model-button').onclick=showSettings;
+
+$('import-local-vision').onclick=safe(async()=>{
+ if(state.run||state.sending||installBusy(setup.data?.job))return toast('先完成当前任务或安装。');
+ const directory=$('local-vision-directory').value.trim();
+ if(!directory)return toast('请输入本机已有转换模型的绝对目录。');
+ if(!$('trust-local-vision').checked)return toast('请先确认模型目录来源可信。');
+ $('import-local-vision').disabled=true;
+ try{await setupRequest('/api/setup/import-vision',{directory,accept_local_model:true});await updateSetup();toast('已导入。点击 MiniCPM 卡片的“启用此模型”即可使用。');}
+ finally{$('import-local-vision').disabled=false;}
+});

@@ -64,16 +64,40 @@ class NcnnBridgeBackend:
             raise PolicyError("ncnn model/model.json not found; no fake fallback")
         if not config.get("command"):
             raise PolicyError("Native bridge command is not configured")
-    def complete(self, messages: list[dict]) -> str:
+    def _connect(self):
         c = self.config
         if self.rpc is None:
             argv = list(c["command"]) + ["--model", str(Path(c["model"]).resolve()),
                                           "--threads", str(int(c.get("threads", 4)))]
-            self.device_selection = select(c, "llm")
+            from .vision_input import is_minicpm
+            if is_minicpm(c):
+                self.device_selection = select(dict(c, device="cpu", vulkan=False), "llm")
+                self.device_selection["reason"] = "minicpm_experimental_cpu_fp32"
+            else:
+                self.device_selection = select(c, "llm")
             if self.device_selection["selected"] == "vulkan":
                 argv += ["--vulkan", "--vulkan-device", str(self.device_selection["gpu"])]
             self.rpc = StdioRPC(argv, cwd=self.project, timeout=float(c.get("timeout", 180)), env=engine_env(c["command"]))
-        result = self.rpc.request("infer", {"messages": messages, "max_new_tokens": int(c.get("max_new_tokens", 1024))})
+    def complete(self, messages: list[dict]) -> str:
+        self._connect()
+        return self._infer(messages)
+
+    def complete_with_image(self, messages: list[dict], workspace, relative: str) -> str:
+        from .vision_input import enabled, image_path
+        if not enabled(self.config):
+            raise PolicyError("Experimental MiniCPM image questions are not enabled")
+        path = image_path(workspace, relative)
+        self._connect()
+        capabilities = self.rpc.request("capabilities", {})
+        if not isinstance(capabilities, dict) or capabilities.get("single_image") != "minicpm_v4_7_experimental":
+            raise PolicyError("Native bridge has no verified single-image protocol; refusing text-only fallback")
+        return self._infer(messages, str(path))
+
+    def _infer(self, messages, image=None):
+        params = {"messages": messages, "max_new_tokens": int(self.config.get("max_new_tokens", 1024))}
+        if image is not None:
+            params["image_path"] = image
+        result = self.rpc.request("infer", params)
         if not isinstance(result, dict) or not isinstance(result.get("text"), str):
             raise RuntimeError("Malformed native bridge result")
         return result["text"]

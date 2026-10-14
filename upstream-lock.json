@@ -13,5 +13,14 @@
     }
   ],
   "mcp_implemented_protocol": "2025-11-25",
-  "ncnn_library": "ci/dependencies.json pins the bridge ncnn independently; qwenimage.ncnn_commit verifies the unchanged Qwen Image embedded submodule."
+  "ncnn_library": "ci/dependencies.json pins the bridge ncnn independently; qwenimage.ncnn_commit verifies the unchanged Qwen Image embedded submodule.",
+  "temporary_pull_requests": {
+    "ncnn_llm": {
+      "repository": "futz12/ncnn_llm",
+      "number": 58,
+      "checkout_ref": "refs/pull/58/head",
+      "commit": "09fb5f3312e63b9abdd8b803c0548303a0484042",
+      "base_commit": "0538ae8b9e2d47f597ba3491e35d2f610c3a3114"
+    }
+  }
 }

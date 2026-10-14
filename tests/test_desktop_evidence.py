@@ -25,12 +25,16 @@ class DesktopEvidenceTests(unittest.TestCase):
                                         'probe_sha256': hashlib.sha256(probe.read_bytes()).hexdigest()}
         (self.root / 'BUNDLE.json').write_text(json.dumps(metadata))
 
-    def check(self, capabilities):
+    def check(self, capabilities, runtime_result=None):
         good = {'returncode': 0, 'timed_out': False, 'stdout': 'Usage: ncnn_agent_bridge Usage: qwenimage-ncnn-vulkan', 'stderr': ''}
+        runtime_result = runtime_result or dict(good, stdout=json.dumps({
+            'minicpm_v4_7_runtime': 1, 'single_image_protocol': True}))
+        def run(argv, **kwargs):
+            return runtime_result if argv[-1] == '--capabilities' else good
         output = self.root / 'result.json'
         with patch.object(desktop, 'resource_root', return_value=self.root), \
              patch.object(desktop, 'engine_paths', return_value=self.engines), \
-             patch('local_agent.process.run_process', return_value=good), \
+             patch('local_agent.process.run_process', side_effect=run), \
              patch('local_agent.device.probe', return_value=capabilities), \
              patch.object(DocumentTools, 'create', return_value={'path': 'fixture'}), \
              patch.object(DocumentTools, 'read', return_value={'content': 'CHECK'}):
@@ -54,6 +58,25 @@ class DesktopEvidenceTests(unittest.TestCase):
         for data in result['engines'].values():
             self.assertEqual(data['device_selection']['selected'], 'cpu')
             self.assertEqual(data['device_selection']['reason'], 'no_usable_hardware_vulkan')
+        self.assertTrue(result['engines']['llm']['runtime_capability_check']['passed'])
+        self.assertEqual(result['model_inference'], 'not_run')
+
+    def test_old_invalid_or_truncated_bridge_capability_fails_bundle(self):
+        good = {'returncode': 0, 'timed_out': False, 'stdout': json.dumps({
+            'minicpm_v4_7_runtime': 1, 'single_image_protocol': True}), 'stderr': ''}
+        bad = [dict(good, returncode=2), dict(good, timed_out=True),
+               dict(good, output_truncated=True), dict(good, stdout='not JSON'),
+               dict(good, stdout='[]'), dict(good, stdout='{}'),
+               dict(good, stdout='{"minicpm_v4_7_runtime":true,"single_image_protocol":true}'),
+               dict(good, stdout='{"minicpm_v4_7_runtime":1,"single_image_protocol":1}')]
+        for runtime_result in bad:
+            with self.subTest(runtime_result=runtime_result):
+                code, result = self.check({'version': 1, 'compiled': True, 'devices': []}, runtime_result)
+                self.assertEqual(code, 1)
+                self.assertFalse(result['ok'])
+                self.assertFalse(result['engines']['llm']['runtime_capability_check']['passed'])
+                self.assertTrue(result['engines']['image']['passed'])
+                self.assertEqual(result['model_inference'], 'not_run')
 
     def test_invalid_protocol_cannot_pass(self):
         code, result = self.check({'version': 'invalid', 'compiled': True, 'devices': []})

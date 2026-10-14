@@ -81,7 +81,11 @@ def doctor(c: dict) -> dict:
         cmd = section.get("command", [])
         return bool(cmd and (shutil.which(cmd[0]) or Path(cmd[0]).is_file()))
     llm, img = c.get("llm", {}), c.get("image", {})
-    return {"devices": {"llm": describe(llm, "llm"), "image": describe(img, "image")}, "python": platform.python_version(), "platform": platform.platform(),
+    from .vision_input import is_minicpm
+    minicpm=is_minicpm(llm)
+    llm_device=describe(dict(llm,device="cpu",vulkan=False) if minicpm else llm,"llm")
+    if minicpm: llm_device["reason"]="minicpm_experimental_cpu_fp32"
+    return {"devices": {"llm": llm_device, "image": describe(img, "image")}, "python": platform.python_version(), "platform": platform.platform(),
             "orchestrator": "stdlib Python; native inference is separate",
             "llm_backend": llm.get("backend"), "llm_executable_found": executable(llm),
             "llm_model_json_found": bool(llm.get("model") and Path(llm["model"]).joinpath("model.json").is_file()),
@@ -163,6 +167,9 @@ def main(argv=None) -> int:
             if args.subcommand == "doctor":
                 result = doctor(c)
             else:
+                from .vision_input import is_minicpm
+                if args.subcommand=="run" and is_minicpm(c.get("llm",{})):
+                    raise PolicyError("MiniCPM supports chat/image questions only; Agent tool execution is disabled")
                 ws, registry, clients = make_runtime(c, args)
                 if args.subcommand == "tools":
                     result = {"tools": registry.schemas()}

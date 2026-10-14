@@ -22,6 +22,15 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 REPOSITORIES = {'ncnn_llm': 'futz12/ncnn_llm', 'qwenimage': 'nihui/qwenimage-ncnn-vulkan',
                 'ncnn': 'Tencent/ncnn', 'json': 'nlohmann/json'}
+# One reviewed official pull-request ref, pinned to its immutable head and base.
+# Moving PR heads require review; no additional repository is trusted.
+MINICPM_PULL_REQUEST = {
+    'repository': 'futz12/ncnn_llm',
+    'number': 58,
+    'checkout_ref': 'refs/pull/58/head',
+    'commit': '09fb5f3312e63b9abdd8b803c0548303a0484042',
+    'base_commit': '0538ae8b9e2d47f597ba3491e35d2f610c3a3114',
+}
 TARGETS = {'bridge': 'ncnn_agent_bridge', 'image': 'qwenimage-ncnn-vulkan'}
 SCOPE = 'Real C++ compilation/linking, CLI and Vulkan ReLU preflight. Software Vulkan explicitly identified; no full-model/image/GPU performance or Docker isolation claim.'
 
@@ -39,10 +48,21 @@ def read_pins(root: Path = ROOT) -> dict:
     if set(unused) != {'ncnn'} or not re.fullmatch(r'[0-9a-f]{40}', unused['ncnn']):
         raise ValueError('Invalid unused ncnn_llm submodule pin')
     original = json.loads((root / 'upstream-lock.json').read_text(encoding='utf-8'))
+    pull_requests = original.get('temporary_pull_requests', {})
+    using_pr = 'checkout_ref' in pins['ncnn_llm']
+    if pull_requests != ({'ncnn_llm': MINICPM_PULL_REQUEST} if using_pr else {}):
+        raise ValueError('Invalid temporary pull request; head/base changes require explicit review')
+    for name, pin in pins.items():
+        if 'checkout_ref' in pin and (name != 'ncnn_llm' or
+                any(pin.get(k) != MINICPM_PULL_REQUEST[k] for k in ('repository', 'commit', 'checkout_ref'))):
+            raise ValueError('Invalid reviewed pull-request checkout ref or immutable head')
     for name in ('ncnn_llm', 'qwenimage'):
-        match = next(r for r in original['repositories'] if r['name'] == REPOSITORIES[name])
-        if match['commit'] != pins[name]['commit']:
-            raise ValueError(f'{name} differs from upstream-lock.json; update both deliberately')
+        matches = [r for r in original['repositories'] if r['name'] == REPOSITORIES[name]]
+        if len(matches) != 1 or matches[0].get('url') != 'https://github.com/' + REPOSITORIES[name]:
+            raise ValueError(f'Invalid official upstream lock: {name}')
+        expected = MINICPM_PULL_REQUEST['base_commit'] if name == 'ncnn_llm' and using_pr else pins[name]['commit']
+        if matches[0]['commit'] != expected:
+            raise ValueError(f'{name} differs from reviewed upstream base; review divergence deliberately')
     return pins
 
 
@@ -160,6 +180,9 @@ def verify_sources(component: str, pins: dict, evidence: Path) -> dict:
         if got != pins[name]['commit']:
             raise RuntimeError(f'Dependency SHA mismatch for {name}: {got}')
         result[name] = {'repository': REPOSITORIES[name], 'commit': got}
+        if name == 'ncnn_llm' and 'checkout_ref' in pins[name]:
+            result[name]['temporary_pull_request'] = dict(MINICPM_PULL_REQUEST)
+            result[name]['build_source_policy'] = 'Official PR ref with verified immutable HEAD; divergence requires review'
         run_logged(['git', '-C', str(directory), 'submodule', 'status', '--recursive'],
                    evidence / f'submodules-{name}.log', timeout=60)
         status_text = (evidence / f'submodules-{name}.log').read_text(encoding='utf-8').partition('\n')[2]
@@ -209,6 +232,8 @@ def main() -> int:
                 with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
                     for name, info in pins.items():
                         f.write(f'{name}={info["commit"]}\n')
+                        f.write(f'{name}_repository={info["repository"]}\n')
+                        f.write(f'{name}_checkout_ref={info.get("checkout_ref", info["commit"])}\n')
             print(json.dumps(pins, indent=2))
         elif stage == 'configure':
             state['dependencies'] = verify_sources(component, pins, evidence)

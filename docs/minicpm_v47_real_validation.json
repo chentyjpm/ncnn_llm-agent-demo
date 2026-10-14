@@ -1,0 +1,61 @@
+{
+  "model": "openbmb/MiniCPM-V-4.7-1B",
+  "backend": "real LocalAgent NcnnBridgeBackend",
+  "cases": [
+    {
+      "image": "refract-448.png",
+      "text": "A red pencil with a yellow tip rests in a glass of water, partially submerged.",
+      "seconds": 98.36649367700011
+    },
+    {
+      "image": "bee-448.png",
+      "text": "A bumblebee rests on a pink cosmos flower, surrounded by wilting blooms and red flowers in a garden.",
+      "seconds": 67.91647598100099
+    }
+  ],
+  "max_rss_kib": 6469036,
+  "device_selection": {
+    "requested": "cpu",
+    "selected": "cpu",
+    "gpu": -1,
+    "name": "CPU",
+    "reason": "minicpm_experimental_cpu_fp32",
+    "hardware": false,
+    "probe_scope": "isolated ncnn Vulkan MAX(x, 0); not full-model validation"
+  },
+  "model_revision": "ef3ab3bf0120a60e1a2d2b52d984a79d8cb7c630",
+  "ncnn_revision": "b0f97f43f266617ff5e5096d440dbe3f9a4c35b8",
+  "platform": "Linux x86_64 CPU FP32",
+  "threads": 2,
+  "request_path": "NcnnBridgeBackend.complete_with_image \u2192 capabilities RPC \u2192 infer RPC \u2192 native image preprocessing/vision/projector/text decoder",
+  "different_images_produced_different_grounded_answers": true,
+  "reference_comparison": "Pencil answer exactly matches independent official HF; bee answer manually checked against actual image, no HF bee reference",
+  "scope": "Single image per request,16x,448x448 PNG thumbnails; no video/detail slices/multi-image/GPU/quantization claim",
+  "fixture_provenance": [
+    {
+      "source_url": "https://huggingface.co/datasets/openbmb/DemoCase/resolve/main/refract.png",
+      "original_size": [
+        406,
+        528
+      ],
+      "original_sha256": "e384f22e7a10381084d3dafba477cf0fa59fa671612027e87e675de5ad149441",
+      "test_fixture": "refract-448.png",
+      "test_fixture_sha256": "969dbe26ad4dd2d94daad99b6b7c172ea7adf9f56305ee416d39794b9fbd299a",
+      "processing": "Pillow ImageOps.pad RGB448x448 bicubic, background240; both reference and ncnn receive the same saved fixture"
+    },
+    {
+      "original_file": "bee.jpg",
+      "original_size": [
+        5184,
+        3456
+      ],
+      "original_sha256": "8b21ba78250f852ca5990063866b1ace6432521d0251bde7f8de783b22c99a6d",
+      "fixture": "bee-448.png",
+      "fixture_sha256": "a62f6e4325d40d59ae23bc24ee415f6876c8b6d4d4f52e9e8deaa34fd4c984ca",
+      "processing": "Pillow ImageOps.pad RGB448x448 bicubic, background240",
+      "source_url": "https://huggingface.co/datasets/huggingface/documentation-images/resolve/f2568e43643d69096c8e3f1a68badd0cefad5d66/bee.jpg",
+      "source_page": "https://huggingface.co/datasets/huggingface/documentation-images/blob/f2568e43643d69096c8e3f1a68badd0cefad5d66/bee.jpg",
+      "source_license": "cc-by-nc-sa-4.0; image is not redistributed in this PR"
+    }
+  ]
+}

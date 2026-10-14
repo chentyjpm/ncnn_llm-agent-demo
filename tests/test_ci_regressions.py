@@ -229,6 +229,26 @@ class NativeHarnessTests(FixtureCase):
         self.assertEqual(result['status'], 'failed')
         self.assertIn('TimeoutExpired', result['error'])
 
+    def test_minicpm_capability_contract_is_strict(self):
+        good = {'minicpm_v4_7_runtime': 1, 'single_image_protocol': True}
+        for value, passed in [(good, True), ({}, False), ([], False),
+                              (dict(good, minicpm_v4_7_runtime=0), False),
+                              (dict(good, minicpm_v4_7_runtime=True), False),
+                              (dict(good, minicpm_v4_7_runtime='1'), False),
+                              (dict(good, single_image_protocol=1), False),
+                              (dict(good, single_image_protocol=False), False)]:
+            with self.subTest(value=value):
+                result = native.run_case(self.command(f'print({json.dumps(value)!r})'), 0, '',
+                                         minicpm_capabilities=True)
+                self.assertEqual(result['status'], 'passed' if passed else 'failed')
+
+    def test_capability_json_cannot_be_polluted_or_printed_only_to_stderr(self):
+        for code in ["print('not JSON')", "print('{} trailing')",
+                     "import sys; print('{}', file=sys.stderr)"]:
+            with self.subTest(code=code):
+                result = native.run_case(self.command(code), 0, '', minicpm_capabilities=True)
+                self.assertEqual(result['status'], 'failed')
+
     def test_nonexistent_program_is_failure(self):
         result = native.run_case([str(self.root / 'does-not-exist')], 0, 'nothing')
         self.assertEqual(result['status'], 'failed')
@@ -244,7 +264,7 @@ class NativeHarnessTests(FixtureCase):
             native.validate_binary(path)
 
     def test_native_cases_are_unique_and_have_expected_scope(self):
-        for component, count in [('bridge', 22), ('image', 13)]:
+        for component, count in [('bridge', 23), ('image', 13)]:
             with self.subTest(component=component):
                 cases = native.cases(component, self.root)
                 self.assertEqual(len(cases), count)
