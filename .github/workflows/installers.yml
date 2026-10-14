@@ -2,7 +2,7 @@ name: Application installers
 on:
   workflow_dispatch:
   push:
-    branches: [main, "upgrade/upstream-*"]
+    branches: [main, "upgrade/upstream-*", "feat/minicpm-v47-integration"]
     paths:
       - 'packaging/**'
       - 'local_agent/**'
