@@ -11,6 +11,8 @@ import shutil
 import threading
 import time
 from .model_catalog import CATALOG, PROFILES, PROVIDERS
+from .local_vision_model import MODEL_ID as LOCAL_VISION_ID, validate_package, check_bridge
+
 from .image_profiles import BASE_IMAGE, TURBO_IMAGE, TURBO_FILES, shared_components
 from .model_sources import safe_name, digest, open_https, resolve_manifest, file_url, QWEN_FILES, IMAGE_REQUIRED, download_route, HF_DOWNLOAD_ROUTES, response_host, verify_mirror_manifest
 
@@ -54,7 +56,34 @@ class ModelHub:
         except (OSError, ValueError):
             pass
 
+    def imported_vision(self):
+        try:
+            entry=json.loads((self.home/'imported-vision.json').read_text(encoding='utf-8'))
+            current=validate_package(entry['path'])
+            return current if current['files']==entry['files'] else None
+        except (OSError,ValueError,KeyError,TypeError): return None
+
+    def model_path(self, model_id):
+        if model_id==LOCAL_VISION_ID:
+            entry=self.imported_vision()
+            if not entry: raise ValueError('Imported MiniCPM package is unavailable or changed')
+            return Path(entry['path'])
+        return self.models/model_id
+
+    def import_vision(self, directory, consent):
+        if consent is not True: raise ValueError('请确认导入的是可信的本地转换模型')
+        with self.lock:
+            if self.job['status'] in BUSY: raise ValueError('安装进行中，暂不能导入模型')
+            if self.active().get('llm')==LOCAL_VISION_ID:
+                raise ValueError('当前 MiniCPM 正在启用；请先切换其他模型，再重新导入')
+            package=validate_package(directory)
+            check_bridge(self.engines['llm'],self.home)
+            # Registration preserves the source files. Activation remains explicit.
+            save_json(self.home/'imported-vision.json',package)
+        return {'id':LOCAL_VISION_ID,'path':package['path'],'imported':True,'activated':False}
+
     def installed(self, model_id):
+        if model_id==LOCAL_VISION_ID: return self.imported_vision() is not None
         if model_id not in CATALOG or not CATALOG[model_id].get('installable', True): return False
         folder = self.models / model_id
         try:
@@ -122,6 +151,7 @@ class ModelHub:
                           for k,v in CATALOG.items()], 'job':job}
 
     def prepare(self, model_id, provider='huggingface', *, download_route_id='direct'):
+        if model_id==LOCAL_VISION_ID: raise ValueError('此模型仅支持导入本地转换目录，不提供下载')
         route = download_route(provider, download_route_id)
         if model_id == TURBO_IMAGE:
             if not self.installed(BASE_IMAGE):
@@ -181,6 +211,7 @@ class ModelHub:
             if not isinstance(model_id,str) or model_id not in CATALOG or not self.installed(model_id):
                 raise ValueError('Model is not installed')
             kind = CATALOG[model_id]['kind']
+            if model_id==LOCAL_VISION_ID: check_bridge(self.engines['llm'],self.home)
             if model_id == TURBO_IMAGE and not _installation:
                 shared_components(self.models / BASE_IMAGE, verify_hashes=True)
             if not Path(self.engines[kind]).is_file(): raise ValueError('Bundled engine is missing')

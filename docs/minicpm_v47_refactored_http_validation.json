@@ -1,0 +1,44 @@
+{
+  "scope": "Real ModelHub import/activate and H5 HTTP upload/chat to native ncnn; no fixture backend; not browser interaction",
+  "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+  "ok": true,
+  "checks": [
+    "local import requires explicit trust confirmation",
+    "real converted package registered without copying or activating weights",
+    "activation derives real CPU single-image configuration without manual JSON edits",
+    "activation survives ModelHub reconstruction",
+    "Agent mode rejected for MiniCPM before inference",
+    "multiple image attachments rejected",
+    "uploaded pixels produced required real native image answer on CPU"
+  ],
+  "binary_sha256": "fc6f517868152f68db62da38549da42f3355a2282344664332c3374c0cf0de89",
+  "image_sha256": "969dbe26ad4dd2d94daad99b6b7c172ea7adf9f56305ee416d39794b9fbd299a",
+  "runtime": {
+    "model": "minicpm-final-ready",
+    "ready": true,
+    "experimental_vision": true,
+    "agent_enabled": false,
+    "device": "CPU",
+    "device_reason": "MiniCPM experimental CPU FP32 contract"
+  },
+  "reply": "A red pencil with a yellow tip floats diagonally in a clear glass of water against a gradient background.",
+  "reply_state": "completed",
+  "actual_device": {
+    "requested": "cpu",
+    "selected": "cpu",
+    "gpu": -1,
+    "name": "CPU",
+    "reason": "minicpm_experimental_cpu_fp32",
+    "hardware": false,
+    "probe_scope": "isolated ncnn Vulkan MAX(x, 0); not full-model validation"
+  },
+  "elapsed_seconds": 44.867,
+  "model_revision": "ef3ab3bf0120a60e1a2d2b52d984a79d8cb7c630",
+  "runtime_source_commit": "a14fe16f49ea6ad36767ade62bba9d6d3d1d8e60",
+  "runtime_source_ref": "futz12/ncnn_llm refs/pull/58/head",
+  "ncnn_revision": "b0f97f43f266617ff5e5096d440dbe3f9a4c35b8",
+  "runtime_source_clean": true,
+  "prior_runtime_commit": "09fb5f3312e63b9abdd8b803c0548303a0484042",
+  "answer_validation": "Required pencil/water phrases; exact answer matches the previous application HTTP result. Not an independent HF reference for this attachment-context prompt.",
+  "answer_identical_to_pre_refactor": true
+}

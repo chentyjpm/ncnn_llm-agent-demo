@@ -2,7 +2,7 @@ name: Application installers
 on:
   workflow_dispatch:
   push:
-    branches: [main, "upgrade/upstream-*"]
+    branches: [main, "upgrade/upstream-*", "feat/minicpm-v47-integration"]
     paths:
       - 'packaging/**'
       - 'local_agent/**'
@@ -54,8 +54,8 @@ jobs:
         if: matrix.component == 'bridge'
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
-          repository: futz12/ncnn_llm
-          ref: ${{ steps.pins.outputs.ncnn_llm }}
+          repository: ${{ steps.pins.outputs.ncnn_llm_repository }}
+          ref: ${{ steps.pins.outputs.ncnn_llm_checkout_ref }}
           path: .ci-src/ncnn_llm
           persist-credentials: false
       - name: Checkout ncnn and Vulkan dependencies

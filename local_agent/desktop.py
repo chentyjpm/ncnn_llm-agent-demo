@@ -29,9 +29,13 @@ def engine_paths():
 
 def automatic_config(home: Path, hub):
     active = hub.active()
+    from .local_vision_model import MODEL_ID
+    vision=active.get('llm')==MODEL_ID
+    model=hub.model_path(MODEL_ID) if vision else hub.models / active.get('llm','qwen05')
     return {'workspace': str(home / 'workspace'), 'max_steps': 12,
         'llm': {'backend': 'ncnn_bridge', 'command': [hub.engines['llm']],
-                'model': str(hub.models / active.get('llm', 'qwen05')), 'device': 'auto',
+                'model': str(model), 'device': 'cpu' if vision else 'auto',
+                **({'experimental_vision':True,'agent_enabled':False} if vision else {}),
                 'threads': min(4, os.cpu_count() or 1), 'timeout': 300, 'max_new_tokens': 512},
         'image': {'enabled': 'image' in active, 'command': [hub.engines['image']],
                   'model': str(hub.models / active.get('image', 'qwenimage21')), 'device': 'auto', 'timeout': 5400},
@@ -95,6 +99,23 @@ def self_test(output: Path):
                     'result': result, 'probe_report': capabilities, 'device_selection': selection,
                     'executable': str(p.resolve()), 'probe_path': str(probe.resolve()),
                     'driver_environment': engine_env([str(p)])}
+                if kind == 'llm':
+                    runtime_result = run_process([str(p), '--capabilities'], cwd=root,
+                        timeout=10, max_output=8192, env=engine_env([str(p)]))
+                    try:
+                        runtime = json.loads(runtime_result['stdout'])
+                    except (ValueError, TypeError):
+                        runtime = None
+                    runtime_ok = (runtime_result['returncode'] == 0 and
+                        not runtime_result['timed_out'] and not runtime_result.get('output_truncated', False) and
+                        isinstance(runtime, dict) and type(runtime.get('minicpm_v4_7_runtime')) is int and
+                        runtime['minicpm_v4_7_runtime'] >= 1 and runtime.get('single_image_protocol') is True)
+                    report['engines'][kind]['runtime_capability_check'] = {
+                        'passed': runtime_ok, 'capabilities': runtime, 'result': runtime_result,
+                        'scope': 'Compiled bridge protocol only; no model loaded or inference run.'}
+                    report['engines'][kind]['passed'] &= runtime_ok
+                    if not runtime_ok:
+                        report.setdefault('failures', []).append('llm: MiniCPM compiled runtime capability missing or invalid')
                 if not probe_ok:
                     report.setdefault('failures', []).append(kind + ': ' + selection['reason'] + ': ' + capabilities.get('detail', ''))
             docs = DocumentTools(Workspace(root / 'documents'))

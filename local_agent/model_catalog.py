@@ -117,3 +117,7 @@ for _id, _name, _family, _why in (
     CATALOG[_id]={'name':_name,'kind':'pending','category':'pending','family':_family,'installable':False,
         'sources':{},'description':_why,'validation':'上游有支持，本应用尚未接通专用调用接口',
         'format':'专用模型 · 不是聊天后端','capabilities':[], 'light':False}
+
+# Local conversion import is separate from all remote download profiles.
+from .local_vision_model import MODEL_ID as _local_vision_id, PROFILE as _local_vision_profile
+CATALOG[_local_vision_id] = _local_vision_profile

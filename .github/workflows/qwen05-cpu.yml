@@ -2,7 +2,7 @@ name: Real Qwen 0.5B CPU
 on:
   workflow_dispatch:
   push:
-    branches: [main, "upgrade/upstream-*"]
+    branches: [main, "upgrade/upstream-*", "feat/minicpm-v47-integration"]
     paths:
       - '.github/workflows/qwen05-cpu.yml'
       - 'scripts/qwen05_*.py'
@@ -42,8 +42,8 @@ jobs:
         run: python scripts/ci_native.py refs --component bridge
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
-          repository: futz12/ncnn_llm
-          ref: ${{ steps.pins.outputs.ncnn_llm }}
+          repository: ${{ steps.pins.outputs.ncnn_llm_repository }}
+          ref: ${{ steps.pins.outputs.ncnn_llm_checkout_ref }}
           path: .ci-src/ncnn_llm
           persist-credentials: false
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803

@@ -61,7 +61,7 @@ Windows/MSVC 的 Release 输出通常是 `build/native/Release/ncnn_agent_bridge
 python scripts/fetch_upstream.py ncnn_llm --directory third_party/ncnn_llm
 ```
 
-脚本只向新目录拉取 `upstream-lock.json` 中的提交，不下载权重、不初始化第三方子模块、不编译、不安装系统组件。已安装运行时的用户不必执行。
+脚本只向新目录拉取由 `ci/dependencies.json` 和 `upstream-lock.json` 共同校验的源码；临时 MiniCPM 依赖使用官方 PR #58 ref 并要求 HEAD 精确匹配锁定提交，不下载权重、不初始化第三方子模块、不编译、不安装系统组件。已安装运行时的用户不必执行。
 
 ## 接入 Qwen Image
 

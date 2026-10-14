@@ -22,3 +22,9 @@ MIT 许可仅覆盖本项目原创编排/桥接代码；上游代码、模型及
 - Docker 执行参数参照官方文档：https://docs.docker.com/reference/cli/docker/container/run/
 
 导出/安装阶段可以需要联网和额外工具；运行阶段只有在二进制、模型、分词器、Python 包、Docker 镜像、MCP 程序都已经就位，且不接远程 MCP 服务时，才能保持完全离线。
+
+
+MiniCPM 临时构建来源：官方 [ncnn_llm PR #58](https://github.com/futz12/ncnn_llm/pull/58)，
+`refs/pull/58/head`，精确提交 `a14fe16f49ea6ad36767ade62bba9d6d3d1d8e60`；
+正式上游基线仍为上述 `0538ae8…`。PR 尚未合并时不将该提交描述为正式上游发布。
+详见 `docs/CI.md` 的双锁校验和更新审核规则。

@@ -29,7 +29,8 @@ def validate_binary(binary: Path) -> Path:
 
 
 def run_case(argv: list[str], expected_code: int, diagnostic: str, *,
-             stdout_empty: bool = False, timeout: float = 30) -> dict:
+             stdout_empty: bool = False, timeout: float = 30,
+             minicpm_capabilities: bool = False) -> dict:
     started = time.monotonic()
     record = {'argv': argv, 'expected_code': expected_code, 'diagnostic': diagnostic}
     try:
@@ -44,6 +45,18 @@ def run_case(argv: list[str], expected_code: int, diagnostic: str, *,
             errors.append('expected diagnostic not emitted by executable')
         if stdout_empty and result.stdout:
             errors.append('error/log text leaked into the JSON-RPC stdout channel')
+        if minicpm_capabilities:
+            # This checks the compiled protocol only; no model is loaded.
+            try:
+                capabilities = json.loads(result.stdout)
+            except (ValueError, TypeError):
+                capabilities = None
+            record['runtime_capabilities'] = capabilities
+            if (not isinstance(capabilities, dict) or
+                    type(capabilities.get('minicpm_v4_7_runtime')) is not int or
+                    capabilities['minicpm_v4_7_runtime'] < 1 or
+                    capabilities.get('single_image_protocol') is not True):
+                errors.append('MiniCPM compiled runtime capability missing or invalid')
         if errors:
             raise AssertionError('; '.join(errors))
         record['status'] = 'passed'
@@ -61,6 +74,7 @@ def cases(component: str, scratch: Path) -> list[tuple]:
             ('help', ['--help'], 0, 'Usage: ncnn_agent_bridge', False),
             ('short_help', ['-h'], 0, 'Usage: ncnn_agent_bridge', False),
             ('version', ['--version'], 0, 'ncnn_agent_bridge 0.1.0', False),
+            ('runtime_capabilities', ['--capabilities'], 0, '', False),
             ('no_model', [], 2, missing, True),
             ('missing_model_path', ['--model', str(scratch / 'not-present')], 2, missing, True),
             ('empty_model_directory', ['--model', str(scratch / 'empty')], 2, missing, True),
@@ -107,14 +121,15 @@ def run_suite(binary: Path, component: str, output: Path) -> dict:
         (scratch / 'malformed').mkdir()
         (scratch / 'malformed/model.json').write_text('{invalid', encoding='utf-8')
         for name, args, code, diagnostic, empty in cases(component, scratch):
-            record = run_case([str(binary), *args], code, diagnostic, stdout_empty=empty)
+            record = run_case([str(binary), *args], code, diagnostic, stdout_empty=empty,
+                              minicpm_capabilities=name == 'runtime_capabilities')
             record['name'] = name
             records.append(record)
             print(f'{name}: {record["status"]}', flush=True)
     report = {'component': component, 'binary': str(binary),
               'binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
               'platform': platform.platform(), 'machine': platform.machine(),
-              'scope': 'Real native executable; model-free CLI/error-path tests only. No inference or GPU execution.',
+              'scope': 'Real native executable; model-free compiled-capability/CLI/error-path tests only. No inference or GPU execution.',
               'tests_run': len(records), 'passed': sum(r['status'] == 'passed' for r in records),
               'failed': sum(r['status'] != 'passed' for r in records), 'tests': records}
     output.parent.mkdir(parents=True, exist_ok=True)

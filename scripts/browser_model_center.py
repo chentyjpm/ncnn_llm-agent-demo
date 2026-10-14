@@ -10,6 +10,7 @@ import sys
 import tempfile
 import threading
 import time
+from unittest.mock import patch
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
 from local_agent.web import LocalServer,WebApp
@@ -146,6 +147,36 @@ def main():
                 assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
                 page.screenshot(path=str(a.output/'hf-mirror-mobile.png'),full_page=True)
                 passed('mirror selector on narrow screens has no horizontal overflow')
+                # Local import uses validated fixture files and a mocked weightless
+                # capability response. It never starts a model or downloads bytes.
+                from tests.test_local_vision_model import package
+                local_model=root/'local-vision-fixture';package(local_model)
+                Path(hub.engines['llm']).write_text('EXPLICIT BRIDGE FILE FIXTURE')
+                hub.on_change=lambda:setattr(app,'config',automatic_config(root,hub))
+                page.set_viewport_size({'width':1200,'height':900})
+                page.locator('#model-filter').select_option('all');page.locator('#model-search').fill('MiniCPM-V-4.7')
+                before_downloads=len(hub.calls)
+                page.locator('#local-vision-directory').fill(str(local_model))
+                page.locator('#import-local-vision').click()
+                expect(page.locator('#toast')).to_contain_text('来源可信')
+                assert not (hub.home/'imported-vision.json').exists()
+                page.locator('#trust-local-vision').check()
+                with patch('local_agent.model_hub.check_bridge',return_value={'minicpm_v4_7_runtime':1,'single_image_protocol':True}):
+                    page.locator('#import-local-vision').click()
+                    card=page.locator('[data-model-id="minicpm_v47_local"]')
+                    expect(card.get_by_role('button')).to_have_text('启用此模型')
+                    assert hub.active().get('llm')!='minicpm_v47_local'
+                    card.get_by_role('button').click()
+                    expect(card.get_by_role('button')).to_have_text('当前使用')
+                assert len(hub.calls)==before_downloads
+                assert app.config['llm']['experimental_vision'] is True
+                assert app.config['llm']['device']=='cpu'
+                page.locator('#close-setup').click()
+                expect(page.locator('#mode-agent')).to_be_disabled()
+                expect(page.locator('#vision-question-option')).to_be_visible()
+                expect(page.locator('#device-badge')).to_have_text('CPU')
+                page.screenshot(path=str(a.output/'minicpm-import-chat-only-fixture.png'),full_page=True)
+                passed('local MiniCPM import requires trust, separate activation, CPU and chat-only UI; no download/inference')
                 assert not errors,errors;assert not requests,requests;passed('no page errors or browser external requests');browser.close()
         except Exception as exc:
             result['cases'].append({'name':'browser execution','passed':False,'error':f'{type(exc).__name__}: {exc}'})

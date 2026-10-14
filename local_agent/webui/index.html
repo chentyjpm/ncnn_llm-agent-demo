@@ -75,7 +75,7 @@
     </div>
     <footer class="composer-area">
       <form id="composer" class="composer">
-        <div id="attachments" class="attachments"></div>
+        <label id="vision-question-option" hidden><input id="interpret-image" type="checkbox">实验性图片问答（建议 448×448，仅单张缩略图；不支持切片，完整模型未验收）</label><div id="attachments" class="attachments"></div>
         <label for="message-input" class="sr-only">消息</label>
         <textarea id="message-input" placeholder="发消息，或交给 Agent 处理文件…" rows="2" maxlength="12000"></textarea>
         <div id="image-options" class="image-options" hidden>
@@ -119,6 +119,13 @@
   <p id="hf-route-note" class="setting-note" hidden></p>
   <div class="catalog-search"><input id="model-search" type="search" aria-label="搜索模型" placeholder="搜索 Qwen / MiniCPM / Youtu / 代码…"><span id="model-count"></span></div>
   <div id="active-models" class="active-models"></div>
+  <section id="local-vision-import" hidden>
+    <h3>导入 MiniCPM-V-4.7 本地转换模型</h3>
+    <label>本机模型绝对目录<input id="local-vision-directory" type="text" placeholder="包含 model.json 的已转换目录" autocomplete="off"></label>
+    <label><input id="trust-local-vision" type="checkbox">我确认目录来源可信，并允许本地原生引擎读取它。</label>
+    <p class="setting-note">仅登记已有文件，不下载、不复制、不删除原目录。不要移动该目录。启用后使用 CPU FP32 单图问答，Agent / 工具模式关闭。</p>
+    <button id="import-local-vision" class="soft-button">验证并导入本地模型</button>
+  </section>
   <p class="setting-note">“准备下载”先查询所选来源的文件大小，确认后才开始下载。切换来源不会自动替换模型或发起下载。</p>
   <div id="model-progress-box" class="model-progress-box" hidden>
     <strong id="model-progress" role="status" aria-live="polite"></strong>

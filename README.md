@@ -36,6 +36,8 @@ Local Agent 将 **本地文本模型、图像引擎、文件与 Office 工具**�
 
 **引擎负责计算，Python 负责编排，工具负责执行，你保留操作控制权。** 安装版内置运行组件与两个引擎；模型权重按需下载，不必手工填写引擎路径。
 
+**实验性 MiniCPM 单图问答：** 在“安装与模型”中导入已有的 MiniCPM-V-4.7 ncnn 转换目录并启用，即可在聊天模式上传一张图片提问，无需手改配置。当前限 CPU FP32、单图缩略图，MiniCPM 不支持 Agent/工具模式；权重不随安装包分发。[使用步骤与实测范围](docs/MINICPM_V47_EXPERIMENTAL.md)。构建暂时固定使用官方 ncnn_llm [PR #58](https://github.com/futz12/ncnn_llm/pull/58) 的已验证提交，尚未表示上游接受该功能。
+
 <a id="screenshots"></a>
 
 ## 先看工作台
