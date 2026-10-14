@@ -4,8 +4,8 @@ This opt-in adapter has passed real-checkpoint image questions on Linux CPU FP32
 
 ## Desktop import and activation
 
-1. Build/install this feature version of LocalAgent. Native builds fetch the official `futz12/ncnn_llm` pull-request ref `refs/pull/58/head` and require exact commit `09fb5f3312e63b9abdd8b803c0548303a0484042`. [Upstream PR #58](https://github.com/futz12/ncnn_llm/pull/58) is experimental and unmerged; this is not a claim of upstream acceptance. A changed PR head fails the dependency check instead of silently changing the runtime. The official repository allowlist is unchanged.
-2. Obtain and convert the original checkpoint separately using the [runtime conversion guide](https://github.com/futz12/ncnn_llm/blob/09fb5f3312e63b9abdd8b803c0548303a0484042/tests/MINICPM_CPU_VALIDATION.md). No weights are bundled or downloaded by the import action.
+1. Build/install this feature version of LocalAgent. Native builds fetch the official `futz12/ncnn_llm` pull-request ref `refs/pull/58/head` and require exact commit `a14fe16f49ea6ad36767ade62bba9d6d3d1d8e60`. [Upstream PR #58](https://github.com/futz12/ncnn_llm/pull/58) is experimental and unmerged; this is not a claim of upstream acceptance. A changed PR head fails the dependency check instead of silently changing the runtime. The official repository allowlist is unchanged.
+2. Obtain and convert the original checkpoint separately using the [runtime conversion guide](https://github.com/futz12/ncnn_llm/blob/a14fe16f49ea6ad36767ade62bba9d6d3d1d8e60/tests/MINICPM_CPU_VALIDATION.md). No weights are bundled or downloaded by the import action.
 3. In **安装与模型**, select the local MiniCPM import card. Enter the absolute directory containing the converted `model.json`, confirm that this is a trusted local model, and import it. This registers its existing location without copying approximately 6.22 GB of weights. Keep the directory available.
 4. Activate the imported model explicitly. LocalAgent derives CPU FP32, experimental single-image chat and disabled Agent/tool mode automatically; manual JSON editing is not needed.
 5. Select chat, attach exactly one PNG/JPEG, enable the experimental image-question checkbox, and ask a question. Start with a 448×448 PNG. Reattach an image for a subsequent image question.
@@ -69,6 +69,8 @@ python scripts/smoke_vision.py --config configs/local.json \
 The runner checks the real bridge capability, records the answer and image hash in `reports/real-vision-smoke-result.json`, and optionally requires a phrase. Without `--expect`, nonempty text alone is not a semantic quality check. This does not replace the separate Agent/file-tool smoke test in `scripts/smoke_real.py`.
 
 ## Import-to-answer HTTP acceptance
+
+The current pinned revision `a14fe16f49ea6ad36767ade62bba9d6d3d1d8e60` refactors MiniCPM into the existing upstream GPT/image/position utilities instead of six separate vision implementation files. The application bridge was rebuilt from a clean checkout of that exact revision. The same real import-to-answer HTTP test passed again in 44.9 seconds with an answer identical to the pre-refactor application result. Fresh binary/image hashes and all checks are in `minicpm_v47_refactored_http_validation.json`; the older reports retain their original revisions and measurements.
 
 The integrated model-center path was also tested with the real PR58 native executable: trust confirmation, registration without copying weights, separate activation, automatic CPU/image configuration, restored settings, HTTP image upload and actual image-question inference. Agent mode and multiple-image requests rejected. The pencil/water answer completed in about 92 seconds; this application prompt includes attachment context and is not the earlier exact-HF prompt comparison. See `minicpm_v47_http_validation.json`.
 

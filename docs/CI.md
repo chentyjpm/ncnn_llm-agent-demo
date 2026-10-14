@@ -83,7 +83,7 @@ Qwen Image 将 `bridge` 换成 `image`。脚本不会自行联网下载依赖；
 正式上游基线仍为 `futz12/ncnn_llm@0538ae8b9e2d47f597ba3491e35d2f610c3a3114`。
 在 [官方 PR #58](https://github.com/futz12/ncnn_llm/pull/58) 合并前，原生构建通过同一官方仓库的
 `refs/pull/58/head` 获取源码，并在任何 CMake 配置/构建前要求实际 HEAD 精确等于
-`09fb5f3312e63b9abdd8b803c0548303a0484042`。不允许任意 fork、分支、PR 或更新后的 PR head。
+`a14fe16f49ea6ad36767ade62bba9d6d3d1d8e60`。不允许任意 fork、分支、PR 或更新后的 PR head。
 
 `ci/dependencies.json` 记录实际构建 SHA/ref；`upstream-lock.json.repositories` 保留正式上游基线供更新监测，
 `temporary_pull_requests.ncnn_llm` 单独记录 PR 编号、精确 head/base。`scripts/ci_native.py` 校验该完整组合后才输出 Actions checkout 参数。

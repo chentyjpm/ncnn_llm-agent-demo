@@ -25,6 +25,6 @@ MIT 许可仅覆盖本项目原创编排/桥接代码；上游代码、模型及
 
 
 MiniCPM 临时构建来源：官方 [ncnn_llm PR #58](https://github.com/futz12/ncnn_llm/pull/58)，
-`refs/pull/58/head`，精确提交 `09fb5f3312e63b9abdd8b803c0548303a0484042`；
+`refs/pull/58/head`，精确提交 `a14fe16f49ea6ad36767ade62bba9d6d3d1d8e60`；
 正式上游基线仍为上述 `0538ae8…`。PR 尚未合并时不将该提交描述为正式上游发布。
 详见 `docs/CI.md` 的双锁校验和更新审核规则。

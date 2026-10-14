@@ -1,7 +1,7 @@
 {
   "ncnn_llm": {
     "repository": "futz12/ncnn_llm",
-    "commit": "09fb5f3312e63b9abdd8b803c0548303a0484042",
+    "commit": "a14fe16f49ea6ad36767ade62bba9d6d3d1d8e60",
     "unused_submodules": {
       "ncnn": "ab44b9012ab510309b63a55d30784c1eda0ac4ec"
     },

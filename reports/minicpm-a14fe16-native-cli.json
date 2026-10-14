@@ -1,0 +1,354 @@
+{
+  "component": "bridge",
+  "binary": "/workspace/shared/minicpm-build/ncnn_agent_bridge",
+  "binary_sha256": "fc6f517868152f68db62da38549da42f3355a2282344664332c3374c0cf0de89",
+  "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+  "machine": "x86_64",
+  "scope": "Real native executable; model-free compiled-capability/CLI/error-path tests only. No inference or GPU execution.",
+  "tests_run": 23,
+  "passed": 23,
+  "failed": 0,
+  "tests": [
+    {
+      "argv": [
+        "/workspace/shared/minicpm-build/ncnn_agent_bridge",
+        "--help"
+      ],
+      "expected_code": 0,
+      "diagnostic": "Usage: ncnn_agent_bridge",
+      "returncode": 0,
+      "stdout": "Usage: ncnn_agent_bridge --model DIR [--threads N] [--vulkan] [--vulkan-device N]\nJSON-RPC stdio bridge. Model weights are required for inference, not for --help/--version.\n",
+      "stderr": "",
+      "status": "passed",
+      "elapsed_seconds": 0.005,
+      "name": "help"
+    },
+    {
+      "argv": [
+        "/workspace/shared/minicpm-build/ncnn_agent_bridge",
+        "-h"
+      ],
+      "expected_code": 0,
+      "diagnostic": "Usage: ncnn_agent_bridge",
+      "returncode": 0,
+      "stdout": "Usage: ncnn_agent_bridge --model DIR [--threads N] [--vulkan] [--vulkan-device N]\nJSON-RPC stdio bridge. Model weights are required for inference, not for --help/--version.\n",
+      "stderr": "",
+      "status": "passed",
+      "elapsed_seconds": 0.016,
+      "name": "short_help"
+    },
+    {
+      "argv": [
+        "/workspace/shared/minicpm-build/ncnn_agent_bridge",
+        "--version"
+      ],
+      "expected_code": 0,
+      "diagnostic": "ncnn_agent_bridge 0.1.0",
+      "returncode": 0,
+      "stdout": "ncnn_agent_bridge 0.1.0\n",
+      "stderr": "",
+      "status": "passed",
+      "elapsed_seconds": 0.004,
+      "name": "version"
+    },
+    {
+      "argv": [
+        "/workspace/shared/minicpm-build/ncnn_agent_bridge",
+        "--capabilities"
+      ],
+      "expected_code": 0,
+      "diagnostic": "",
+      "returncode": 0,
+      "stdout": "{\"minicpm_v4_7_runtime\":1,\"single_image_protocol\":true}\n",
+      "stderr": "",
+      "runtime_capabilities": {
+        "minicpm_v4_7_runtime": 1,
+        "single_image_protocol": true
+      },
+      "status": "passed",
+      "elapsed_seconds": 0.009,
+      "name": "runtime_capabilities"
+    },
+    {
+      "argv": [
+        "/workspace/shared/minicpm-build/ncnn_agent_bridge"
+      ],
+      "expected_code": 2,
+      "diagnostic": "--model must point to a converted ncnn model directory",
+      "returncode": 2,
+      "stdout": "",
+      "stderr": "ncnn_agent_bridge: --model must point to a converted ncnn model directory\n",
+      "status": "passed",
+      "elapsed_seconds": 0.025,
+      "name": "no_model"
+    },
+    {
+      "argv": [
+        "/workspace/shared/minicpm-build/ncnn_agent_bridge",
+        "--model",
+        "/tmp/native-regression-f03w7qe1/not-present"
+      ],
+      "expected_code": 2,
+      "diagnostic": "--model must point to a converted ncnn model directory",
+      "returncode": 2,
+      "stdout": "",
+      "stderr": "ncnn_agent_bridge: --model must point to a converted ncnn model directory\n",
+      "status": "passed",
+      "elapsed_seconds": 0.004,
+      "name": "missing_model_path"
+    },
+    {
+      "argv": [
+        "/workspace/shared/minicpm-build/ncnn_agent_bridge",
+        "--model",
+        "/tmp/native-regression-f03w7qe1/empty"
+      ],
+      "expected_code": 2,
+      "diagnostic": "--model must point to a converted ncnn model directory",
+      "returncode": 2,
+      "stdout": "",
+      "stderr": "ncnn_agent_bridge: --model must point to a converted ncnn model directory\n",
+      "status": "passed",
+      "elapsed_seconds": 0.008,
+      "name": "empty_model_directory"
+    },
+    {
+      "argv": [
+        "/workspace/shared/minicpm-build/ncnn_agent_bridge",
+        "--model",
+        "/tmp/native-regression-f03w7qe1/malformed"
+      ],
+      "expected_code": 2,
+      "diagnostic": "parse_error",
+      "returncode": 2,
+      "stdout": "",
+      "stderr": "ncnn_agent_bridge: [json.exception.parse_error.101] parse error at line 1, column 2: syntax error while parsing object key - invalid literal; last read: '{i'; expected string literal\n",
+      "status": "passed",
+      "elapsed_seconds": 0.006,
+      "name": "malformed_model_json"
+    },
+    {
+      "argv": [
+        "/workspace/shared/minicpm-build/ncnn_agent_bridge",
+        "--no-such-option"
+      ],
+      "expected_code": 2,
+      "diagnostic": "Unsupported/incomplete bridge argument",
+      "returncode": 2,
+      "stdout": "",
+      "stderr": "ncnn_agent_bridge: Unsupported/incomplete bridge argument: --no-such-option\n",
+      "status": "passed",
+      "elapsed_seconds": 0.009,
+      "name": "unknown_option"
+    },
+    {
+      "argv": [
+        "/workspace/shared/minicpm-build/ncnn_agent_bridge",
+        "--model"
+      ],
+      "expected_code": 2,
+      "diagnostic": "Unsupported/incomplete bridge argument",
+      "returncode": 2,
+      "stdout": "",
+      "stderr": "ncnn_agent_bridge: Unsupported/incomplete bridge argument: --model\n",
+      "status": "passed",
+      "elapsed_seconds": 0.005,
+      "name": "missing_option_value"
+    },
+    {
+      "argv": [
+        "/workspace/shared/minicpm-build/ncnn_agent_bridge",
+        "--threads",
+        "1"
+      ],
+      "expected_code": 2,
+      "diagnostic": "--model must point to a converted ncnn model directory",
+      "returncode": 2,
+      "stdout": "",
+      "stderr": "ncnn_agent_bridge: --model must point to a converted ncnn model directory\n",
+      "status": "passed",
+      "elapsed_seconds": 0.006,
+      "name": "threads_minimum"
+    },
+    {
+      "argv": [
+        "/workspace/shared/minicpm-build/ncnn_agent_bridge",
+        "--threads",
+        "128"
+      ],
+      "expected_code": 2,
+      "diagnostic": "--model must point to a converted ncnn model directory",
+      "returncode": 2,
+      "stdout": "",
+      "stderr": "ncnn_agent_bridge: --model must point to a converted ncnn model directory\n",
+      "status": "passed",
+      "elapsed_seconds": 0.012,
+      "name": "threads_maximum"
+    },
+    {
+      "argv": [
+        "/workspace/shared/minicpm-build/ncnn_agent_bridge",
+        "--vulkan-device",
+        "0"
+      ],
+      "expected_code": 2,
+      "diagnostic": "--model must point to a converted ncnn model directory",
+      "returncode": 2,
+      "stdout": "",
+      "stderr": "ncnn_agent_bridge: --model must point to a converted ncnn model directory\n",
+      "status": "passed",
+      "elapsed_seconds": 0.004,
+      "name": "device_zero"
+    },
+    {
+      "argv": [
+        "/workspace/shared/minicpm-build/ncnn_agent_bridge",
+        "--threads",
+        "abc"
+      ],
+      "expected_code": 2,
+      "diagnostic": "Invalid value for --threads",
+      "returncode": 2,
+      "stdout": "",
+      "stderr": "ncnn_agent_bridge: Invalid value for --threads: expected integer in 1..128\n",
+      "status": "passed",
+      "elapsed_seconds": 0.007,
+      "name": "threads_letters"
+    },
+    {
+      "argv": [
+        "/workspace/shared/minicpm-build/ncnn_agent_bridge",
+        "--threads",
+        "4junk"
+      ],
+      "expected_code": 2,
+      "diagnostic": "Invalid value for --threads",
+      "returncode": 2,
+      "stdout": "",
+      "stderr": "ncnn_agent_bridge: Invalid value for --threads: expected integer in 1..128\n",
+      "status": "passed",
+      "elapsed_seconds": 0.012,
+      "name": "threads_suffix"
+    },
+    {
+      "argv": [
+        "/workspace/shared/minicpm-build/ncnn_agent_bridge",
+        "--threads",
+        "4.5"
+      ],
+      "expected_code": 2,
+      "diagnostic": "Invalid value for --threads",
+      "returncode": 2,
+      "stdout": "",
+      "stderr": "ncnn_agent_bridge: Invalid value for --threads: expected integer in 1..128\n",
+      "status": "passed",
+      "elapsed_seconds": 0.033,
+      "name": "threads_fraction"
+    },
+    {
+      "argv": [
+        "/workspace/shared/minicpm-build/ncnn_agent_bridge",
+        "--threads",
+        "0"
+      ],
+      "expected_code": 2,
+      "diagnostic": "Invalid value for --threads",
+      "returncode": 2,
+      "stdout": "",
+      "stderr": "ncnn_agent_bridge: Invalid value for --threads: expected integer in 1..128\n",
+      "status": "passed",
+      "elapsed_seconds": 0.016,
+      "name": "threads_zero"
+    },
+    {
+      "argv": [
+        "/workspace/shared/minicpm-build/ncnn_agent_bridge",
+        "--threads",
+        "-1"
+      ],
+      "expected_code": 2,
+      "diagnostic": "Invalid value for --threads",
+      "returncode": 2,
+      "stdout": "",
+      "stderr": "ncnn_agent_bridge: Invalid value for --threads: expected integer in 1..128\n",
+      "status": "passed",
+      "elapsed_seconds": 0.018,
+      "name": "threads_negative"
+    },
+    {
+      "argv": [
+        "/workspace/shared/minicpm-build/ncnn_agent_bridge",
+        "--threads",
+        "129"
+      ],
+      "expected_code": 2,
+      "diagnostic": "Invalid value for --threads",
+      "returncode": 2,
+      "stdout": "",
+      "stderr": "ncnn_agent_bridge: Invalid value for --threads: expected integer in 1..128\n",
+      "status": "passed",
+      "elapsed_seconds": 0.014,
+      "name": "threads_too_large"
+    },
+    {
+      "argv": [
+        "/workspace/shared/minicpm-build/ncnn_agent_bridge",
+        "--threads",
+        "999999999999999999999"
+      ],
+      "expected_code": 2,
+      "diagnostic": "Invalid value for --threads",
+      "returncode": 2,
+      "stdout": "",
+      "stderr": "ncnn_agent_bridge: Invalid value for --threads: expected integer in 1..128\n",
+      "status": "passed",
+      "elapsed_seconds": 0.018,
+      "name": "threads_overflow"
+    },
+    {
+      "argv": [
+        "/workspace/shared/minicpm-build/ncnn_agent_bridge",
+        "--vulkan-device",
+        "0junk"
+      ],
+      "expected_code": 2,
+      "diagnostic": "Invalid value for --vulkan-device",
+      "returncode": 2,
+      "stdout": "",
+      "stderr": "ncnn_agent_bridge: Invalid value for --vulkan-device: expected integer in 0..2147483647\n",
+      "status": "passed",
+      "elapsed_seconds": 0.015,
+      "name": "device_suffix"
+    },
+    {
+      "argv": [
+        "/workspace/shared/minicpm-build/ncnn_agent_bridge",
+        "--vulkan-device",
+        "-1"
+      ],
+      "expected_code": 2,
+      "diagnostic": "Invalid value for --vulkan-device",
+      "returncode": 2,
+      "stdout": "",
+      "stderr": "ncnn_agent_bridge: Invalid value for --vulkan-device: expected integer in 0..2147483647\n",
+      "status": "passed",
+      "elapsed_seconds": 0.013,
+      "name": "device_negative"
+    },
+    {
+      "argv": [
+        "/workspace/shared/minicpm-build/ncnn_agent_bridge",
+        "--vulkan-device",
+        "2147483648"
+      ],
+      "expected_code": 2,
+      "diagnostic": "Invalid value for --vulkan-device",
+      "returncode": 2,
+      "stdout": "",
+      "stderr": "ncnn_agent_bridge: Invalid value for --vulkan-device: expected integer in 0..2147483647\n",
+      "status": "passed",
+      "elapsed_seconds": 0.005,
+      "name": "device_overflow"
+    }
+  ]
+}

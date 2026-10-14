@@ -98,7 +98,7 @@ class DependencyPullRequestTests(unittest.TestCase):
             text = output.read_text()
             self.assertIn('ncnn_llm_repository=futz12/ncnn_llm\n', text)
             self.assertIn('ncnn_llm_checkout_ref=refs/pull/58/head\n', text)
-            self.assertIn('ncnn_llm=09fb5f3312e63b9abdd8b803c0548303a0484042\n', text)
+            self.assertIn('ncnn_llm=a14fe16f49ea6ad36767ade62bba9d6d3d1d8e60\n', text)
             self.pins['ncnn_llm']['checkout_ref'] = 'main'
             self.write()
             self.assertNotEqual(ci_native.main(), 0)
