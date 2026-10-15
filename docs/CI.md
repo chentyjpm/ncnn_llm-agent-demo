@@ -82,14 +82,29 @@ Qwen Image 将 `bridge` 换成 `image`。脚本不会自行联网下载依赖；
 
 正式上游基线仍为 `futz12/ncnn_llm@0538ae8b9e2d47f597ba3491e35d2f610c3a3114`。
 在 [官方 PR #58](https://github.com/futz12/ncnn_llm/pull/58) 合并前，原生构建通过同一官方仓库的
-`refs/pull/58/head` 获取源码，并在任何 CMake 配置/构建前要求实际 HEAD 精确等于
-`a14fe16f49ea6ad36767ade62bba9d6d3d1d8e60`。不允许任意 fork、分支、PR 或更新后的 PR head。
+`refs/pull/58/head` 获取可达历史，先确认锁定对象是 commit 且为该官方 ref 的祖先，再 detached checkout
+`a14fe16f49ea6ad36767ade62bba9d6d3d1d8e60`。任何 CMake 配置/构建前仍要求实际 HEAD 精确等于该 SHA。
+PR ref 可以前进，但新增提交不会被构建；缺失对象、非祖先（包括不再包含该 pin 的 force-push）、错误来源或 HEAD 不匹配均失败。
 
 `ci/dependencies.json` 记录实际构建 SHA/ref；`upstream-lock.json.repositories` 保留正式上游基线供更新监测，
-`temporary_pull_requests.ncnn_llm` 单独记录 PR 编号、精确 head/base。`scripts/ci_native.py` 校验该完整组合后才输出 Actions checkout 参数。
-四个消费者（native-build、installers、qwen05-cpu、native-catalog）和显式源码获取脚本使用同一校验。
-构建证据记录真实 repository、commit 和 PR 来源。此策略测试不等于跨平台构建或模型推理通过。
+`temporary_pull_requests.ncnn_llm` 单独记录 PR 编号、经审核的精确 commit/base。`scripts/ci_native.py` 校验该完整组合。
+四个消费者（native-build、installers、qwen05-cpu、native-catalog）统一调用 `scripts/fetch_upstream.py`，
+只在新空目录中拉取官方来源，不初始化 ncnn_llm 的未使用子模块。配置阶段再次校验官方 remote、对象类型、PR 祖先关系和精确 HEAD。
+构建证据分别记录实际构建 commit、经审核 PR 来源和当次获取的 PR head；后者不代表被接受的新运行时。
+此策略测试不等于跨平台构建或模型推理通过。
 
 监测到上游或 PR 更新时只应提示人工审核，不可自动删除临时记录、更换 base 或跟随新 head。
 PR 合并后恢复正式提交需要显式移除临时记录和 checkout_ref，并同时更新两个锁文件；官方仓库白名单保持不变。
 Qwen Image 的上游提交、内嵌 ncnn pin、模型和镜像校验保持不变。
+
+### 大模型下载的变更范围检查（2026-10-15）
+
+`qwenimage-real`、`qwenimage-turbo` 和 `native-catalog` 在下载或安装测试依赖之前运行轻量 scope job。
+普通 push 以该次准确的 before/after 提交比较变更：图像测试仅在对应图像代码/测试输入或
+`qwenimage` 上游及专用内嵌 ncnn pin 改变时下载；文字 bridge 的独立 ncnn 升级不重复下载图像权重。
+catalog 仅在模型目录、导入实现或 catalog 验收代码改变时自动下载整套目录模型。
+仅 checkout、工作流编排或文档维护不会自动重下载模型；这类变化仍由工具测试和原生构建覆盖。
+
+手动 `workflow_dispatch` 始终请求完整模型测试，适用于工作流编排维护后的模型端到端复验。
+scope 无法读取准确历史或遇到损坏的相关锁时明确失败，不将未知状态当作通过。
+Summary 会说明下载被跳过的原因；跳过不代表本次真实模型推理已经通过。Qwen 0.5B CPU 与安装包升级验证保持原有触发范围。

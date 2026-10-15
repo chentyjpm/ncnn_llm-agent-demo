@@ -77,6 +77,12 @@ if(MSVC)
 endif()
 include(CTest)
 if(BUILD_TESTING)
+    if(TARGET test_minicpm_runtime)
+        add_dependencies(ncnn_agent_bridge test_minicpm_runtime)
+        add_test(NAME bridge_minicpm_limits COMMAND test_minicpm_runtime --check-limits)
+        set_tests_properties(bridge_minicpm_limits PROPERTIES TIMEOUT 30
+            PASS_REGULAR_EXPRESSION "Thumbnail, manifest and context-clone limits passed")
+    endif()
     add_executable(bridge_lm_head_precision_tests lm_head_precision_test.cpp)
     target_link_libraries(bridge_lm_head_precision_tests PRIVATE agent_ncnn_llm)
     add_test(NAME bridge_lm_head_precision COMMAND bridge_lm_head_precision_tests

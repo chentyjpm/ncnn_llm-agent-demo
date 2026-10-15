@@ -1,0 +1,54 @@
+name: Focused ncnn core regression
+on:
+  pull_request:
+    branches: [main]
+    paths: ['ci/dependencies.json', 'model-tests/ncnn-core/**', '.github/workflows/ncnn-core.yml']
+  push:
+    branches: [main]
+    paths: ['ci/dependencies.json', 'model-tests/ncnn-core/**', '.github/workflows/ncnn-core.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ncnn-core-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  core:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {cc: gcc, cxx: g++, openmp: 'ON', simpleomp: 'ON'}
+          - {cc: clang, cxx: clang++, openmp: 'ON', simpleomp: 'ON'}
+          - {cc: gcc, cxx: g++, openmp: 'OFF', simpleomp: 'OFF'}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with: {persist-credentials: false}
+      - id: pins
+        run: python scripts/ci_native.py refs --component bridge
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: Tencent/ncnn
+          ref: ${{ steps.pins.outputs.ncnn }}
+          path: .ci-src/ncnn
+          persist-credentials: false
+      - name: Verify source and configure SSE2 INT8 tests
+        env:
+          PIN: ${{ steps.pins.outputs.ncnn }}
+        run: |
+          test "$(git -C .ci-src/ncnn rev-parse HEAD)" = "$PIN"
+          cmake -S model-tests/ncnn-core -B build/ncnn-core -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=${{ matrix.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DAGENT_NCNN_SOURCE_DIR="$PWD/.ci-src/ncnn" -DNCNN_OPENMP=${{ matrix.openmp }} -DNCNN_SIMPLEOMP=${{ matrix.simpleomp }} -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+      - name: Compile upstream CPU and INT8 Winograd tests
+        run: cmake --build build/ncnn-core --parallel 2 --target test_cpu test_convolution_3a test_convolution_oom
+      - name: Run nested-team restoration, Winograd and allocation-failure tests
+        run: ctest --test-dir build/ncnn-core --output-on-failure --timeout 300 -R '^test_(cpu|convolution_3a|convolution_oom)$'
+      - if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: ncnn-core-${{ matrix.cc }}-omp-${{ matrix.openmp }}
+          path: |
+            build/ncnn-core/CMakeCache.txt
+            build/ncnn-core/Testing/Temporary/
+          retention-days: 14

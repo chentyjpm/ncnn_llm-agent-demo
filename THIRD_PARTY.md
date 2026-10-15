@@ -14,7 +14,7 @@ MIT 许可仅覆盖本项目原创编排/桥接代码；上游代码、模型及
   - 核对：README 的 `-m/-p/-o/-s/-l/-r/-g/-i` 命令行。
   - 模型资产来源：https://huggingface.co/nihui-szyl/qwen-image-ncnn
 - ncnn 模型库：上游 README 指向 https://mirrors.sdu.edu.cn/ncnn_modelzoo/
-- ncnn 运行库固定于 `ci/dependencies.json`：文字 bridge 为 `b0f97f43f266617ff5e5096d440dbe3f9a4c35b8`，Qwen Image 内嵌版本仍为 `c6b351b56fbe32e0381ae00331e3df649b20d7b7`。两个引擎分别构建匹配的硬件探测器；不能混用旧版 SDK 的内部头文件。
+- ncnn 运行库固定于 `ci/dependencies.json`：文字 bridge 为 `c15904bb8918187ec100f1ebe708942af83b84be`，Qwen Image 内嵌版本仍为 `c6b351b56fbe32e0381ae00331e3df649b20d7b7`。两个引擎分别构建匹配的硬件探测器；不能混用旧版 SDK 的内部头文件。
 - JSON C++ 依赖：https://github.com/nlohmann/json
 - MCP 实现明确限定为 `2025-11-25` 的 stdio tools 子集，兼容握手版本 `2025-06-18`、`2025-03-26`。不声称实现当前最新规范全部功能。
   - https://modelcontextprotocol.io/specification/2025-11-25/basic/transports
