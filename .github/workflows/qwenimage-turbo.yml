@@ -33,8 +33,26 @@ concurrency:
   group: real-turbo-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  scope:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      required: ${{ steps.scope.outputs.required }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with: {python-version: '3.13'}
+      - name: Select relevant model validation before any large download
+        id: scope
+        env:
+          MODEL_SCOPE_BEFORE: ${{ github.event.before }}
+        run: python scripts/ci_model_scope.py --scope turbo
   turbo:
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/automatic-image-tool'
+    needs: scope
+    if: needs.scope.outputs.required == 'true' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/automatic-image-tool')
     runs-on: ${{ inputs.runner == 'self-hosted-vulkan' && fromJSON('["self-hosted","linux","x64","qwenimage-vulkan"]') || 'ubuntu-24.04' }}
     timeout-minutes: 120
     env:

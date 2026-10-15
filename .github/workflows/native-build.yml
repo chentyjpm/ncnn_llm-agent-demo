@@ -7,6 +7,7 @@ on:
       - 'native/**'
       - 'ci/**'
       - 'scripts/ci_native.py'
+      - 'scripts/fetch_upstream.py'
       - 'scripts/native_regression.py'
       - 'scripts/probe_regression.py'
       - 'local_agent/device.py'
@@ -19,6 +20,7 @@ on:
       - 'native/**'
       - 'ci/**'
       - 'scripts/ci_native.py'
+      - 'scripts/fetch_upstream.py'
       - 'scripts/native_regression.py'
       - 'scripts/probe_regression.py'
       - 'local_agent/device.py'
@@ -55,14 +57,9 @@ jobs:
       - name: Read and validate pinned dependency commits
         id: pins
         run: python scripts/ci_native.py refs --component ${{ matrix.component }}
-      - name: Checkout ncnn_llm
+      - name: Fetch reviewed official ncnn_llm commit and verify PR ancestry
         if: matrix.component == 'bridge'
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
-        with:
-          repository: ${{ steps.pins.outputs.ncnn_llm_repository }}
-          ref: ${{ steps.pins.outputs.ncnn_llm_checkout_ref }}
-          path: .ci-src/ncnn_llm
-          persist-credentials: false
+        run: python scripts/fetch_upstream.py ncnn_llm --directory .ci-src/ncnn_llm
       - name: Checkout ncnn and Vulkan compiler dependencies
         if: matrix.component == 'bridge'
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803

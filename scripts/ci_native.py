@@ -22,8 +22,8 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 REPOSITORIES = {'ncnn_llm': 'futz12/ncnn_llm', 'qwenimage': 'nihui/qwenimage-ncnn-vulkan',
                 'ncnn': 'Tencent/ncnn', 'json': 'nlohmann/json'}
-# One reviewed official pull-request ref, pinned to its immutable head and base.
-# Moving PR heads require review; no additional repository is trusted.
+# One reviewed official pull-request ref, pinned to its immutable commit and base.
+# A moving ref never changes the built commit; no additional repository is trusted.
 MINICPM_PULL_REQUEST = {
     'repository': 'futz12/ncnn_llm',
     'number': 58,
@@ -31,8 +31,27 @@ MINICPM_PULL_REQUEST = {
     'commit': 'a14fe16f49ea6ad36767ade62bba9d6d3d1d8e60',
     'base_commit': '0538ae8b9e2d47f597ba3491e35d2f610c3a3114',
 }
+REVIEWED_PR_LOCAL_REF = 'refs/remotes/origin/reviewed-pull-request'
 TARGETS = {'bridge': 'ncnn_agent_bridge', 'image': 'qwenimage-ncnn-vulkan'}
 SCOPE = 'Real C++ compilation/linking, CLI and Vulkan ReLU preflight. Software Vulkan explicitly identified; no full-model/image/GPU performance or Docker isolation claim.'
+
+
+def verify_pull_request_source(directory: Path, pin: dict) -> str:
+    """Verify official provenance and ancestry without trusting a moving PR head."""
+    def git(*args):
+        return subprocess.check_output(['git', '-C', str(directory), *args],
+                                       text=True, timeout=30).strip()
+    if git('remote', 'get-url', 'origin') != 'https://github.com/' + pin['repository'] + '.git':
+        raise RuntimeError('Pull-request source must use the reviewed official repository')
+    if git('cat-file', '-t', pin['commit']) != 'commit':
+        raise RuntimeError('Pinned pull-request object is not a commit')
+    head = git('rev-parse', REVIEWED_PR_LOCAL_REF)
+    if not re.fullmatch(r'[0-9a-f]{40}', head):
+        raise RuntimeError('Invalid fetched official pull-request head')
+    subprocess.run(['git', '-C', str(directory), 'merge-base', '--is-ancestor',
+                    pin['commit'], REVIEWED_PR_LOCAL_REF], check=True, timeout=30,
+                   shell=False)
+    return head
 
 
 def read_pins(root: Path = ROOT) -> dict:
@@ -181,8 +200,9 @@ def verify_sources(component: str, pins: dict, evidence: Path) -> dict:
             raise RuntimeError(f'Dependency SHA mismatch for {name}: {got}')
         result[name] = {'repository': REPOSITORIES[name], 'commit': got}
         if name == 'ncnn_llm' and 'checkout_ref' in pins[name]:
+            result[name]['fetched_pull_request_head'] = verify_pull_request_source(directory, pins[name])
             result[name]['temporary_pull_request'] = dict(MINICPM_PULL_REQUEST)
-            result[name]['build_source_policy'] = 'Official PR ref with verified immutable HEAD; divergence requires review'
+            result[name]['build_source_policy'] = 'Official PR history contains the reviewed immutable commit; detached HEAD must match the pin'
         run_logged(['git', '-C', str(directory), 'submodule', 'status', '--recursive'],
                    evidence / f'submodules-{name}.log', timeout=60)
         status_text = (evidence / f'submodules-{name}.log').read_text(encoding='utf-8').partition('\n')[2]

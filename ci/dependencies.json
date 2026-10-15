@@ -14,7 +14,7 @@
   },
   "ncnn": {
     "repository": "Tencent/ncnn",
-    "commit": "b0f97f43f266617ff5e5096d440dbe3f9a4c35b8"
+    "commit": "c15904bb8918187ec100f1ebe708942af83b84be"
   },
   "json": {
     "repository": "nlohmann/json",
