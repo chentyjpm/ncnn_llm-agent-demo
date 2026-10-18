@@ -6,6 +6,8 @@ on:
     paths:
       - '.github/workflows/qwen05-cpu.yml'
       - 'scripts/qwen05_*.py'
+      - 'scripts/fetch_upstream.py'
+      - 'scripts/ci_native.py'
       - 'scripts/model_catalog_inference.py'
       - 'scripts/web_real_smoke.py'
       - 'model-tests/**'
@@ -40,12 +42,8 @@ jobs:
       - name: Read pinned native dependencies
         id: pins
         run: python scripts/ci_native.py refs --component bridge
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
-        with:
-          repository: ${{ steps.pins.outputs.ncnn_llm_repository }}
-          ref: ${{ steps.pins.outputs.ncnn_llm_checkout_ref }}
-          path: .ci-src/ncnn_llm
-          persist-credentials: false
+      - name: Fetch reviewed official ncnn_llm commit and verify PR ancestry
+        run: python scripts/fetch_upstream.py ncnn_llm --directory .ci-src/ncnn_llm
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           repository: Tencent/ncnn

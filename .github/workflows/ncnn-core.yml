@@ -1,0 +1,124 @@
+name: Focused ncnn core regression
+on:
+  pull_request:
+    branches: [main]
+    paths: ['ci/dependencies.json', 'model-tests/ncnn-core/**', '.github/workflows/ncnn-core.yml']
+  push:
+    branches: [main]
+    paths: ['ci/dependencies.json', 'model-tests/ncnn-core/**', '.github/workflows/ncnn-core.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ncnn-core-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  core:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {cc: gcc, cxx: g++, openmp: 'ON', simpleomp: 'ON'}
+          - {cc: clang, cxx: clang++, openmp: 'ON', simpleomp: 'ON'}
+          - {cc: gcc, cxx: g++, openmp: 'OFF', simpleomp: 'OFF'}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with: {persist-credentials: false}
+      - id: pins
+        run: python scripts/ci_native.py refs --component bridge
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: Tencent/ncnn
+          ref: ${{ steps.pins.outputs.ncnn }}
+          path: .ci-src/ncnn
+          persist-credentials: false
+      - name: Verify source and configure SSE2 INT8 tests
+        env:
+          PIN: ${{ steps.pins.outputs.ncnn }}
+        run: |
+          test "$(git -C .ci-src/ncnn rev-parse HEAD)" = "$PIN"
+          cmake -S model-tests/ncnn-core -B build/ncnn-core -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=${{ matrix.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DAGENT_NCNN_SOURCE_DIR="$PWD/.ci-src/ncnn" -DNCNN_OPENMP=${{ matrix.openmp }} -DNCNN_SIMPLEOMP=${{ matrix.simpleomp }} -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+      - name: Compile upstream CPU, layout, norm and INT8 Winograd tests
+        run: cmake --build build/ncnn-core --parallel 2 --target test_cpu test_convolution_3a test_convolution_oom test_net test_layernorm test_rmsnorm test_unaryop
+      - name: Run CPU regressions including BF16 storage packing
+        run: ctest --test-dir build/ncnn-core --output-on-failure --timeout 300 -R '^test_(cpu|convolution_3a|convolution_oom|net|layernorm|rmsnorm|unaryop)$'
+      - if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: ncnn-core-${{ matrix.cc }}-omp-${{ matrix.openmp }}
+          path: |
+            build/ncnn-core/CMakeCache.txt
+            build/ncnn-core/Testing/Temporary/
+          retention-days: 14
+
+  vulkan-lavapipe:
+    # Software Vulkan executes the actual shader/command paths. It does not
+    # establish physical GPU performance, RISC-V or model-inference coverage.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    env:
+      AGENT_REQUIRE_LAVAPIPE: '1'
+      LP_NUM_THREADS: '2'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with: {persist-credentials: false}
+      - id: pins
+        run: python scripts/ci_native.py refs --component bridge
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: Tencent/ncnn
+          ref: ${{ steps.pins.outputs.ncnn }}
+          path: .ci-src/ncnn
+          submodules: true
+          persist-credentials: false
+      - name: Prepare Mesa software Vulkan on the CI runner
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y libvulkan1 mesa-vulkan-drivers vulkan-tools
+          mkdir -p build/ncnn-vulkan
+          python - <<'PY'
+          import glob, os
+          paths = glob.glob('/usr/share/vulkan/icd.d/lvp_icd*.json')
+          if len(paths) != 1:
+              raise SystemExit(f'Expected exactly one lavapipe ICD, got {paths}')
+          with open(os.environ['GITHUB_ENV'], 'a') as out:
+              out.write(f'VK_ICD_FILENAMES={paths[0]}\nVK_DRIVER_FILES={paths[0]}\n')
+          PY
+      - name: Record software Vulkan capabilities
+        run: vulkaninfo --summary 2>&1 | tee build/ncnn-vulkan/vulkaninfo.txt
+      - name: Verify pinned sources and configure Vulkan
+        env:
+          PIN: ${{ steps.pins.outputs.ncnn }}
+        run: |
+          test "$(git -C .ci-src/ncnn rev-parse HEAD)" = "$PIN"
+          test "$(git -C .ci-src/ncnn/glslang rev-parse HEAD)" = "$(git -C .ci-src/ncnn rev-parse HEAD:glslang)"
+          git -C .ci-src/ncnn submodule status > build/ncnn-vulkan/submodules.txt
+          cmake -S model-tests/ncnn-core -B build/ncnn-vulkan -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DAGENT_NCNN_SOURCE_DIR="$PWD/.ci-src/ncnn" -DAGENT_NCNN_VULKAN_TESTS=ON -DNCNN_SIMPLEVK=ON -DNCNN_SYSTEM_GLSLANG=OFF -DNCNN_OPENMP=OFF -DNCNN_SIMPLEOMP=OFF -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+      - name: Compile strict Vulkan and upstream operator regressions
+        run: cmake --build build/ncnn-vulkan --parallel 2 --target test_vulkan_required test_layernorm test_rmsnorm test_unaryop test_net
+      - name: Verify a missing Vulkan device fails instead of skipping
+        run: |
+          if VK_DRIVER_FILES="$PWD/no-such-icd.json" VK_ICD_FILENAMES="$PWD/no-such-icd.json" build/ncnn-vulkan/test_vulkan_required > build/ncnn-vulkan/no-device.txt 2>&1; then
+            echo 'ERROR: no-device regression unexpectedly passed'
+            exit 1
+          fi
+          cat build/ncnn-vulkan/no-device.txt
+          grep -F 'a working Vulkan device is required' build/ncnn-vulkan/no-device.txt
+      - name: Require submitted Vulkan work with subgroup on and off
+        run: ctest --test-dir build/ncnn-vulkan --verbose --timeout 300 -R '^test_vulkan_required$' | tee build/ncnn-vulkan/required-vulkan.txt
+      - name: Run upstream norm, roundEven and net layout cases
+        run: ctest --test-dir build/ncnn-vulkan --verbose --timeout 600 -R '^test_(layernorm|rmsnorm|unaryop|net)$' | tee build/ncnn-vulkan/upstream-tests.txt
+      - if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: ncnn-core-vulkan-lavapipe
+          path: |
+            build/ncnn-vulkan/CMakeCache.txt
+            build/ncnn-vulkan/*.txt
+            build/ncnn-vulkan/Testing/Temporary/
+          retention-days: 14
