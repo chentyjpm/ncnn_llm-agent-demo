@@ -35,7 +35,7 @@ class DependencyPullRequestTests(unittest.TestCase):
             'commit': ci_native.MINICPM_PULL_REQUEST['commit'],
             'checkout_ref': 'refs/pull/58/head'})
         self.assertEqual(source_pin('qwenimage-ncnn-vulkan', self.root)['commit'],
-                         '14953559f39c7658e5a6cc117481e1922660cc9e')
+                         '4e48f36dd356c9b48fce43a349a972b1f310afa0')
         self.assertEqual(self.pins['qwenimage']['ncnn_commit'], 'c6b351b56fbe32e0381ae00331e3df649b20d7b7')
 
     def test_other_forks_shas_branches_and_urls_fail(self):

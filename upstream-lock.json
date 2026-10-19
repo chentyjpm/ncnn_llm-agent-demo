@@ -1,5 +1,5 @@
 {
-  "reviewed_on": "2026-10-13",
+  "reviewed_on": "2026-10-19",
   "repositories": [
     {
       "name": "futz12/ncnn_llm",
@@ -8,7 +8,7 @@
     },
     {
       "name": "nihui/qwenimage-ncnn-vulkan",
-      "commit": "14953559f39c7658e5a6cc117481e1922660cc9e",
+      "commit": "4e48f36dd356c9b48fce43a349a972b1f310afa0",
       "url": "https://github.com/nihui/qwenimage-ncnn-vulkan"
     }
   ],
