@@ -57,3 +57,10 @@ CI-only. The strict suite requests 200 cases when FP16 is available, including
 132 Group/Instance cases, double-precision centered references, both subgroup
 options, pack1/4, FP32/FP16 and large dispatch boundaries. This is intended
 coverage, not a claim that these cases have executed before CI.
+
+CI trigger adjustment: this independent branch is named
+`upgrade/ncnn-instancenorm-20261019`, while the existing real-Qwen and installer
+push filters only matched `upgrade/upstream-*`. Add the exact new branch to
+those two workflows so the required jobs run; do not broaden all branch triggers.
+The earlier exact-SHA CI alias did not create workflow runs. This follow-on
+change does not alter runtime sources, pins or core/native test inputs.
