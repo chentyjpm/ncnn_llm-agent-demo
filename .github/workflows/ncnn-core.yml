@@ -41,9 +41,9 @@ jobs:
           test "$(git -C .ci-src/ncnn rev-parse HEAD)" = "$PIN"
           cmake -S model-tests/ncnn-core -B build/ncnn-core -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=${{ matrix.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DAGENT_NCNN_SOURCE_DIR="$PWD/.ci-src/ncnn" -DNCNN_OPENMP=${{ matrix.openmp }} -DNCNN_SIMPLEOMP=${{ matrix.simpleomp }} -DCMAKE_POLICY_VERSION_MINIMUM=3.5
       - name: Compile upstream CPU, layout, norm and INT8 Winograd tests
-        run: cmake --build build/ncnn-core --parallel 2 --target test_cpu test_convolution_3a test_convolution_oom test_net test_layernorm test_rmsnorm test_unaryop
+        run: cmake --build build/ncnn-core --parallel 2 --target test_cpu test_convolution_int8_smoke test_convolution_3a test_convolution_oom test_net test_layernorm test_rmsnorm test_groupnorm test_instancenorm test_unaryop
       - name: Run CPU regressions including BF16 storage packing
-        run: ctest --test-dir build/ncnn-core --output-on-failure --timeout 300 -R '^test_(cpu|convolution_3a|convolution_oom|net|layernorm|rmsnorm|unaryop)$'
+        run: ctest --test-dir build/ncnn-core --output-on-failure --timeout 300 -R '^test_(cpu|convolution_int8_smoke|convolution_3a|convolution_oom|net|layernorm|rmsnorm|groupnorm|instancenorm|unaryop)$'
       - if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
@@ -100,19 +100,21 @@ jobs:
           git -C .ci-src/ncnn submodule status > build/ncnn-vulkan/submodules.txt
           cmake -S model-tests/ncnn-core -B build/ncnn-vulkan -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DAGENT_NCNN_SOURCE_DIR="$PWD/.ci-src/ncnn" -DAGENT_NCNN_VULKAN_TESTS=ON -DNCNN_SIMPLEVK=ON -DNCNN_SYSTEM_GLSLANG=OFF -DNCNN_OPENMP=OFF -DNCNN_SIMPLEOMP=OFF -DCMAKE_POLICY_VERSION_MINIMUM=3.5
       - name: Compile strict Vulkan and upstream operator regressions
-        run: cmake --build build/ncnn-vulkan --parallel 2 --target test_vulkan_required test_layernorm test_rmsnorm test_unaryop test_net
+        run: cmake --build build/ncnn-vulkan --parallel 2 --target test_vulkan_required test_vulkan_matrix_required test_convolution_int8_smoke test_memorydata test_layernorm test_rmsnorm test_groupnorm test_instancenorm test_unaryop test_net
       - name: Verify a missing Vulkan device fails instead of skipping
         run: |
-          if VK_DRIVER_FILES="$PWD/no-such-icd.json" VK_ICD_FILENAMES="$PWD/no-such-icd.json" build/ncnn-vulkan/test_vulkan_required > build/ncnn-vulkan/no-device.txt 2>&1; then
-            echo 'ERROR: no-device regression unexpectedly passed'
-            exit 1
-          fi
-          cat build/ncnn-vulkan/no-device.txt
-          grep -F 'a working Vulkan device is required' build/ncnn-vulkan/no-device.txt
+          for target in test_vulkan_required test_vulkan_matrix_required; do
+            if VK_DRIVER_FILES="$PWD/no-such-icd.json" VK_ICD_FILENAMES="$PWD/no-such-icd.json" "build/ncnn-vulkan/$target" > "build/ncnn-vulkan/no-device-$target.txt" 2>&1; then
+              echo "ERROR: $target no-device regression unexpectedly passed"
+              exit 1
+            fi
+            cat "build/ncnn-vulkan/no-device-$target.txt"
+            grep -F 'a working Vulkan device is required' "build/ncnn-vulkan/no-device-$target.txt"
+          done
       - name: Require submitted Vulkan work with subgroup on and off
-        run: ctest --test-dir build/ncnn-vulkan --verbose --timeout 300 -R '^test_vulkan_required$' | tee build/ncnn-vulkan/required-vulkan.txt
-      - name: Run upstream norm, roundEven and net layout cases
-        run: ctest --test-dir build/ncnn-vulkan --verbose --timeout 600 -R '^test_(layernorm|rmsnorm|unaryop|net)$' | tee build/ncnn-vulkan/upstream-tests.txt
+        run: ctest --test-dir build/ncnn-vulkan --verbose --timeout 600 -R '^test_vulkan_(required|matrix_required)$' | tee build/ncnn-vulkan/required-vulkan.txt
+      - name: Run upstream norms, layout, MemoryData and bounded INT8 convolution cases
+        run: ctest --test-dir build/ncnn-vulkan --verbose --timeout 600 -R '^test_(layernorm|rmsnorm|groupnorm|instancenorm|unaryop|net|memorydata|convolution_int8_smoke)$' | tee build/ncnn-vulkan/upstream-tests.txt
       - if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:

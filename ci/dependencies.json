@@ -9,12 +9,12 @@
   },
   "qwenimage": {
     "repository": "nihui/qwenimage-ncnn-vulkan",
-    "commit": "14953559f39c7658e5a6cc117481e1922660cc9e",
+    "commit": "4e48f36dd356c9b48fce43a349a972b1f310afa0",
     "ncnn_commit": "c6b351b56fbe32e0381ae00331e3df649b20d7b7"
   },
   "ncnn": {
     "repository": "Tencent/ncnn",
-    "commit": "5d1c5ad4fd4b4ba32794000cd77a19ba7145d987"
+    "commit": "b5721b4bd2c8d0a8b861477f72c515db6b9f6dd0"
   },
   "json": {
     "repository": "nlohmann/json",

@@ -26,6 +26,19 @@ PATHS = {
                 'tests/test_native_catalog_acceptance.py'),
 }
 
+# Forward-only exceptions reviewed against the complete upstream diff, never
+# inferred from commit messages. Each key is (repository, old SHA, new SHA), and
+# the value is the unchanged embedded ncnn SHA. Additions require a fresh review.
+# Reviewed 2026-10-19: only .github/workflows/release.yml changed, bumping
+# pypa/cibuildwheel 4.3.0 -> 4.3.1; no runtime/build source or submodule changed.
+# https://github.com/nihui/qwenimage-ncnn-vulkan/compare/14953559f39c7658e5a6cc117481e1922660cc9e...4e48f36dd356c9b48fce43a349a972b1f310afa0
+REVIEWED_IMAGE_CI_UPGRADES = {
+    ('nihui/qwenimage-ncnn-vulkan',
+     '14953559f39c7658e5a6cc117481e1922660cc9e',
+     '4e48f36dd356c9b48fce43a349a972b1f310afa0'):
+        'c6b351b56fbe32e0381ae00331e3df649b20d7b7',
+}
+
 
 def image_dependencies(files: dict[str, str]) -> dict:
     dependencies = json.loads(files['ci/dependencies.json'])
@@ -39,12 +52,37 @@ def image_dependencies(files: dict[str, str]) -> dict:
     return {'dependency': image, 'upstream': official[0]}
 
 
+def reviewed_image_ci_upgrade(before: dict, after: dict) -> bool:
+    """Recognize only a reviewed pin transition with all other metadata intact."""
+    old, new = before['dependency'], after['dependency']
+    identity = (old['repository'], old['commit'], new['commit'])
+    if not all(isinstance(value, str) for value in identity):
+        return False
+    ncnn_commit = REVIEWED_IMAGE_CI_UPGRADES.get(identity)
+    if ncnn_commit is None or old['ncnn_commit'] != ncnn_commit:
+        return False
+    for state in (before, after):
+        dependency, upstream = state['dependency'], state['upstream']
+        if (upstream.get('commit') != dependency['commit']
+                or upstream.get('name') != dependency['repository']
+                or upstream.get('url') != 'https://github.com/' + dependency['repository']):
+            return False
+    # Compare complete records so new/unknown metadata, checkout refs, model
+    # inputs, repositories and embedded submodule pins cannot hide in the skip.
+    return all({k: v for k, v in before[record].items() if k != 'commit'}
+               == {k: v for k, v in after[record].items() if k != 'commit'}
+               for record in ('dependency', 'upstream'))
+
+
 def requires_models(scope: str, changed: list[str], before: dict[str, str], after: dict[str, str]) -> tuple[bool, str]:
     for path in changed:
         if any(fnmatch.fnmatchcase(path, pattern) for pattern in PATHS[scope]):
             return True, 'Relevant model test input changed: ' + path
     if scope in ('image', 'turbo') and any(p in changed for p in ('ci/dependencies.json', 'upstream-lock.json')):
-        if image_dependencies(before) != image_dependencies(after):
+        old, new = image_dependencies(before), image_dependencies(after)
+        if old != new:
+            if reviewed_image_ci_upgrade(old, new):
+                return False, 'Exact reviewed Qwen Image CI-only pin upgrade; runtime inputs are unchanged'
             return True, 'Qwen Image engine or its dedicated dependency pin changed'
     return False, 'No relevant model input changed; checkout/CI maintenance does not request large downloads'
 

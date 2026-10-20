@@ -2,7 +2,7 @@ name: Real Qwen 0.5B CPU
 on:
   workflow_dispatch:
   push:
-    branches: [main, "upgrade/upstream-*", "feat/minicpm-v47-integration"]
+    branches: [main, "upgrade/upstream-*", "upgrade/ncnn-instancenorm-20261019", "feat/minicpm-v47-integration"]
     paths:
       - '.github/workflows/qwen05-cpu.yml'
       - 'scripts/qwen05_*.py'

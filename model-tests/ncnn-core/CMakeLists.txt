@@ -27,15 +27,23 @@ if(NCNN_OPENMP AND NCNN_SIMPLEOMP)
     target_compile_options(test_cpu PRIVATE -fopenmp)
 endif()
 
+add_executable(test_convolution_int8_smoke test_convolution_int8_smoke.cpp)
+target_include_directories(test_convolution_int8_smoke PRIVATE "${AGENT_NCNN_SOURCE_DIR}/tests")
+target_link_libraries(test_convolution_int8_smoke PRIVATE ncnntestutil ncnn)
+add_test(NAME test_convolution_int8_smoke COMMAND test_convolution_int8_smoke)
+set_tests_properties(test_convolution_int8_smoke PROPERTIES TIMEOUT 600)
+
 if(AGENT_NCNN_VULKAN_TESTS)
-    # Upstream's layer helpers permit GPU skips. This additional test instead
-    # requires a device, valid pipelines and submitted VkCompute dispatches.
-    add_executable(test_vulkan_required test_vulkan_required.cpp)
-    target_include_directories(test_vulkan_required PRIVATE
-        "${AGENT_NCNN_SOURCE_DIR}/tests"
-        "${AGENT_NCNN_SOURCE_DIR}/src/layer"
-        "${AGENT_NCNN_SOURCE_DIR}/src/layer/vulkan")
-    target_link_libraries(test_vulkan_required PRIVATE ncnntestutil ncnn)
-    add_test(NAME test_vulkan_required COMMAND test_vulkan_required)
-    set_tests_properties(test_vulkan_required PROPERTIES TIMEOUT 300)
+    # Upstream helpers permit GPU skips. The strict companions instead require
+    # a device, valid pipelines and submitted compute/copy work.
+    foreach(strict_test test_vulkan_required test_vulkan_matrix_required)
+        add_executable(${strict_test} ${strict_test}.cpp)
+        target_include_directories(${strict_test} PRIVATE
+            "${AGENT_NCNN_SOURCE_DIR}/tests"
+            "${AGENT_NCNN_SOURCE_DIR}/src/layer"
+            "${AGENT_NCNN_SOURCE_DIR}/src/layer/vulkan")
+        target_link_libraries(${strict_test} PRIVATE ncnntestutil ncnn)
+        add_test(NAME ${strict_test} COMMAND ${strict_test})
+        set_tests_properties(${strict_test} PROPERTIES TIMEOUT 600)
+    endforeach()
 endif()
