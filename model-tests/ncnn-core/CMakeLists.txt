@@ -33,6 +33,14 @@ target_link_libraries(test_convolution_int8_smoke PRIVATE ncnntestutil ncnn)
 add_test(NAME test_convolution_int8_smoke COMMAND test_convolution_int8_smoke)
 set_tests_properties(test_convolution_int8_smoke PROPERTIES TIMEOUT 600)
 
+# Bound the 5x5 stride-1/2 shape matrix while retaining upstream comparisons
+# across the storage/packing options supported by the executing architecture.
+add_executable(test_convolutiondepthwise_5x5_smoke test_convolutiondepthwise_5x5_smoke.cpp)
+target_include_directories(test_convolutiondepthwise_5x5_smoke PRIVATE "${AGENT_NCNN_SOURCE_DIR}/tests")
+target_link_libraries(test_convolutiondepthwise_5x5_smoke PRIVATE ncnntestutil ncnn)
+add_test(NAME test_convolutiondepthwise_5x5_smoke COMMAND test_convolutiondepthwise_5x5_smoke)
+set_tests_properties(test_convolutiondepthwise_5x5_smoke PROPERTIES TIMEOUT 300)
+
 if(AGENT_NCNN_VULKAN_TESTS)
     # Upstream helpers permit GPU skips. The strict companions instead require
     # a device, valid pipelines and submitted compute/copy work.
