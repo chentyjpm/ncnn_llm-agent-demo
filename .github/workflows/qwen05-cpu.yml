@@ -63,6 +63,23 @@ jobs:
           python -m pip install numpy==1.26.4 transformers==4.57.3 huggingface-hub==0.36.0 safetensors==0.6.2 -r requirements-office.txt
       - name: Run tool and exporter regressions
         run: python scripts/run_tests.py --output-dir reports/qwen05/unit
+      - name: Check runner resources before model downloads
+        run: |
+          python - <<'PY_RESOURCES'
+          import json, shutil
+          from pathlib import Path
+          gib = 1024 ** 3
+          available = next(int(line.split()[1]) * 1024 for line in Path('/proc/meminfo').read_text().splitlines() if line.startswith('MemAvailable:'))
+          resources = {'disk_free_bytes': shutil.disk_usage('.').free,
+                       'memory_available_bytes': available,
+                       'minimum_disk_bytes': 12 * gib, 'minimum_memory_bytes': 6 * gib}
+          output = Path('reports/qwen05/resources.json')
+          output.parent.mkdir(parents=True, exist_ok=True)
+          output.write_text(json.dumps(resources, indent=2) + '\n')
+          print(json.dumps(resources, indent=2))
+          if resources['disk_free_bytes'] < resources['minimum_disk_bytes'] or available < resources['minimum_memory_bytes']:
+              raise SystemExit('Insufficient runner resources for sequential model download, conversion and inference; no weights downloaded')
+          PY_RESOURCES
       - name: Download exact official 0.5B and verify SHA-256
         run: python scripts/qwen05_export.py download --source models/official-qwen05
       - name: Convert real weights to ncnn
