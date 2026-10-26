@@ -21,7 +21,7 @@ class NcnnCoreWorkflowTests(unittest.TestCase):
                      if line.strip().startswith('run: ctest'))
         build_args, test_args = shlex.split(build), shlex.split(ctest)
         pattern = re.compile(test_args[test_args.index('-R') + 1])
-        for target in ('test_relu', 'test_shufflechannel', 'test_convolutiondepthwise_5x5_smoke'):
+        for target in ('test_relu', 'test_shufflechannel', 'test_convolutiondepthwise_5x5_smoke', 'test_packing', 'test_convolutiondepthwise_int8_smoke'):
             with self.subTest(target=target):
                 self.assertIn(target, build_args[build_args.index('--target') + 1:])
                 self.assertIsNotNone(pattern.fullmatch(target))
@@ -35,6 +35,22 @@ class NcnnCoreWorkflowTests(unittest.TestCase):
         source = (ROOT / f'model-tests/ncnn-core/{target}.cpp').read_text(encoding='utf-8')
         self.assertIn('#include "test_convolutiondepthwise.cpp"', source)
         self.assertIn('test_convolutiondepthwise(w, h, c, c, 5, 1, stride, 0, bias, c, 0)', source)
+
+    def test_int8_shader_regression_is_built_and_required(self):
+        workflow = (ROOT / '.github/workflows/ncnn-core.yml').read_text(encoding='utf-8')
+        vulkan = workflow.split('  vulkan-lavapipe:', 1)[1]
+        self.assertIn('test_vulkan_int8_storage', self.cmake)
+        self.assertIn('--target test_vulkan_required test_vulkan_matrix_required test_vulkan_int8_storage', vulkan)
+        self.assertIn("--no-tests=error --timeout 120 -R '^test_vulkan_int8_storage$'", vulkan)
+
+    def test_int8_depthwise_is_bounded_and_fails_without_int8(self):
+        target = 'test_convolutiondepthwise_int8_smoke'
+        self.assertIn(f'add_test(NAME {target} COMMAND {target})', self.cmake)
+        source = (ROOT / f'model-tests/ncnn-core/{target}.cpp').read_text(encoding='utf-8')
+        self.assertIn('#include "test_convolutiondepthwise_1.cpp"', source)
+        self.assertIn('{7, 8, 31, 32, 33, 64}', source)
+        self.assertIn('requires NCNN_INT8', source)
+        self.assertIn('test_convolutiondepthwise_int8(', source)
 
     def test_bf16_and_architecture_scope_are_explicit(self):
         self.assertIn('set(NCNN_BF16 ON CACHE BOOL "" FORCE)', self.cmake)
