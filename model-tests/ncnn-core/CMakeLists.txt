@@ -41,10 +41,17 @@ target_link_libraries(test_convolutiondepthwise_5x5_smoke PRIVATE ncnntestutil n
 add_test(NAME test_convolutiondepthwise_5x5_smoke COMMAND test_convolutiondepthwise_5x5_smoke)
 set_tests_properties(test_convolutiondepthwise_5x5_smoke PROPERTIES TIMEOUT 300)
 
+# Bounded INT8 depthwise tail/packing/requantization coverage; host architecture.
+add_executable(test_convolutiondepthwise_int8_smoke test_convolutiondepthwise_int8_smoke.cpp)
+target_include_directories(test_convolutiondepthwise_int8_smoke PRIVATE "${AGENT_NCNN_SOURCE_DIR}/tests")
+target_link_libraries(test_convolutiondepthwise_int8_smoke PRIVATE ncnntestutil ncnn)
+add_test(NAME test_convolutiondepthwise_int8_smoke COMMAND test_convolutiondepthwise_int8_smoke)
+set_tests_properties(test_convolutiondepthwise_int8_smoke PROPERTIES TIMEOUT 300)
+
 if(AGENT_NCNN_VULKAN_TESTS)
     # Upstream helpers permit GPU skips. The strict companions instead require
     # a device, valid pipelines and submitted compute/copy work.
-    foreach(strict_test test_vulkan_required test_vulkan_matrix_required)
+    foreach(strict_test test_vulkan_required test_vulkan_matrix_required test_vulkan_int8_storage)
         add_executable(${strict_test} ${strict_test}.cpp)
         target_include_directories(${strict_test} PRIVATE
             "${AGENT_NCNN_SOURCE_DIR}/tests"

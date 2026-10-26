@@ -42,9 +42,9 @@ jobs:
           test "$(git -C .ci-src/ncnn rev-parse HEAD)" = "$PIN"
           cmake -S model-tests/ncnn-core -B build/ncnn-core -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=${{ matrix.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DAGENT_NCNN_SOURCE_DIR="$PWD/.ci-src/ncnn" -DNCNN_OPENMP=${{ matrix.openmp }} -DNCNN_SIMPLEOMP=${{ matrix.simpleomp }} -DCMAKE_POLICY_VERSION_MINIMUM=3.5
       - name: Compile CPU, layout, norm, ReLU, ShuffleChannel and convolution tests
-        run: cmake --build build/ncnn-core --parallel 2 --target test_cpu test_convolution_int8_smoke test_convolution_3a test_convolution_oom test_net test_layernorm test_rmsnorm test_groupnorm test_instancenorm test_unaryop test_relu test_shufflechannel test_convolutiondepthwise_5x5_smoke
+        run: cmake --build build/ncnn-core --parallel 2 --target test_cpu test_convolution_int8_smoke test_convolution_3a test_convolution_oom test_net test_layernorm test_rmsnorm test_groupnorm test_instancenorm test_unaryop test_relu test_shufflechannel test_convolutiondepthwise_5x5_smoke test_packing test_convolutiondepthwise_int8_smoke
       - name: Run CPU regressions including BF16 storage packing
-        run: ctest --test-dir build/ncnn-core --output-on-failure --no-tests=error --timeout 300 -R '^test_(cpu|convolution_int8_smoke|convolution_3a|convolution_oom|net|layernorm|rmsnorm|groupnorm|instancenorm|unaryop|relu|shufflechannel|convolutiondepthwise_5x5_smoke)$'
+        run: ctest --test-dir build/ncnn-core --output-on-failure --no-tests=error --timeout 300 -R '^test_(cpu|convolution_int8_smoke|convolution_3a|convolution_oom|net|layernorm|rmsnorm|groupnorm|instancenorm|unaryop|relu|shufflechannel|convolutiondepthwise_5x5_smoke|packing|convolutiondepthwise_int8_smoke)$'
       - if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
@@ -101,10 +101,12 @@ jobs:
           git -C .ci-src/ncnn submodule status > build/ncnn-vulkan/submodules.txt
           cmake -S model-tests/ncnn-core -B build/ncnn-vulkan -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DAGENT_NCNN_SOURCE_DIR="$PWD/.ci-src/ncnn" -DAGENT_NCNN_VULKAN_TESTS=ON -DNCNN_SIMPLEVK=ON -DNCNN_SYSTEM_GLSLANG=OFF -DNCNN_OPENMP=OFF -DNCNN_SIMPLEOMP=OFF -DCMAKE_POLICY_VERSION_MINIMUM=3.5
       - name: Compile strict Vulkan and upstream operator regressions
-        run: cmake --build build/ncnn-vulkan --parallel 2 --target test_vulkan_required test_vulkan_matrix_required test_convolution_int8_smoke test_memorydata test_layernorm test_rmsnorm test_groupnorm test_instancenorm test_unaryop test_net
+        run: cmake --build build/ncnn-vulkan --parallel 2 --target test_vulkan_required test_vulkan_matrix_required test_vulkan_int8_storage test_convolution_int8_smoke test_memorydata test_layernorm test_rmsnorm test_groupnorm test_instancenorm test_unaryop test_net
+      - name: Require INT8 StorageBuffer SPIR-V compilation
+        run: ctest --test-dir build/ncnn-vulkan --verbose --no-tests=error --timeout 120 -R '^test_vulkan_int8_storage$'
       - name: Verify a missing Vulkan device fails instead of skipping
         run: |
-          for target in test_vulkan_required test_vulkan_matrix_required; do
+          for target in test_vulkan_required test_vulkan_matrix_required test_vulkan_int8_storage; do
             if VK_DRIVER_FILES="$PWD/no-such-icd.json" VK_ICD_FILENAMES="$PWD/no-such-icd.json" "build/ncnn-vulkan/$target" > "build/ncnn-vulkan/no-device-$target.txt" 2>&1; then
               echo "ERROR: $target no-device regression unexpectedly passed"
               exit 1
