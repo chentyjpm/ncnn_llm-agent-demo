@@ -41,10 +41,10 @@ jobs:
         run: |
           test "$(git -C .ci-src/ncnn rev-parse HEAD)" = "$PIN"
           cmake -S model-tests/ncnn-core -B build/ncnn-core -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=${{ matrix.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DAGENT_NCNN_SOURCE_DIR="$PWD/.ci-src/ncnn" -DNCNN_OPENMP=${{ matrix.openmp }} -DNCNN_SIMPLEOMP=${{ matrix.simpleomp }} -DCMAKE_POLICY_VERSION_MINIMUM=3.5
-      - name: Compile CPU, layout, norm, ReLU, ShuffleChannel and convolution tests
-        run: cmake --build build/ncnn-core --parallel 2 --target test_cpu test_convolution_int8_smoke test_convolution_3a test_convolution_oom test_net test_layernorm test_rmsnorm test_groupnorm test_instancenorm test_unaryop test_relu test_shufflechannel test_convolutiondepthwise_5x5_smoke test_packing test_convolutiondepthwise_int8_smoke
+      - name: Compile CPU, layout, norm, ReLU, Sigmoid, TanH, ShuffleChannel and convolution tests
+        run: cmake --build build/ncnn-core --parallel 2 --target test_cpu test_convolution_int8_smoke test_convolution_3a test_convolution_oom test_net test_layernorm test_rmsnorm test_groupnorm test_instancenorm test_unaryop test_relu test_sigmoid test_tanh test_shufflechannel test_convolutiondepthwise_5x5_smoke test_packing test_convolutiondepthwise_int8_smoke
       - name: Run CPU regressions including BF16 storage packing
-        run: ctest --test-dir build/ncnn-core --output-on-failure --no-tests=error --timeout 300 -R '^test_(cpu|convolution_int8_smoke|convolution_3a|convolution_oom|net|layernorm|rmsnorm|groupnorm|instancenorm|unaryop|relu|shufflechannel|convolutiondepthwise_5x5_smoke|packing|convolutiondepthwise_int8_smoke)$'
+        run: ctest --test-dir build/ncnn-core --output-on-failure --no-tests=error --timeout 300 -R '^test_(cpu|convolution_int8_smoke|convolution_3a|convolution_oom|net|layernorm|rmsnorm|groupnorm|instancenorm|unaryop|relu|sigmoid|tanh|shufflechannel|convolutiondepthwise_5x5_smoke|packing|convolutiondepthwise_int8_smoke)$'
       - if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
