@@ -21,7 +21,7 @@ class NcnnCoreWorkflowTests(unittest.TestCase):
                      if line.strip().startswith('run: ctest'))
         build_args, test_args = shlex.split(build), shlex.split(ctest)
         pattern = re.compile(test_args[test_args.index('-R') + 1])
-        for target in ('test_relu', 'test_shufflechannel', 'test_convolutiondepthwise_5x5_smoke', 'test_packing', 'test_convolutiondepthwise_int8_smoke'):
+        for target in ('test_relu', 'test_sigmoid', 'test_tanh', 'test_shufflechannel', 'test_convolutiondepthwise_5x5_smoke', 'test_packing', 'test_convolutiondepthwise_int8_smoke'):
             with self.subTest(target=target):
                 self.assertIn(target, build_args[build_args.index('--target') + 1:])
                 self.assertIsNotNone(pattern.fullmatch(target))
