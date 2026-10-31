@@ -51,7 +51,7 @@ set_tests_properties(test_convolutiondepthwise_int8_smoke PROPERTIES TIMEOUT 300
 if(AGENT_NCNN_VULKAN_TESTS)
     # Upstream helpers permit GPU skips. The strict companions instead require
     # a device, valid pipelines and submitted compute/copy work.
-    foreach(strict_test test_vulkan_required test_vulkan_matrix_required test_vulkan_int8_storage)
+    foreach(strict_test test_vulkan_required test_vulkan_matrix_required test_vulkan_int8_storage test_vulkan_interp_coordinates)
         add_executable(${strict_test} ${strict_test}.cpp)
         target_include_directories(${strict_test} PRIVATE
             "${AGENT_NCNN_SOURCE_DIR}/tests"

@@ -41,10 +41,10 @@ jobs:
         run: |
           test "$(git -C .ci-src/ncnn rev-parse HEAD)" = "$PIN"
           cmake -S model-tests/ncnn-core -B build/ncnn-core -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=${{ matrix.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DAGENT_NCNN_SOURCE_DIR="$PWD/.ci-src/ncnn" -DNCNN_OPENMP=${{ matrix.openmp }} -DNCNN_SIMPLEOMP=${{ matrix.simpleomp }} -DCMAKE_POLICY_VERSION_MINIMUM=3.5
-      - name: Compile CPU, layout, norm, ReLU, Sigmoid, TanH, ELU, Swish, HardSigmoid, HardSwish, ShuffleChannel and convolution tests
-        run: cmake --build build/ncnn-core --parallel 2 --target test_cpu test_convolution_int8_smoke test_convolution_3a test_convolution_oom test_net test_layernorm test_rmsnorm test_groupnorm test_instancenorm test_unaryop test_relu test_sigmoid test_tanh test_elu test_swish test_hardsigmoid test_hardswish test_shufflechannel test_convolutiondepthwise_5x5_smoke test_packing test_convolutiondepthwise_int8_smoke
+      - name: Compile CPU, layout, norm, ReLU, Sigmoid, TanH, ELU, Swish, HardSigmoid, HardSwish, SELU, ShuffleChannel and convolution tests
+        run: cmake --build build/ncnn-core --parallel 2 --target test_cpu test_convolution_int8_smoke test_convolution_3a test_convolution_oom test_net test_layernorm test_rmsnorm test_groupnorm test_instancenorm test_unaryop test_relu test_sigmoid test_tanh test_elu test_swish test_hardsigmoid test_hardswish test_selu test_shufflechannel test_convolutiondepthwise_5x5_smoke test_packing test_convolutiondepthwise_int8_smoke
       - name: Run CPU regressions including BF16 storage packing
-        run: ctest --test-dir build/ncnn-core --output-on-failure --no-tests=error --timeout 300 -R '^test_(cpu|convolution_int8_smoke|convolution_3a|convolution_oom|net|layernorm|rmsnorm|groupnorm|instancenorm|unaryop|relu|sigmoid|tanh|elu|swish|hardsigmoid|hardswish|shufflechannel|convolutiondepthwise_5x5_smoke|packing|convolutiondepthwise_int8_smoke)$'
+        run: ctest --test-dir build/ncnn-core --output-on-failure --no-tests=error --timeout 300 -R '^test_(cpu|convolution_int8_smoke|convolution_3a|convolution_oom|net|layernorm|rmsnorm|groupnorm|instancenorm|unaryop|relu|sigmoid|tanh|elu|swish|hardsigmoid|hardswish|selu|shufflechannel|convolutiondepthwise_5x5_smoke|packing|convolutiondepthwise_int8_smoke)$'
       - if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
@@ -101,12 +101,12 @@ jobs:
           git -C .ci-src/ncnn submodule status > build/ncnn-vulkan/submodules.txt
           cmake -S model-tests/ncnn-core -B build/ncnn-vulkan -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DAGENT_NCNN_SOURCE_DIR="$PWD/.ci-src/ncnn" -DAGENT_NCNN_VULKAN_TESTS=ON -DNCNN_SIMPLEVK=ON -DNCNN_SYSTEM_GLSLANG=OFF -DNCNN_OPENMP=OFF -DNCNN_SIMPLEOMP=OFF -DCMAKE_POLICY_VERSION_MINIMUM=3.5
       - name: Compile strict Vulkan and upstream operator regressions
-        run: cmake --build build/ncnn-vulkan --parallel 2 --target test_vulkan_required test_vulkan_matrix_required test_vulkan_int8_storage test_convolution_int8_smoke test_memorydata test_layernorm test_rmsnorm test_groupnorm test_instancenorm test_unaryop test_net
+        run: cmake --build build/ncnn-vulkan --parallel 2 --target test_vulkan_required test_vulkan_matrix_required test_vulkan_int8_storage test_vulkan_interp_coordinates test_convolution_int8_smoke test_memorydata test_layernorm test_rmsnorm test_groupnorm test_instancenorm test_unaryop test_net
       - name: Require INT8 StorageBuffer SPIR-V compilation
         run: ctest --test-dir build/ncnn-vulkan --verbose --no-tests=error --timeout 120 -R '^test_vulkan_int8_storage$'
       - name: Verify a missing Vulkan device fails instead of skipping
         run: |
-          for target in test_vulkan_required test_vulkan_matrix_required test_vulkan_int8_storage; do
+          for target in test_vulkan_required test_vulkan_matrix_required test_vulkan_int8_storage test_vulkan_interp_coordinates; do
             if VK_DRIVER_FILES="$PWD/no-such-icd.json" VK_ICD_FILENAMES="$PWD/no-such-icd.json" "build/ncnn-vulkan/$target" > "build/ncnn-vulkan/no-device-$target.txt" 2>&1; then
               echo "ERROR: $target no-device regression unexpectedly passed"
               exit 1
@@ -114,6 +114,28 @@ jobs:
             cat "build/ncnn-vulkan/no-device-$target.txt"
             grep -F 'a working Vulkan device is required' "build/ncnn-vulkan/no-device-$target.txt"
           done
+      - name: Require FP16 Interp coordinate regression on current shaders
+        run: ctest --test-dir build/ncnn-vulkan --verbose --no-tests=error --timeout 300 -R '^test_vulkan_interp_coordinates$' | tee build/ncnn-vulkan/interp-current.txt
+      - name: Prove coordinate regression detects the previous shaders
+        run: |
+          git -C .ci-src/ncnn fetch --no-tags --depth=1 origin 66a63a20a75ba89b06906d5ec527d2ac0367784b
+          for shader in interp.comp interp_pack4.comp interp_bicubic_coeffs.comp; do
+            git -C .ci-src/ncnn show "66a63a20a75ba89b06906d5ec527d2ac0367784b:src/layer/vulkan/shader/$shader" > ".ci-src/ncnn/src/layer/vulkan/shader/$shader"
+          done
+          cmake --build build/ncnn-vulkan --parallel 2 --target test_vulkan_interp_coordinates
+          set +e
+          build/ncnn-vulkan/test_vulkan_interp_coordinates > build/ncnn-vulkan/interp-old-shaders.txt 2>&1
+          result=$?
+          set -e
+          cat build/ncnn-vulkan/interp-old-shaders.txt
+          test "$result" = 2
+          grep -F NUMERICAL_MISMATCH build/ncnn-vulkan/interp-old-shaders.txt
+          for shader in interp.comp interp_pack4.comp interp_bicubic_coeffs.comp; do
+            git -C .ci-src/ncnn restore --source=HEAD -- "src/layer/vulkan/shader/$shader"
+          done
+          git -C .ci-src/ncnn diff --exit-code
+          cmake --build build/ncnn-vulkan --parallel 2 --target test_vulkan_interp_coordinates
+          ctest --test-dir build/ncnn-vulkan --verbose --no-tests=error --timeout 300 -R '^test_vulkan_interp_coordinates$' | tee build/ncnn-vulkan/interp-restored.txt
       - name: Require submitted Vulkan work with subgroup on and off
         run: ctest --test-dir build/ncnn-vulkan --verbose --timeout 600 -R '^test_vulkan_(required|matrix_required)$' | tee build/ncnn-vulkan/required-vulkan.txt
       - name: Run upstream norms, layout, MemoryData and bounded INT8 convolution cases

@@ -107,3 +107,27 @@ unchanged helper on five small inputs: 1×1, 3×3 (requesting Winograd23/43), an
 references, option variants and permissive GPU skips, so a pass does not prove
 an INT8 cooperative-matrix path ran. The exhaustive `test_convolution_3a` remains
 in the CPU matrix only. Each new companion has a 600-second test timeout.
+
+## Strict Interp coordinate companion
+
+`test_vulkan_interp_coordinates` adds **76 directly submitted cases**, requiring
+FP16 storage and arithmetic support on every device (unsupported is failure,
+not skip). It runs nearest/bilinear/bicubic in FP32 and native FP16 arithmetic,
+pack1/pack4, 2D horizontal and 3D horizontal/vertical geometry, both alignment
+modes where applicable, and singleton-width/height bilinear branches. Output
+widths/heights 1920 and 2100 cross the half-pixel and odd-coordinate precision
+boundaries. All inputs are exact FP16 bounded non-linear values, compared against
+the independent generic CPU Interp implementation with absolute tolerances: exact
+nearest, `0.0005` FP32 interpolation, `0.02` FP16 interpolation. This tolerates
+half-stored weights/arithmetic, not a one-pixel sampling error.
+
+Each case verifies selected pipelines, actual pack/storage, the exact expected
+operator workgroup count (including both bicubic coefficient stages for 3D),
+submission and download. Upload/download dispatches do not count as operator
+execution. `AGENT_REQUIRE_LAVAPIPE=1` additionally requires Mesa's software device.
+Exit **2** is reserved for completed numerical mismatches; missing devices,
+unsupported FP16, invalid pipelines, bad layouts and submission failures exit
+**1**. A negative-control CI run using the three pre-fix Interp shaders must
+produce exit 2 and `NUMERICAL_MISMATCH`, then restore the pinned shaders, rebuild
+and pass. Neither software Vulkan nor this synthetic operator test establishes
+physical GPU performance or trained-model inference.

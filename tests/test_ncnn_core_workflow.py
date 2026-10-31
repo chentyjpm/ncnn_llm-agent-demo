@@ -21,7 +21,7 @@ class NcnnCoreWorkflowTests(unittest.TestCase):
                      if line.strip().startswith('run: ctest'))
         build_args, test_args = shlex.split(build), shlex.split(ctest)
         pattern = re.compile(test_args[test_args.index('-R') + 1])
-        for target in ('test_relu', 'test_sigmoid', 'test_tanh', 'test_elu', 'test_swish', 'test_hardsigmoid', 'test_hardswish', 'test_shufflechannel', 'test_convolutiondepthwise_5x5_smoke', 'test_packing', 'test_convolutiondepthwise_int8_smoke'):
+        for target in ('test_relu', 'test_sigmoid', 'test_tanh', 'test_elu', 'test_swish', 'test_hardsigmoid', 'test_hardswish', 'test_selu', 'test_shufflechannel', 'test_convolutiondepthwise_5x5_smoke', 'test_packing', 'test_convolutiondepthwise_int8_smoke'):
             with self.subTest(target=target):
                 self.assertIn(target, build_args[build_args.index('--target') + 1:])
                 self.assertIsNotNone(pattern.fullmatch(target))
@@ -51,6 +51,18 @@ class NcnnCoreWorkflowTests(unittest.TestCase):
         self.assertIn('{7, 8, 31, 32, 33, 64}', source)
         self.assertIn('requires NCNN_INT8', source)
         self.assertIn('test_convolutiondepthwise_int8(', source)
+
+    def test_interp_coordinates_are_required_and_negative_controlled(self):
+        workflow = (ROOT / '.github/workflows/ncnn-core.yml').read_text(encoding='utf-8')
+        vulkan = workflow.split('  vulkan-lavapipe:', 1)[1]
+        target = 'test_vulkan_interp_coordinates'
+        self.assertIn(target, self.cmake)
+        self.assertIn('test_vulkan_int8_storage ' + target, vulkan)
+        self.assertIn("--no-tests=error --timeout 300 -R '^" + target + "$'", vulkan)
+        self.assertIn('interp.comp interp_pack4.comp interp_bicubic_coeffs.comp', vulkan)
+        self.assertIn('test "$result" = 2', vulkan)
+        self.assertIn('git -C .ci-src/ncnn diff --exit-code', vulkan)
+        self.assertIn('interp-restored.txt', vulkan)
 
     def test_bf16_and_architecture_scope_are_explicit(self):
         self.assertIn('set(NCNN_BF16 ON CACHE BOOL "" FORCE)', self.cmake)
