@@ -200,7 +200,7 @@ jobs:
           git -C .ci-src/ncnn fetch --no-tags --depth=1 origin f18f3ffc94dbc76a277e94556c588ab2c2d0e1d9
           header=src/layer/arm/convolutiondepthwise_3x3_pack8_fp16s.h
           git -C .ci-src/ncnn show "f18f3ffc94dbc76a277e94556c588ab2c2d0e1d9:$header" > ".ci-src/ncnn/$header"
-          cmake -E touch model-tests/ncnn-core/test_arm_fp16_depthwise.cpp
+          cmake -E rm -f build/ncnn-arm/CMakeFiles/test_arm_fp16_depthwise.dir/test_arm_fp16_depthwise.cpp.o build/ncnn-arm/test_arm_fp16_depthwise
           cmake --build build/ncnn-arm --parallel 2 --target test_arm_fp16_depthwise
           set +e
           build/ncnn-arm/test_arm_fp16_depthwise > build/ncnn-arm/old-kernel.txt 2>&1
@@ -213,7 +213,9 @@ jobs:
           git -C .ci-src/ncnn diff --exit-code
           # The companion includes an external header directly. Force its own
           # translation unit to rebuild, not only the ncnn library object.
-          cmake -E touch model-tests/ncnn-core/test_arm_fp16_depthwise.cpp
+          # Remove only this generated object/binary: touch alone is unreliable
+          # with timestamp/dependency behavior observed on the macOS runner.
+          cmake -E rm -f build/ncnn-arm/CMakeFiles/test_arm_fp16_depthwise.dir/test_arm_fp16_depthwise.cpp.o build/ncnn-arm/test_arm_fp16_depthwise
           cmake --build build/ncnn-arm --parallel 2 --target test_arm_fp16_depthwise
           ctest --test-dir build/ncnn-arm --verbose --no-tests=error -R '^test_arm_fp16_depthwise$' | tee build/ncnn-arm/restored.txt
       - if: always()
