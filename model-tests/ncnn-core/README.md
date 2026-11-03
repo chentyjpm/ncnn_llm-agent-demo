@@ -131,3 +131,18 @@ unsupported FP16, invalid pipelines, bad layouts and submission failures exit
 produce exit 2 and `NUMERICAL_MISMATCH`, then restore the pinned shaders, rebuild
 and pass. Neither software Vulkan nor this synthetic operator test establishes
 physical GPU performance or trained-model inference.
+
+## Strict ARM FP16 depthwise companion
+
+`AGENT_NCNN_ARM_FP16_TESTS=ON` adds `test_arm_fp16_depthwise` on ARM64 with
+FP16 arithmetic support. It calls the pinned upstream
+`convdw3x3s2_pack8_fp16sa_neon` directly, so a CPU dispatcher fallback cannot
+satisfy it. It compares packed half input/kernel/output against an independent
+FP32 scalar depthwise reference, covering row-distinct data, channel groups,
+bias, realistic image widths and two-/one-column tails.
+
+The dedicated Apple Silicon job requires current-code success, old-header
+numerical failure (exit 2 plus `NUMERICAL_MISMATCH`) and restored-code success.
+Missing ARM/FP16 capability is failure rather than skip. This establishes only
+the executed operator's numerical behavior, not physical RISC-V, GPU, Android
+runtime compatibility, or a trained model's accuracy/performance.

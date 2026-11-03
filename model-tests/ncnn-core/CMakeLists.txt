@@ -62,3 +62,13 @@ if(AGENT_NCNN_VULKAN_TESTS)
         set_tests_properties(${strict_test} PROPERTIES TIMEOUT 600)
     endforeach()
 endif()
+
+# No skip/fallback: execute the changed ARMv8.2 FP16 pack8 kernel directly.
+option(AGENT_NCNN_ARM_FP16_TESTS "Require direct ARM FP16 depthwise regression" OFF)
+if(AGENT_NCNN_ARM_FP16_TESTS)
+    add_executable(test_arm_fp16_depthwise test_arm_fp16_depthwise.cpp)
+    target_include_directories(test_arm_fp16_depthwise PRIVATE "${AGENT_NCNN_SOURCE_DIR}/src/layer/arm")
+    target_link_libraries(test_arm_fp16_depthwise PRIVATE ncnn)
+    add_test(NAME test_arm_fp16_depthwise COMMAND test_arm_fp16_depthwise)
+    set_tests_properties(test_arm_fp16_depthwise PROPERTIES TIMEOUT 120)
+endif()

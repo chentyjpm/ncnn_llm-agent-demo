@@ -42,9 +42,9 @@ jobs:
           test "$(git -C .ci-src/ncnn rev-parse HEAD)" = "$PIN"
           cmake -S model-tests/ncnn-core -B build/ncnn-core -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=${{ matrix.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DAGENT_NCNN_SOURCE_DIR="$PWD/.ci-src/ncnn" -DNCNN_OPENMP=${{ matrix.openmp }} -DNCNN_SIMPLEOMP=${{ matrix.simpleomp }} -DCMAKE_POLICY_VERSION_MINIMUM=3.5
       - name: Compile CPU, layout, norm, ReLU, Sigmoid, TanH, ELU, Swish, HardSigmoid, HardSwish, SELU, ShuffleChannel and convolution tests
-        run: cmake --build build/ncnn-core --parallel 2 --target test_cpu test_convolution_int8_smoke test_convolution_3a test_convolution_oom test_net test_layernorm test_rmsnorm test_groupnorm test_instancenorm test_unaryop test_relu test_sigmoid test_tanh test_elu test_swish test_hardsigmoid test_hardswish test_selu test_shufflechannel test_convolutiondepthwise_5x5_smoke test_packing test_convolutiondepthwise_int8_smoke
+        run: cmake --build build/ncnn-core --parallel 2 --target test_absval test_bnll test_dropout test_erf test_exp test_gelu test_log test_mish test_power test_shrink test_softplus test_threshold test_cpu test_convolution_int8_smoke test_convolution_3a test_convolution_oom test_net test_layernorm test_rmsnorm test_groupnorm test_instancenorm test_unaryop test_relu test_sigmoid test_tanh test_elu test_swish test_hardsigmoid test_hardswish test_selu test_shufflechannel test_convolutiondepthwise_5x5_smoke test_packing test_convolutiondepthwise_int8_smoke
       - name: Run CPU regressions including BF16 storage packing
-        run: ctest --test-dir build/ncnn-core --output-on-failure --no-tests=error --timeout 300 -R '^test_(cpu|convolution_int8_smoke|convolution_3a|convolution_oom|net|layernorm|rmsnorm|groupnorm|instancenorm|unaryop|relu|sigmoid|tanh|elu|swish|hardsigmoid|hardswish|selu|shufflechannel|convolutiondepthwise_5x5_smoke|packing|convolutiondepthwise_int8_smoke)$'
+        run: ctest --test-dir build/ncnn-core --output-on-failure --no-tests=error --timeout 300 -R '^test_(absval|bnll|dropout|erf|exp|gelu|log|mish|power|shrink|softplus|threshold|cpu|convolution_int8_smoke|convolution_3a|convolution_oom|net|layernorm|rmsnorm|groupnorm|instancenorm|unaryop|relu|sigmoid|tanh|elu|swish|hardsigmoid|hardswish|selu|shufflechannel|convolutiondepthwise_5x5_smoke|packing|convolutiondepthwise_int8_smoke)$'
       - if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
@@ -148,4 +148,62 @@ jobs:
             build/ncnn-vulkan/CMakeCache.txt
             build/ncnn-vulkan/*.txt
             build/ncnn-vulkan/Testing/Temporary/
+          retention-days: 14
+
+  arm-fp16-depthwise:
+    # Physical Apple Silicon CPU, not x86 fallback or an emulator.
+    runs-on: macos-15
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with: {persist-credentials: false}
+      - id: pins
+        run: python3 scripts/ci_native.py refs --component bridge
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: Tencent/ncnn
+          ref: ${{ steps.pins.outputs.ncnn }}
+          path: .ci-src/ncnn
+          persist-credentials: false
+      - name: Require ARM host and configure real FP16 arithmetic
+        env:
+          PIN: ${{ steps.pins.outputs.ncnn }}
+        run: |
+          test "$(uname -m)" = arm64
+          test "$(git -C .ci-src/ncnn rev-parse HEAD)" = "$PIN"
+          mkdir -p build/ncnn-arm
+          uname -a | tee build/ncnn-arm/host.txt
+          cmake -S model-tests/ncnn-core -B build/ncnn-arm -DCMAKE_BUILD_TYPE=Release -DAGENT_NCNN_SOURCE_DIR="$PWD/.ci-src/ncnn" -DAGENT_NCNN_ARM_FP16_TESTS=ON -DNCNN_OPENMP=OFF -DNCNN_SIMPLEOMP=OFF -DCMAKE_CXX_FLAGS=-march=armv8.2-a+fp16 -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+      - name: Compile and require current kernel numerical regression
+        run: |
+          cmake --build build/ncnn-arm --parallel 2 --target test_arm_fp16_depthwise
+          ctest --test-dir build/ncnn-arm --verbose --no-tests=error -R '^test_arm_fp16_depthwise$' | tee build/ncnn-arm/current.txt
+      - name: Require the previous kernel to fail numerically then restore
+        run: |
+          git -C .ci-src/ncnn fetch --no-tags --depth=1 origin f18f3ffc94dbc76a277e94556c588ab2c2d0e1d9
+          header=src/layer/arm/convolutiondepthwise_3x3_pack8_fp16s.h
+          git -C .ci-src/ncnn show "f18f3ffc94dbc76a277e94556c588ab2c2d0e1d9:$header" > ".ci-src/ncnn/$header"
+          cmake --build build/ncnn-arm --parallel 2 --target test_arm_fp16_depthwise
+          set +e
+          build/ncnn-arm/test_arm_fp16_depthwise > build/ncnn-arm/old-kernel.txt 2>&1
+          result=$?
+          set -e
+          cat build/ncnn-arm/old-kernel.txt
+          test "$result" = 2
+          grep -F NUMERICAL_MISMATCH build/ncnn-arm/old-kernel.txt
+          git -C .ci-src/ncnn restore --source=HEAD -- "$header"
+          git -C .ci-src/ncnn diff --exit-code
+          cmake --build build/ncnn-arm --parallel 2 --target test_arm_fp16_depthwise
+          ctest --test-dir build/ncnn-arm --verbose --no-tests=error -R '^test_arm_fp16_depthwise$' | tee build/ncnn-arm/restored.txt
+      - if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: ncnn-core-arm-fp16-depthwise
+          path: |
+            build/ncnn-arm/CMakeCache.txt
+            build/ncnn-arm/*.txt
+            build/ncnn-arm/Testing/Temporary/
           retention-days: 14
