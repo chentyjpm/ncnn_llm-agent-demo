@@ -176,11 +176,25 @@ jobs:
           test "$(git -C .ci-src/ncnn rev-parse HEAD)" = "$PIN"
           mkdir -p build/ncnn-arm
           uname -a | tee build/ncnn-arm/host.txt
-          cmake -S model-tests/ncnn-core -B build/ncnn-arm -DCMAKE_BUILD_TYPE=Release -DAGENT_NCNN_SOURCE_DIR="$PWD/.ci-src/ncnn" -DAGENT_NCNN_ARM_FP16_TESTS=ON -DNCNN_OPENMP=OFF -DNCNN_SIMPLEOMP=OFF -DCMAKE_CXX_FLAGS=-march=armv8.2-a+fp16 -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+          cmake -S model-tests/ncnn-core -B build/ncnn-arm -DCMAKE_BUILD_TYPE=Release -DAGENT_NCNN_SOURCE_DIR="$PWD/.ci-src/ncnn" -DAGENT_NCNN_ARM_FP16_TESTS=ON -DNCNN_ARM82=ON -DNCNN_ARM82DOT=OFF -DNCNN_ARM82FP16FML=OFF -DNCNN_ARM84BF16=OFF -DNCNN_ARM84I8MM=OFF -DNCNN_ARM86SVE=OFF -DNCNN_ARM86SVE2=OFF -DNCNN_ARM86SVEBF16=OFF -DNCNN_ARM86SVEI8MM=OFF -DNCNN_ARM86SVEF32MM=OFF -DNCNN_OPENMP=OFF -DNCNN_SIMPLEOMP=OFF -DCMAKE_CXX_FLAGS=-march=armv8.2-a+fp16 -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+          # Compiler support is not hardware support: without runtime dispatch,
+          # ncnn otherwise raises the whole library to SVE on AppleClang 17.
+          cat build/ncnn-arm/ncnn/src/CMakeFiles/ncnn.dir/flags.make | tee build/ncnn-arm/compiler-flags.txt
+          if grep -E -- '-march=[^ ]*(sve|bf16|i8mm)' build/ncnn-arm/compiler-flags.txt; then
+            echo 'ERROR: unsupported ISA enabled in mandatory FP16-only test'
+            exit 1
+          fi
       - name: Compile and require current kernel numerical regression
         run: |
           cmake --build build/ncnn-arm --parallel 2 --target test_arm_fp16_depthwise
           ctest --test-dir build/ncnn-arm --verbose --no-tests=error -R '^test_arm_fp16_depthwise$' | tee build/ncnn-arm/current.txt
+      - name: Diagnose an unexpected ARM runtime failure
+        if: failure()
+        run: |
+          if test -x build/ncnn-arm/test_arm_fp16_depthwise; then
+            lldb --batch -o run -o bt -o 'register read pc' -o 'disassemble --pc --count 12' -- build/ncnn-arm/test_arm_fp16_depthwise > build/ncnn-arm/lldb-failure.txt 2>&1 || true
+            cat build/ncnn-arm/lldb-failure.txt
+          fi
       - name: Require the previous kernel to fail numerically then restore
         run: |
           git -C .ci-src/ncnn fetch --no-tags --depth=1 origin f18f3ffc94dbc76a277e94556c588ab2c2d0e1d9
