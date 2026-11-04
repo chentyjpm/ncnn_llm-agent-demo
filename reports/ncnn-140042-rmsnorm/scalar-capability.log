@@ -1,0 +1,2 @@
+COMMAND /workspace/scratch/ace345b46746/rmsnorm-standalone/probe_x86_rmsnorm scalar
+AVAILABLE ISA=scalar CPU_AND_OS

@@ -1,0 +1,22 @@
+{
+  "scalar": {
+    "exit": 2,
+    "summary": "FAIL ISA=scalar cases=2448 failed=1416 max_error_over_tolerance=3.99514086e+09"
+  },
+  "sse2": {
+    "exit": 2,
+    "summary": "FAIL ISA=sse2 cases=4896 failed=2716 max_error_over_tolerance=8.27178107e+09"
+  },
+  "avx": {
+    "exit": 2,
+    "summary": "FAIL ISA=avx cases=7344 failed=4216 max_error_over_tolerance=3.42689702e+10"
+  },
+  "avx-fma": {
+    "exit": 2,
+    "summary": "FAIL ISA=avx-fma cases=7344 failed=4216 max_error_over_tolerance=3.42689702e+10"
+  },
+  "avx512": {
+    "exit": 2,
+    "summary": "FAIL ISA=avx512 cases=9792 failed=5404 max_error_over_tolerance=3.42689702e+10"
+  }
+}

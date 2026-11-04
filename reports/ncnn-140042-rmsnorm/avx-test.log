@@ -1,0 +1,6 @@
+COMMAND /workspace/scratch/ace345b46746/rmsnorm-standalone/test_x86_rmsnorm_avx avx
+EXECUTED ISA=avx pack=1 cases=2448
+EXECUTED ISA=avx pack=4 cases=2448
+EXECUTED ISA=avx pack=8 cases=2448
+UNSUPPORTED_PACK ISA=avx pack=16 not_compiled
+PASS ISA=avx cases=7344 failed=0 max_error_over_tolerance=0.0220284642

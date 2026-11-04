@@ -1,0 +1,45 @@
+{
+  "platform": "Linux-6.18.57-x86_64-with-glibc2.41",
+  "source": "/workspace/scratch/ace345b46746/ncnn-review-20261103",
+  "compiler": "g++",
+  "required": [
+    "avx",
+    "avx-fma",
+    "avx512",
+    "scalar",
+    "sse2"
+  ],
+  "variants": {
+    "scalar": {
+      "compile_exit": 0,
+      "probe_exit": 0,
+      "test_exit": 0,
+      "status": "PASS"
+    },
+    "sse2": {
+      "compile_exit": 0,
+      "probe_exit": 0,
+      "test_exit": 0,
+      "status": "PASS"
+    },
+    "avx": {
+      "compile_exit": 0,
+      "probe_exit": 0,
+      "test_exit": 0,
+      "status": "PASS"
+    },
+    "avx-fma": {
+      "compile_exit": 0,
+      "probe_exit": 0,
+      "test_exit": 0,
+      "status": "PASS"
+    },
+    "avx512": {
+      "compile_exit": 0,
+      "probe_exit": 0,
+      "test_exit": 0,
+      "status": "PASS"
+    }
+  },
+  "status": "PASS_REQUIRED_MATRIX"
+}

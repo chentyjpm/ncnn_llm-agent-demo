@@ -51,7 +51,7 @@ set_tests_properties(test_convolutiondepthwise_int8_smoke PROPERTIES TIMEOUT 300
 if(AGENT_NCNN_VULKAN_TESTS)
     # Upstream helpers permit GPU skips. The strict companions instead require
     # a device, valid pipelines and submitted compute/copy work.
-    foreach(strict_test test_vulkan_required test_vulkan_matrix_required test_vulkan_int8_storage test_vulkan_interp_coordinates)
+    foreach(strict_test test_vulkan_required test_vulkan_matrix_required test_vulkan_int8_storage test_vulkan_interp_coordinates test_vulkan_priorbox)
         add_executable(${strict_test} ${strict_test}.cpp)
         target_include_directories(${strict_test} PRIVATE
             "${AGENT_NCNN_SOURCE_DIR}/tests"
@@ -71,4 +71,13 @@ if(AGENT_NCNN_ARM_FP16_TESTS)
     target_link_libraries(test_arm_fp16_depthwise PRIVATE ncnn)
     add_test(NAME test_arm_fp16_depthwise COMMAND test_arm_fp16_depthwise)
     set_tests_properties(test_arm_fp16_depthwise PROPERTIES TIMEOUT 120)
+endif()
+
+# The BF16 storage kernel only needs baseline AArch64 NEON, not BF16 ISA.
+if(AGENT_NCNN_ARM_FP16_TESTS)
+    add_executable(test_arm_bf16_pooling test_arm_bf16_pooling.cpp)
+    target_include_directories(test_arm_bf16_pooling PRIVATE "${AGENT_NCNN_SOURCE_DIR}/src/layer/arm")
+    target_link_libraries(test_arm_bf16_pooling PRIVATE ncnn)
+    add_test(NAME test_arm_bf16_pooling COMMAND test_arm_bf16_pooling)
+    set_tests_properties(test_arm_bf16_pooling PROPERTIES TIMEOUT 120)
 endif()

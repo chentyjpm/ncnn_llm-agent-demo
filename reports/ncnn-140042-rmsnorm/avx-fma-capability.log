@@ -1,0 +1,2 @@
+COMMAND /workspace/scratch/ace345b46746/rmsnorm-standalone/probe_x86_rmsnorm avx-fma
+AVAILABLE ISA=avx-fma CPU_AND_OS
