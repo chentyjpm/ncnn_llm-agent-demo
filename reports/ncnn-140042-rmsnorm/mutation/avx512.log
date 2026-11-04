@@ -1,0 +1,17 @@
+NUMERICAL_MISMATCH ISA=avx512 count=64 size=64 pack=1 affine=0 eps=9.99999997e-07 pattern=lane-distinct offset=0 element=0 lane=0 actual=0.598419845 expected=0.51462603453401923 tolerance=1.22925207e-05
+NUMERICAL_MISMATCH ISA=avx512 count=64 size=64 pack=1 affine=0 eps=9.99999997e-07 pattern=lane-distinct offset=0 element=1 lane=0 actual=-1.08463597 expected=-0.93275968759290984 tolerance=2.06551938e-05
+NUMERICAL_MISMATCH ISA=avx512 count=64 size=64 pack=1 affine=0 eps=9.99999997e-07 pattern=lane-distinct offset=0 element=2 lane=0 actual=1.57085204 expected=1.3508933406518004 tolerance=2.90178668e-05
+NUMERICAL_MISMATCH ISA=avx512 count=64 size=64 pack=1 affine=0 eps=9.99999997e-07 pattern=lane-distinct offset=0 element=3 lane=0 actual=-0.972432256 expected=-0.83626730611778122 tolerance=1.87253461e-05
+NUMERICAL_MISMATCH ISA=avx512 count=64 size=64 pack=1 affine=0 eps=9.99999997e-07 pattern=lane-distinct offset=0 element=4 lane=0 actual=1.45864832 expected=1.2544009591766718 tolerance=2.70880192e-05
+NUMERICAL_MISMATCH ISA=avx512 count=64 size=64 pack=1 affine=0 eps=9.99999997e-07 pattern=lane-distinct offset=0 element=5 lane=0 actual=-0.860228539 expected=-0.7397749246426526 tolerance=1.67954985e-05
+NUMERICAL_MISMATCH ISA=avx512 count=64 size=64 pack=1 affine=0 eps=9.99999997e-07 pattern=lane-distinct offset=0 element=6 lane=0 actual=1.34644461 expected=1.1579085777015432 tolerance=2.51581716e-05
+NUMERICAL_MISMATCH ISA=avx512 count=64 size=64 pack=1 affine=0 eps=9.99999997e-07 pattern=lane-distinct offset=0 element=7 lane=0 actual=-0.748024821 expected=-0.64328254316752398 tolerance=1.48656509e-05
+NUMERICAL_MISMATCH ISA=avx512 count=64 size=64 pack=1 affine=0 eps=9.99999997e-07 pattern=lane-distinct offset=0 element=8 lane=0 actual=1.23424089 expected=1.0614161962264146 tolerance=2.32283239e-05
+NUMERICAL_MISMATCH ISA=avx512 count=64 size=64 pack=1 affine=0 eps=9.99999997e-07 pattern=lane-distinct offset=0 element=9 lane=0 actual=-0.635821104 expected=-0.54679016169239547 tolerance=1.29358032e-05
+NUMERICAL_MISMATCH ISA=avx512 count=64 size=64 pack=1 affine=0 eps=9.99999997e-07 pattern=lane-distinct offset=0 element=10 lane=0 actual=1.12203717 expected=0.96492381475128608 tolerance=2.12984763e-05
+NUMERICAL_MISMATCH ISA=avx512 count=64 size=64 pack=1 affine=0 eps=9.99999997e-07 pattern=lane-distinct offset=0 element=11 lane=0 actual=-1.60825336 expected=-1.3830574678101766 tolerance=2.96611494e-05
+EXECUTED ISA=avx512 pack=1 cases=2448
+EXECUTED ISA=avx512 pack=4 cases=2448
+EXECUTED ISA=avx512 pack=8 cases=2448
+EXECUTED ISA=avx512 pack=16 cases=2448
+FAIL ISA=avx512 cases=9792 failed=5404 max_error_over_tolerance=3.42689702e+10

@@ -1,0 +1,17 @@
+NUMERICAL_MISMATCH ISA=sse2 count=16 size=16 pack=1 affine=0 eps=9.99999997e-07 pattern=lane-distinct offset=0 element=0 lane=0 actual=0.599042058 expected=0.51096775460765675 tolerance=1.22193551e-05
+NUMERICAL_MISMATCH ISA=sse2 count=16 size=16 pack=1 affine=0 eps=9.99999997e-07 pattern=lane-distinct offset=0 element=1 lane=0 actual=-1.08576369 expected=-0.9261290552263779 tolerance=2.05225811e-05
+NUMERICAL_MISMATCH ISA=sse2 count=16 size=16 pack=1 affine=0 eps=9.99999997e-07 pattern=lane-distinct offset=0 element=2 lane=0 actual=1.57248545 expected=1.341290355845099 tolerance=2.88258071e-05
+NUMERICAL_MISMATCH ISA=sse2 count=16 size=16 pack=1 affine=0 eps=9.99999997e-07 pattern=lane-distinct offset=0 element=3 lane=0 actual=-0.973443329 expected=-0.83032260123744228 tolerance=1.8606452e-05
+NUMERICAL_MISMATCH ISA=sse2 count=16 size=16 pack=1 affine=0 eps=9.99999997e-07 pattern=lane-distinct offset=0 element=4 lane=0 actual=1.46016502 expected=1.2454839018561634 tolerance=2.6909678e-05
+NUMERICAL_MISMATCH ISA=sse2 count=16 size=16 pack=1 affine=0 eps=9.99999997e-07 pattern=lane-distinct offset=0 element=5 lane=0 actual=-0.861122966 expected=-0.73451614724850656 tolerance=1.66903229e-05
+NUMERICAL_MISMATCH ISA=sse2 count=16 size=16 pack=1 affine=0 eps=9.99999997e-07 pattern=lane-distinct offset=0 element=6 lane=0 actual=1.3478446 expected=1.1496774478672278 tolerance=2.4993549e-05
+NUMERICAL_MISMATCH ISA=sse2 count=16 size=16 pack=1 affine=0 eps=9.99999997e-07 pattern=lane-distinct offset=0 element=7 lane=0 actual=-0.748802543 expected=-0.63870969325957094 tolerance=1.47741939e-05
+NUMERICAL_MISMATCH ISA=sse2 count=16 size=16 pack=1 affine=0 eps=9.99999997e-07 pattern=lane-distinct offset=0 element=8 lane=0 actual=1.2355243 expected=1.053870993878292 tolerance=2.30774199e-05
+NUMERICAL_MISMATCH ISA=sse2 count=16 size=16 pack=1 affine=0 eps=9.99999997e-07 pattern=lane-distinct offset=0 element=9 lane=0 actual=-0.636482179 expected=-0.54290323927063533 tolerance=1.28580648e-05
+NUMERICAL_MISMATCH ISA=sse2 count=16 size=16 pack=1 affine=0 eps=9.99999997e-07 pattern=lane-distinct offset=0 element=10 lane=0 actual=1.12320387 expected=0.95806453988935636 tolerance=2.11612908e-05
+NUMERICAL_MISMATCH ISA=sse2 count=16 size=16 pack=1 affine=0 eps=9.99999997e-07 pattern=lane-distinct offset=0 element=11 lane=0 actual=-1.60992551 expected=-1.3732258405080775 tolerance=2.94645168e-05
+EXECUTED ISA=sse2 pack=1 cases=2448
+EXECUTED ISA=sse2 pack=4 cases=2448
+UNSUPPORTED_PACK ISA=sse2 pack=8 not_compiled
+UNSUPPORTED_PACK ISA=sse2 pack=16 not_compiled
+FAIL ISA=sse2 cases=4896 failed=2716 max_error_over_tolerance=8.27178107e+09

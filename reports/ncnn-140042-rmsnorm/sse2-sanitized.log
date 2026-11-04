@@ -1,0 +1,6 @@
+COMMAND ASAN_OPTIONS=detect_leaks=0 rmsnorm-standalone/test_x86_rmsnorm_sse2_sanitized sse2
+EXECUTED ISA=sse2 pack=1 cases=2448
+EXECUTED ISA=sse2 pack=4 cases=2448
+UNSUPPORTED_PACK ISA=sse2 pack=8 not_compiled
+UNSUPPORTED_PACK ISA=sse2 pack=16 not_compiled
+PASS ISA=sse2 cases=4896 failed=0 max_error_over_tolerance=0.0220284642

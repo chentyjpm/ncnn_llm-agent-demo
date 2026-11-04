@@ -1,0 +1,17 @@
+NUMERICAL_MISMATCH ISA=scalar count=2 size=2 pack=1 affine=0 eps=9.99999997e-07 pattern=lane-distinct offset=0 element=0 lane=0 actual=1.41276765 expected=0.68301133409069592 tolerance=1.56602267e-05
+NUMERICAL_MISMATCH ISA=scalar count=2 size=2 pack=1 affine=0 eps=9.99999997e-07 pattern=lane-distinct offset=0 element=1 lane=0 actual=-2.56064129 expected=-1.2379580430393864 tolerance=2.67591609e-05
+NUMERICAL_MISMATCH ISA=scalar count=2 size=2 pack=1 affine=0 eps=9.99999997e-07 pattern=lane-distinct offset=1 element=0 lane=0 actual=1.41276765 expected=0.68301133409069592 tolerance=1.56602267e-05
+NUMERICAL_MISMATCH ISA=scalar count=2 size=2 pack=1 affine=0 eps=9.99999997e-07 pattern=lane-distinct offset=1 element=1 lane=0 actual=-2.56064129 expected=-1.2379580430393864 tolerance=2.67591609e-05
+NUMERICAL_MISMATCH ISA=scalar count=2 size=2 pack=1 affine=0 eps=9.99999997e-07 pattern=mixed-magnitude offset=0 element=0 lane=0 actual=0.121618092 expected=0.0060881055803884551 tolerance=2.12176211e-06
+NUMERICAL_MISMATCH ISA=scalar count=2 size=2 pack=1 affine=0 eps=9.99999997e-07 pattern=mixed-magnitude offset=0 element=1 lane=0 actual=-28.2153969 expected=-1.4124404946501217 tolerance=3.02488099e-05
+NUMERICAL_MISMATCH ISA=scalar count=2 size=2 pack=1 affine=0 eps=9.99999997e-07 pattern=mixed-magnitude offset=1 element=0 lane=0 actual=0.121618092 expected=0.0060881055803884551 tolerance=2.12176211e-06
+NUMERICAL_MISMATCH ISA=scalar count=2 size=2 pack=1 affine=0 eps=9.99999997e-07 pattern=mixed-magnitude offset=1 element=1 lane=0 actual=-28.2153969 expected=-1.4124404946501217 tolerance=3.02488099e-05
+NUMERICAL_MISMATCH ISA=scalar count=2 size=2 pack=1 affine=0 eps=9.99999997e-07 pattern=chain-stripes offset=0 element=0 lane=0 actual=1.39159739 expected=0.68057734501173828 tolerance=1.56115469e-05
+NUMERICAL_MISMATCH ISA=scalar count=2 size=2 pack=1 affine=0 eps=9.99999997e-07 pattern=chain-stripes offset=0 element=1 lane=0 actual=-2.5222702 expected=-1.2335464378337757 tolerance=2.66709288e-05
+NUMERICAL_MISMATCH ISA=scalar count=2 size=2 pack=1 affine=0 eps=9.99999997e-07 pattern=chain-stripes offset=1 element=0 lane=0 actual=1.39159739 expected=0.68057734501173828 tolerance=1.56115469e-05
+NUMERICAL_MISMATCH ISA=scalar count=2 size=2 pack=1 affine=0 eps=9.99999997e-07 pattern=chain-stripes offset=1 element=1 lane=0 actual=-2.5222702 expected=-1.2335464378337757 tolerance=2.66709288e-05
+EXECUTED ISA=scalar pack=1 cases=2448
+UNSUPPORTED_PACK ISA=scalar pack=4 not_compiled
+UNSUPPORTED_PACK ISA=scalar pack=8 not_compiled
+UNSUPPORTED_PACK ISA=scalar pack=16 not_compiled
+FAIL ISA=scalar cases=2448 failed=1416 max_error_over_tolerance=3.99514086e+09

@@ -41,6 +41,8 @@ jobs:
         run: |
           test "$(git -C .ci-src/ncnn rev-parse HEAD)" = "$PIN"
           cmake -S model-tests/ncnn-core -B build/ncnn-core -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=${{ matrix.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DAGENT_NCNN_SOURCE_DIR="$PWD/.ci-src/ncnn" -DNCNN_OPENMP=${{ matrix.openmp }} -DNCNN_SIMPLEOMP=${{ matrix.simpleomp }} -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+      - name: Check direct RMSNorm ISA paths against independent reference
+        run: python3 model-tests/ncnn-core/run_x86_rmsnorm.py --source .ci-src/ncnn --build-dir build/ncnn-core/rmsnorm-isa --cxx ${{ matrix.cxx }} --require scalar,sse2,avx,avx-fma
       - name: Compile CPU, layout, norm, ReLU, Sigmoid, TanH, ELU, Swish, HardSigmoid, HardSwish, SELU, ShuffleChannel and convolution tests
         run: cmake --build build/ncnn-core --parallel 2 --target test_absval test_bnll test_dropout test_erf test_exp test_gelu test_log test_mish test_power test_shrink test_softplus test_threshold test_cpu test_convolution_int8_smoke test_convolution_3a test_convolution_oom test_net test_layernorm test_rmsnorm test_groupnorm test_instancenorm test_unaryop test_relu test_sigmoid test_tanh test_elu test_swish test_hardsigmoid test_hardswish test_selu test_shufflechannel test_convolutiondepthwise_5x5_smoke test_packing test_convolutiondepthwise_int8_smoke
       - name: Run CPU regressions including BF16 storage packing
@@ -52,6 +54,8 @@ jobs:
           path: |
             build/ncnn-core/CMakeCache.txt
             build/ncnn-core/Testing/Temporary/
+            build/ncnn-core/rmsnorm-isa/*.log
+            build/ncnn-core/rmsnorm-isa/summary.json
           retention-days: 14
 
   vulkan-lavapipe:
@@ -101,12 +105,12 @@ jobs:
           git -C .ci-src/ncnn submodule status > build/ncnn-vulkan/submodules.txt
           cmake -S model-tests/ncnn-core -B build/ncnn-vulkan -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DAGENT_NCNN_SOURCE_DIR="$PWD/.ci-src/ncnn" -DAGENT_NCNN_VULKAN_TESTS=ON -DNCNN_SIMPLEVK=ON -DNCNN_SYSTEM_GLSLANG=OFF -DNCNN_OPENMP=OFF -DNCNN_SIMPLEOMP=OFF -DCMAKE_POLICY_VERSION_MINIMUM=3.5
       - name: Compile strict Vulkan and upstream operator regressions
-        run: cmake --build build/ncnn-vulkan --parallel 2 --target test_vulkan_required test_vulkan_matrix_required test_vulkan_int8_storage test_vulkan_interp_coordinates test_convolution_int8_smoke test_memorydata test_layernorm test_rmsnorm test_groupnorm test_instancenorm test_unaryop test_net
+        run: cmake --build build/ncnn-vulkan --parallel 2 --target test_vulkan_required test_vulkan_matrix_required test_vulkan_int8_storage test_vulkan_interp_coordinates test_vulkan_priorbox test_convolution_int8_smoke test_memorydata test_layernorm test_rmsnorm test_groupnorm test_instancenorm test_unaryop test_net
       - name: Require INT8 StorageBuffer SPIR-V compilation
         run: ctest --test-dir build/ncnn-vulkan --verbose --no-tests=error --timeout 120 -R '^test_vulkan_int8_storage$'
       - name: Verify a missing Vulkan device fails instead of skipping
         run: |
-          for target in test_vulkan_required test_vulkan_matrix_required test_vulkan_int8_storage test_vulkan_interp_coordinates; do
+          for target in test_vulkan_required test_vulkan_matrix_required test_vulkan_int8_storage test_vulkan_interp_coordinates test_vulkan_priorbox; do
             if VK_DRIVER_FILES="$PWD/no-such-icd.json" VK_ICD_FILENAMES="$PWD/no-such-icd.json" "build/ncnn-vulkan/$target" > "build/ncnn-vulkan/no-device-$target.txt" 2>&1; then
               echo "ERROR: $target no-device regression unexpectedly passed"
               exit 1
@@ -136,6 +140,24 @@ jobs:
           git -C .ci-src/ncnn diff --exit-code
           cmake --build build/ncnn-vulkan --parallel 2 --target test_vulkan_interp_coordinates
           ctest --test-dir build/ncnn-vulkan --verbose --no-tests=error --timeout 300 -R '^test_vulkan_interp_coordinates$' | tee build/ncnn-vulkan/interp-restored.txt
+      - name: Require current FP16 PriorBox and prove previous shader fails
+        run: |
+          ctest --test-dir build/ncnn-vulkan --verbose --no-tests=error -R '^test_vulkan_priorbox$' | tee build/ncnn-vulkan/priorbox-current.txt
+          git -C .ci-src/ncnn fetch --no-tags --depth=1 origin 45cfde20a5acc711a86a8ddde34941b9634fc0a6
+          shader=src/layer/vulkan/shader/priorbox.comp
+          git -C .ci-src/ncnn show "45cfde20a5acc711a86a8ddde34941b9634fc0a6:$shader" > ".ci-src/ncnn/$shader"
+          cmake --build build/ncnn-vulkan --parallel 2 --target test_vulkan_priorbox
+          set +e
+          build/ncnn-vulkan/test_vulkan_priorbox > build/ncnn-vulkan/priorbox-old.txt 2>&1
+          result=$?
+          set -e
+          cat build/ncnn-vulkan/priorbox-old.txt
+          test "$result" = 2
+          grep -F NUMERICAL_MISMATCH build/ncnn-vulkan/priorbox-old.txt
+          git -C .ci-src/ncnn restore --source=HEAD -- "$shader"
+          git -C .ci-src/ncnn diff --exit-code
+          cmake --build build/ncnn-vulkan --parallel 2 --target test_vulkan_priorbox
+          ctest --test-dir build/ncnn-vulkan --verbose --no-tests=error -R '^test_vulkan_priorbox$' | tee build/ncnn-vulkan/priorbox-restored.txt
       - name: Require submitted Vulkan work with subgroup on and off
         run: ctest --test-dir build/ncnn-vulkan --verbose --timeout 600 -R '^test_vulkan_(required|matrix_required)$' | tee build/ncnn-vulkan/required-vulkan.txt
       - name: Run upstream norms, layout, MemoryData and bounded INT8 convolution cases
@@ -218,6 +240,27 @@ jobs:
           cmake -E rm -f build/ncnn-arm/CMakeFiles/test_arm_fp16_depthwise.dir/test_arm_fp16_depthwise.cpp.o build/ncnn-arm/test_arm_fp16_depthwise
           cmake --build build/ncnn-arm --parallel 2 --target test_arm_fp16_depthwise
           ctest --test-dir build/ncnn-arm --verbose --no-tests=error -R '^test_arm_fp16_depthwise$' | tee build/ncnn-arm/restored.txt
+      - name: Require current BF16 pooling and prove previous header fails
+        run: |
+          cmake --build build/ncnn-arm --parallel 2 --target test_arm_bf16_pooling
+          ctest --test-dir build/ncnn-arm --verbose --no-tests=error -R '^test_arm_bf16_pooling$' | tee build/ncnn-arm/pooling-current.txt
+          git -C .ci-src/ncnn fetch --no-tags --depth=1 origin 45cfde20a5acc711a86a8ddde34941b9634fc0a6
+          header=src/layer/arm/pooling_3x3_pack4_bf16s.h
+          git -C .ci-src/ncnn show "45cfde20a5acc711a86a8ddde34941b9634fc0a6:$header" > ".ci-src/ncnn/$header"
+          cmake -E rm -f build/ncnn-arm/CMakeFiles/test_arm_bf16_pooling.dir/test_arm_bf16_pooling.cpp.o build/ncnn-arm/test_arm_bf16_pooling
+          cmake --build build/ncnn-arm --parallel 2 --target test_arm_bf16_pooling
+          set +e
+          build/ncnn-arm/test_arm_bf16_pooling > build/ncnn-arm/pooling-old.txt 2>&1
+          result=$?
+          set -e
+          cat build/ncnn-arm/pooling-old.txt
+          test "$result" = 2
+          grep -F NUMERICAL_MISMATCH build/ncnn-arm/pooling-old.txt
+          git -C .ci-src/ncnn restore --source=HEAD -- "$header"
+          git -C .ci-src/ncnn diff --exit-code
+          cmake -E rm -f build/ncnn-arm/CMakeFiles/test_arm_bf16_pooling.dir/test_arm_bf16_pooling.cpp.o build/ncnn-arm/test_arm_bf16_pooling
+          cmake --build build/ncnn-arm --parallel 2 --target test_arm_bf16_pooling
+          ctest --test-dir build/ncnn-arm --verbose --no-tests=error -R '^test_arm_bf16_pooling$' | tee build/ncnn-arm/pooling-restored.txt
       - if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:

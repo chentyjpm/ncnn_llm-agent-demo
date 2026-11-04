@@ -1,0 +1,6 @@
+COMMAND /workspace/scratch/ace345b46746/rmsnorm-standalone/test_x86_rmsnorm_scalar scalar
+EXECUTED ISA=scalar pack=1 cases=2448
+UNSUPPORTED_PACK ISA=scalar pack=4 not_compiled
+UNSUPPORTED_PACK ISA=scalar pack=8 not_compiled
+UNSUPPORTED_PACK ISA=scalar pack=16 not_compiled
+PASS ISA=scalar cases=2448 failed=0 max_error_over_tolerance=0.0574697749

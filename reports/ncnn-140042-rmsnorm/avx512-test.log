@@ -1,0 +1,6 @@
+COMMAND /workspace/scratch/ace345b46746/rmsnorm-standalone/test_x86_rmsnorm_avx512 avx512
+EXECUTED ISA=avx512 pack=1 cases=2448
+EXECUTED ISA=avx512 pack=4 cases=2448
+EXECUTED ISA=avx512 pack=8 cases=2448
+EXECUTED ISA=avx512 pack=16 cases=2448
+PASS ISA=avx512 cases=9792 failed=0 max_error_over_tolerance=0.0220284642
