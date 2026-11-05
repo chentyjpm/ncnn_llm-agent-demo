@@ -1,0 +1,13 @@
+COMMAND /workspace/scratch/ace345b46746/softplus-work/final/test_x86_softplus_avx avx
+EXECUTED ISA=avx dtype=fp32 pack=1 dims=1,2,3,4 cases=21504
+EXECUTED ISA=avx dtype=fp32 pack=4 dims=1,2,3,4 cases=21504
+EXECUTED ISA=avx dtype=fp32 pack=8 dims=1,2,3,4 cases=21504
+UNSUPPORTED_PACK ISA=avx dtype=fp32 pack=16 not_compiled
+ACCURACY_LIMITATION ISA=avx dtype=fp32 representable_negative_results_rounded_to_zero=13637520 strict_negative=0
+PASS ISA=avx dtype=fp32 cases=64512 failed=0 elements=72733440 max_error_over_tolerance=0.45554068
+EXECUTED ISA=avx dtype=bf16 pack=1 dims=1,2,3,4 cases=21504
+EXECUTED ISA=avx dtype=bf16 pack=4 dims=1,2,3,4 cases=21504
+EXECUTED ISA=avx dtype=bf16 pack=8 dims=1,2,3,4 cases=21504
+UNSUPPORTED_PACK ISA=avx dtype=bf16 pack=16 not_compiled
+ACCURACY_LIMITATION ISA=avx dtype=bf16 representable_negative_results_rounded_to_zero=11364600 strict_negative=0
+PASS ISA=avx dtype=bf16 cases=64512 failed=0 elements=72733440 max_error_over_tolerance=0.890669542
