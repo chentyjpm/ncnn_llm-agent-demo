@@ -1,0 +1,136 @@
+{
+  "status": "PASS_REQUIRED_MATRIX",
+  "platform": "Linux-6.18.57-x86_64-with-glibc2.41",
+  "source": "/workspace/scratch/ace345b46746/ncnn-review-20261103",
+  "revision": "36036fe31a585b2b8e051844af76b9edf0a5e518",
+  "compiler": "g++",
+  "required": [
+    "avx",
+    "avx-fma",
+    "avx2",
+    "avx512",
+    "avx512-bf16",
+    "scalar",
+    "sse2"
+  ],
+  "strict_negative": false,
+  "scope": "unchanged direct kernels; actual external-storage Mat and Option; serial; no Net dispatch/model inference",
+  "test_sha256": "4170259a5ef5494bd65bcaa9576c7d5e5950558138b501b6101ea1b782d0997d",
+  "source_sha256": {
+    "src/platform.h.in": "d35a0bbf1c1bba33825ccaf298d06aba2b9529be44caa4a08c031bfe79460051",
+    "src/mat.h": "b184b00e03aca72f78605d5d88b9052f0da81ed24e258e09f9d157ddfa5f2495",
+    "src/option.h": "75a6b531a40f6fd9f17deb417f5dcc546c17718858e0b802e1a8d8653299b82c",
+    "src/option.cpp": "3b5362f55912643b1c04717aba609d1570229b9834356933471e71cad0c62ff4",
+    "src/cpu.cpp": "eadab811006a28a848a204067aabfd772723311f6691f9306b5bf0e9bf9ebb7e",
+    "src/layer/x86/softplus_fp32.h": "9ca999b16583ecf1b180389afe5e0a174f50f61732d4b6370b6cbffb169fcd69",
+    "src/layer/x86/softplus_bf16s.h": "fb337fc812fba985efddefc65ed5b75e93857b00030a820e6e8b0bb9d7e97179",
+    "src/layer/x86/x86_usability.h": "e8fc4bd1c39bbf0143270ea3d4d301f063470d090d340ca8ed88c8ec4773d21e"
+  },
+  "variants": {
+    "scalar": {
+      "flags": [
+        "-DAGENT_SOFTPLUS_SCALAR=1",
+        "-fno-tree-vectorize"
+      ],
+      "compiler_probe_exit": 0,
+      "compile_exit": 0,
+      "probe_exit": 0,
+      "test_exit": 0,
+      "status": "PASS"
+    },
+    "sse2": {
+      "flags": [
+        "-msse2"
+      ],
+      "compiler_probe_exit": 0,
+      "compile_exit": 0,
+      "probe_exit": 0,
+      "test_exit": 0,
+      "status": "PASS"
+    },
+    "avx": {
+      "flags": [
+        "-mavx"
+      ],
+      "compiler_probe_exit": 0,
+      "compile_exit": 0,
+      "probe_exit": 0,
+      "test_exit": 0,
+      "status": "PASS"
+    },
+    "avx-fma": {
+      "flags": [
+        "-mavx",
+        "-mfma"
+      ],
+      "compiler_probe_exit": 0,
+      "compile_exit": 0,
+      "probe_exit": 0,
+      "test_exit": 0,
+      "status": "PASS"
+    },
+    "avx-fma4": {
+      "flags": [
+        "-mavx",
+        "-mfma4"
+      ],
+      "compiler_probe_exit": 0,
+      "compile_exit": 0,
+      "probe_exit": 77,
+      "status": "UNAVAILABLE_CPU_OR_OS"
+    },
+    "avx2": {
+      "flags": [
+        "-mavx2",
+        "-mfma"
+      ],
+      "compiler_probe_exit": 0,
+      "compile_exit": 0,
+      "probe_exit": 0,
+      "test_exit": 0,
+      "status": "PASS"
+    },
+    "avx-ne-convert": {
+      "flags": [
+        "-mavx2",
+        "-mfma",
+        "-mavxneconvert"
+      ],
+      "compiler_probe_exit": 0,
+      "compile_exit": 0,
+      "probe_exit": 77,
+      "status": "UNAVAILABLE_CPU_OR_OS"
+    },
+    "avx512": {
+      "flags": [
+        "-mavx2",
+        "-mfma",
+        "-mavx512f",
+        "-mavx512dq",
+        "-mavx512bw",
+        "-mavx512vl"
+      ],
+      "compiler_probe_exit": 0,
+      "compile_exit": 0,
+      "probe_exit": 0,
+      "test_exit": 0,
+      "status": "PASS"
+    },
+    "avx512-bf16": {
+      "flags": [
+        "-mavx2",
+        "-mfma",
+        "-mavx512f",
+        "-mavx512dq",
+        "-mavx512bw",
+        "-mavx512vl",
+        "-mavx512bf16"
+      ],
+      "compiler_probe_exit": 0,
+      "compile_exit": 0,
+      "probe_exit": 0,
+      "test_exit": 0,
+      "status": "PASS"
+    }
+  }
+}

@@ -1,0 +1,2 @@
+COMMAND /workspace/scratch/ace345b46746/softplus-work/final/probe_x86_softplus avx512-bf16
+AVAILABLE ISA=avx512-bf16 CPU_AND_OS xcr0=0xe7

@@ -1,0 +1,13 @@
+COMMAND /workspace/scratch/ace345b46746/softplus-work/final/test_x86_softplus_sse2 sse2
+EXECUTED ISA=sse2 dtype=fp32 pack=1 dims=1,2,3,4 cases=21504
+EXECUTED ISA=sse2 dtype=fp32 pack=4 dims=1,2,3,4 cases=21504
+UNSUPPORTED_PACK ISA=sse2 dtype=fp32 pack=8 not_compiled
+UNSUPPORTED_PACK ISA=sse2 dtype=fp32 pack=16 not_compiled
+ACCURACY_LIMITATION ISA=sse2 dtype=fp32 representable_negative_results_rounded_to_zero=5245200 strict_negative=0
+PASS ISA=sse2 dtype=fp32 cases=43008 failed=0 elements=27974400 max_error_over_tolerance=0.45554068
+EXECUTED ISA=sse2 dtype=bf16 pack=1 dims=1,2,3,4 cases=21504
+EXECUTED ISA=sse2 dtype=bf16 pack=4 dims=1,2,3,4 cases=21504
+UNSUPPORTED_PACK ISA=sse2 dtype=bf16 pack=8 not_compiled
+UNSUPPORTED_PACK ISA=sse2 dtype=bf16 pack=16 not_compiled
+ACCURACY_LIMITATION ISA=sse2 dtype=bf16 representable_negative_results_rounded_to_zero=4371000 strict_negative=0
+PASS ISA=sse2 dtype=bf16 cases=43008 failed=0 elements=27974400 max_error_over_tolerance=0.890669542

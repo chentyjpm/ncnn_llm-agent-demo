@@ -1,0 +1,13 @@
+COMMAND /workspace/scratch/ace345b46746/softplus-work/final/test_x86_softplus_scalar scalar
+EXECUTED ISA=scalar dtype=fp32 pack=1 dims=1,2,3,4 cases=21504
+UNSUPPORTED_PACK ISA=scalar dtype=fp32 pack=4 not_compiled
+UNSUPPORTED_PACK ISA=scalar dtype=fp32 pack=8 not_compiled
+UNSUPPORTED_PACK ISA=scalar dtype=fp32 pack=16 not_compiled
+ACCURACY_LIMITATION ISA=scalar dtype=fp32 representable_negative_results_rounded_to_zero=1049040 strict_negative=0
+PASS ISA=scalar dtype=fp32 cases=21504 failed=0 elements=5594880 max_error_over_tolerance=0.45554068
+EXECUTED ISA=scalar dtype=bf16 pack=1 dims=1,2,3,4 cases=21504
+UNSUPPORTED_PACK ISA=scalar dtype=bf16 pack=4 not_compiled
+UNSUPPORTED_PACK ISA=scalar dtype=bf16 pack=8 not_compiled
+UNSUPPORTED_PACK ISA=scalar dtype=bf16 pack=16 not_compiled
+ACCURACY_LIMITATION ISA=scalar dtype=bf16 representable_negative_results_rounded_to_zero=874200 strict_negative=0
+PASS ISA=scalar dtype=bf16 cases=21504 failed=0 elements=5594880 max_error_over_tolerance=0.890669542
