@@ -48,10 +48,18 @@ target_link_libraries(test_convolutiondepthwise_int8_smoke PRIVATE ncnntestutil 
 add_test(NAME test_convolutiondepthwise_int8_smoke COMMAND test_convolutiondepthwise_int8_smoke)
 set_tests_properties(test_convolutiondepthwise_int8_smoke PROPERTIES TIMEOUT 300)
 
+# Finite independent expectations for generic and architecture-selected CPU
+# LogSumExp, rather than accepting agreement between two overflowing kernels.
+add_executable(test_reduction_logsumexp test_reduction_logsumexp.cpp)
+target_include_directories(test_reduction_logsumexp PRIVATE "${AGENT_NCNN_SOURCE_DIR}/src/layer")
+target_link_libraries(test_reduction_logsumexp PRIVATE ncnn)
+add_test(NAME test_reduction_logsumexp COMMAND test_reduction_logsumexp)
+set_tests_properties(test_reduction_logsumexp PROPERTIES TIMEOUT 120)
+
 if(AGENT_NCNN_VULKAN_TESTS)
     # Upstream helpers permit GPU skips. The strict companions instead require
     # a device, valid pipelines and submitted compute/copy work.
-    foreach(strict_test test_vulkan_required test_vulkan_matrix_required test_vulkan_int8_storage test_vulkan_interp_coordinates test_vulkan_priorbox)
+    foreach(strict_test test_vulkan_required test_vulkan_matrix_required test_vulkan_int8_storage test_vulkan_interp_coordinates test_vulkan_priorbox test_vulkan_stability)
         add_executable(${strict_test} ${strict_test}.cpp)
         target_include_directories(${strict_test} PRIVATE
             "${AGENT_NCNN_SOURCE_DIR}/tests"

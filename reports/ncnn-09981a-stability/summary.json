@@ -1,0 +1,44 @@
+{
+  "scope": "Real ncnn finite LogSumExp operator checks; not trained-model inference.",
+  "platform": "Linux-6.18.57-x86_64-with-glibc2.41",
+  "machine": "x86_64",
+  "compiler": "g++ (Debian 14.2.0-19) 14.2.0",
+  "current_ncnn_revision": "09981a0796cc0dd629ed5ba0f8d55653cc1406a5",
+  "negative_source_revision": "36036fe31a585b2b8e051844af76b9edf0a5e518",
+  "configuration": "Direct g++ x86-64 SSE2, AVX disabled, OpenMP disabled, runtime CPU dispatch disabled; unchanged current ncnn support sources with CMake-equivalent Reduction-only registration headers.",
+  "current": {
+    "exit_code": 0,
+    "cases": 48,
+    "numerical_failures": 0,
+    "generic_cases": 24,
+    "selected_x86_cases": 24
+  },
+  "negative_control": {
+    "exit_code": 2,
+    "cases": 48,
+    "numerical_failures": 48,
+    "required_marker_found": true,
+    "source_substitutions": [
+      "src/layer/reduction.cpp",
+      "src/layer/x86/reduction_fp32.h",
+      "src/layer/x86/reduction_functor.h",
+      "src/layer/x86/reduction_x86.cpp"
+    ]
+  },
+  "cpp_syntax": {
+    "exit_code": 0,
+    "targets": [
+      "test_reduction_logsumexp",
+      "test_vulkan_stability"
+    ],
+    "warnings": false
+  },
+  "not_run": [
+    "CMake configure/build/CTest",
+    "Vulkan SPIR-V compilation and execution",
+    "Vulkan old-shader negative controls",
+    "ARM, Windows and macOS execution",
+    "Physical-GPU or trained-model inference"
+  ],
+  "upstream_checkouts_unchanged": true
+}

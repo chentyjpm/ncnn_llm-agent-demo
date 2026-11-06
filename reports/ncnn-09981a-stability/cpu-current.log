@@ -1,0 +1,97 @@
+RUN Reduction op=10 case=all_1d_257 pattern=0 backend=generic coeff=1 keepdims=0
+PASS op=Reduction max_abs_error=6.75673743e-06 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=all_1d_257 pattern=0 backend=selected_cpu coeff=1 keepdims=0
+PASS op=Reduction max_abs_error=6.75673743e-06 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=all_1d_257 pattern=1 backend=generic coeff=1 keepdims=0
+PASS op=Reduction max_abs_error=6.75673743e-06 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=all_1d_257 pattern=1 backend=selected_cpu coeff=1 keepdims=0
+PASS op=Reduction max_abs_error=6.75673743e-06 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=all_1d_257 pattern=2 backend=generic coeff=1 keepdims=0
+PASS op=Reduction max_abs_error=8.73989802e-06 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=all_1d_257 pattern=2 backend=selected_cpu coeff=1 keepdims=0
+PASS op=Reduction max_abs_error=8.73989802e-06 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=width_2d pattern=0 backend=generic coeff=1 keepdims=0
+PASS op=Reduction max_abs_error=2.32062223e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=width_2d pattern=0 backend=selected_cpu coeff=1 keepdims=0
+PASS op=Reduction max_abs_error=2.32062223e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=width_2d pattern=1 backend=generic coeff=1 keepdims=0
+PASS op=Reduction max_abs_error=2.32062223e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=width_2d pattern=1 backend=selected_cpu coeff=1 keepdims=0
+PASS op=Reduction max_abs_error=2.32062223e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=width_2d pattern=2 backend=generic coeff=1 keepdims=0
+PASS op=Reduction max_abs_error=1.61453431e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=width_2d pattern=2 backend=selected_cpu coeff=1 keepdims=0
+PASS op=Reduction max_abs_error=1.61453431e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=height_2d_keep pattern=0 backend=generic coeff=0.5 keepdims=1
+PASS op=Reduction max_abs_error=1.46491739e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=height_2d_keep pattern=0 backend=selected_cpu coeff=0.5 keepdims=1
+PASS op=Reduction max_abs_error=1.46491739e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=height_2d_keep pattern=1 backend=generic coeff=0.5 keepdims=1
+PASS op=Reduction max_abs_error=1.46491739e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=height_2d_keep pattern=1 backend=selected_cpu coeff=0.5 keepdims=1
+PASS op=Reduction max_abs_error=1.46491739e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=height_2d_keep pattern=2 backend=generic coeff=0.5 keepdims=1
+PASS op=Reduction max_abs_error=1.46491739e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=height_2d_keep pattern=2 backend=selected_cpu coeff=0.5 keepdims=1
+PASS op=Reduction max_abs_error=1.46491739e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=spatial_3d_keep pattern=0 backend=generic coeff=0.5 keepdims=1
+PASS op=Reduction max_abs_error=1.28255218e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=spatial_3d_keep pattern=0 backend=selected_cpu coeff=0.5 keepdims=1
+PASS op=Reduction max_abs_error=1.28255218e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=spatial_3d_keep pattern=1 backend=generic coeff=0.5 keepdims=1
+PASS op=Reduction max_abs_error=1.28255218e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=spatial_3d_keep pattern=1 backend=selected_cpu coeff=0.5 keepdims=1
+PASS op=Reduction max_abs_error=1.28255218e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=spatial_3d_keep pattern=2 backend=generic coeff=0.5 keepdims=1
+PASS op=Reduction max_abs_error=9.56578526e-06 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=spatial_3d_keep pattern=2 backend=selected_cpu coeff=0.5 keepdims=1
+PASS op=Reduction max_abs_error=9.56578526e-06 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=channels_3d pattern=0 backend=generic coeff=-0.5 keepdims=0
+PASS op=Reduction max_abs_error=1.16860411e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=channels_3d pattern=0 backend=selected_cpu coeff=-0.5 keepdims=0
+PASS op=Reduction max_abs_error=1.16860411e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=channels_3d pattern=1 backend=generic coeff=-0.5 keepdims=0
+PASS op=Reduction max_abs_error=1.16860411e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=channels_3d pattern=1 backend=selected_cpu coeff=-0.5 keepdims=0
+PASS op=Reduction max_abs_error=1.16860411e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=channels_3d pattern=2 backend=generic coeff=-0.5 keepdims=0
+PASS op=Reduction max_abs_error=1.16860411e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=channels_3d pattern=2 backend=selected_cpu coeff=-0.5 keepdims=0
+PASS op=Reduction max_abs_error=1.16860411e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=depth_width_4d pattern=0 backend=generic coeff=1 keepdims=0
+PASS op=Reduction max_abs_error=2.60124555e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=depth_width_4d pattern=0 backend=selected_cpu coeff=1 keepdims=0
+PASS op=Reduction max_abs_error=2.60124555e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=depth_width_4d pattern=1 backend=generic coeff=1 keepdims=0
+PASS op=Reduction max_abs_error=2.60124555e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=depth_width_4d pattern=1 backend=selected_cpu coeff=1 keepdims=0
+PASS op=Reduction max_abs_error=2.60124555e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=depth_width_4d pattern=2 backend=generic coeff=1 keepdims=0
+PASS op=Reduction max_abs_error=2.97610291e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=depth_width_4d pattern=2 backend=selected_cpu coeff=1 keepdims=0
+PASS op=Reduction max_abs_error=2.97610291e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=channels_4d_padded pattern=0 backend=generic coeff=1 keepdims=0
+PASS op=Reduction max_abs_error=2.91087771e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=channels_4d_padded pattern=0 backend=selected_cpu coeff=1 keepdims=0
+PASS op=Reduction max_abs_error=2.91087771e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=channels_4d_padded pattern=1 backend=generic coeff=1 keepdims=0
+PASS op=Reduction max_abs_error=2.91087771e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=channels_4d_padded pattern=1 backend=selected_cpu coeff=1 keepdims=0
+PASS op=Reduction max_abs_error=2.91087771e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=channels_4d_padded pattern=2 backend=generic coeff=1 keepdims=0
+PASS op=Reduction max_abs_error=2.91087771e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=channels_4d_padded pattern=2 backend=selected_cpu coeff=1 keepdims=0
+PASS op=Reduction max_abs_error=2.91087771e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=all_4d_keep pattern=0 backend=generic coeff=0.5 keepdims=1
+PASS op=Reduction max_abs_error=4.79897039e-06 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=all_4d_keep pattern=0 backend=selected_cpu coeff=0.5 keepdims=1
+PASS op=Reduction max_abs_error=4.79897039e-06 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=all_4d_keep pattern=1 backend=generic coeff=0.5 keepdims=1
+PASS op=Reduction max_abs_error=4.79897039e-06 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=all_4d_keep pattern=1 backend=selected_cpu coeff=0.5 keepdims=1
+PASS op=Reduction max_abs_error=4.79897039e-06 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=all_4d_keep pattern=2 backend=generic coeff=0.5 keepdims=1
+PASS op=Reduction max_abs_error=1.13563813e-05 mismatches=0 nonfinite=0
+RUN Reduction op=10 case=all_4d_keep pattern=2 backend=selected_cpu coeff=0.5 keepdims=1
+PASS op=Reduction max_abs_error=1.13563813e-05 mismatches=0 nonfinite=0
+PASS: 48 CPU LogSumExp cases; numerical_failures=0; no model inference
