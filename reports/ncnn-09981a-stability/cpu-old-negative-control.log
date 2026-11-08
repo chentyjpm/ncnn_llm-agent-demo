@@ -1,0 +1,145 @@
+RUN Reduction op=10 case=all_1d_257 pattern=0 backend=generic coeff=1 keepdims=0
+NUMERICAL_MISMATCH op=Reduction index=0 expected=1009.5393744325187 actual=inf tolerance=0.000251907875
+FAIL op=Reduction max_abs_error=inf mismatches=1 nonfinite=1
+RUN Reduction op=10 case=all_1d_257 pattern=0 backend=selected_cpu coeff=1 keepdims=0
+NUMERICAL_MISMATCH op=Reduction index=0 expected=1009.5393744325187 actual=inf tolerance=0.000251907875
+FAIL op=Reduction max_abs_error=inf mismatches=1 nonfinite=1
+RUN Reduction op=10 case=all_1d_257 pattern=1 backend=generic coeff=1 keepdims=0
+NUMERICAL_MISMATCH op=Reduction index=0 expected=-990.46062556748132 actual=-inf tolerance=0.000248092125
+FAIL op=Reduction max_abs_error=inf mismatches=1 nonfinite=1
+RUN Reduction op=10 case=all_1d_257 pattern=1 backend=selected_cpu coeff=1 keepdims=0
+NUMERICAL_MISMATCH op=Reduction index=0 expected=-990.46062556748132 actual=-inf tolerance=0.000248092125
+FAIL op=Reduction max_abs_error=inf mismatches=1 nonfinite=1
+RUN Reduction op=10 case=all_1d_257 pattern=2 backend=generic coeff=1 keepdims=0
+NUMERICAL_MISMATCH op=Reduction index=0 expected=1009.1260463375543 actual=inf tolerance=0.000251825209
+FAIL op=Reduction max_abs_error=inf mismatches=1 nonfinite=1
+RUN Reduction op=10 case=all_1d_257 pattern=2 backend=selected_cpu coeff=1 keepdims=0
+NUMERICAL_MISMATCH op=Reduction index=0 expected=1009.1260463375543 actual=inf tolerance=0.000251825209
+FAIL op=Reduction max_abs_error=inf mismatches=1 nonfinite=1
+RUN Reduction op=10 case=width_2d pattern=0 backend=generic coeff=1 keepdims=0
+NUMERICAL_MISMATCH op=Reduction index=0 expected=1006.6635844499752 actual=inf tolerance=0.000251332717
+FAIL op=Reduction max_abs_error=inf mismatches=3 nonfinite=3
+RUN Reduction op=10 case=width_2d pattern=0 backend=selected_cpu coeff=1 keepdims=0
+NUMERICAL_MISMATCH op=Reduction index=0 expected=1006.6635844499752 actual=inf tolerance=0.000251332717
+FAIL op=Reduction max_abs_error=inf mismatches=3 nonfinite=3
+RUN Reduction op=10 case=width_2d pattern=1 backend=generic coeff=1 keepdims=0
+NUMERICAL_MISMATCH op=Reduction index=0 expected=-993.33641555002475 actual=-inf tolerance=0.000248667283
+FAIL op=Reduction max_abs_error=inf mismatches=3 nonfinite=3
+RUN Reduction op=10 case=width_2d pattern=1 backend=selected_cpu coeff=1 keepdims=0
+NUMERICAL_MISMATCH op=Reduction index=0 expected=-993.33641555002475 actual=-inf tolerance=0.000248667283
+FAIL op=Reduction max_abs_error=inf mismatches=3 nonfinite=3
+RUN Reduction op=10 case=width_2d pattern=2 backend=generic coeff=1 keepdims=0
+NUMERICAL_MISMATCH op=Reduction index=0 expected=1006.0930014327819 actual=inf tolerance=0.0002512186
+FAIL op=Reduction max_abs_error=inf mismatches=3 nonfinite=3
+RUN Reduction op=10 case=width_2d pattern=2 backend=selected_cpu coeff=1 keepdims=0
+NUMERICAL_MISMATCH op=Reduction index=0 expected=1006.0930014327819 actual=inf tolerance=0.0002512186
+FAIL op=Reduction max_abs_error=inf mismatches=3 nonfinite=3
+RUN Reduction op=10 case=height_2d_keep pattern=0 backend=generic coeff=0.5 keepdims=1
+NUMERICAL_MISMATCH op=Reduction index=0 expected=503.14459832361922 actual=inf tolerance=0.00015062892
+FAIL op=Reduction max_abs_error=inf mismatches=9 nonfinite=9
+RUN Reduction op=10 case=height_2d_keep pattern=0 backend=selected_cpu coeff=0.5 keepdims=1
+NUMERICAL_MISMATCH op=Reduction index=0 expected=503.14459832361922 actual=inf tolerance=0.00015062892
+FAIL op=Reduction max_abs_error=inf mismatches=9 nonfinite=9
+RUN Reduction op=10 case=height_2d_keep pattern=1 backend=generic coeff=0.5 keepdims=1
+NUMERICAL_MISMATCH op=Reduction index=0 expected=-496.85540167638078 actual=-inf tolerance=0.00014937108
+FAIL op=Reduction max_abs_error=inf mismatches=9 nonfinite=9
+RUN Reduction op=10 case=height_2d_keep pattern=1 backend=selected_cpu coeff=0.5 keepdims=1
+NUMERICAL_MISMATCH op=Reduction index=0 expected=-496.85540167638078 actual=-inf tolerance=0.00014937108
+FAIL op=Reduction max_abs_error=inf mismatches=9 nonfinite=9
+RUN Reduction op=10 case=height_2d_keep pattern=2 backend=generic coeff=0.5 keepdims=1
+NUMERICAL_MISMATCH op=Reduction index=0 expected=-496.85540167638078 actual=-inf tolerance=0.00014937108
+FAIL op=Reduction max_abs_error=inf mismatches=9 nonfinite=9
+RUN Reduction op=10 case=height_2d_keep pattern=2 backend=selected_cpu coeff=0.5 keepdims=1
+NUMERICAL_MISMATCH op=Reduction index=0 expected=-496.85540167638078 actual=-inf tolerance=0.00014937108
+FAIL op=Reduction max_abs_error=inf mismatches=9 nonfinite=9
+RUN Reduction op=10 case=spatial_3d_keep pattern=0 backend=generic coeff=0.5 keepdims=1
+NUMERICAL_MISMATCH op=Reduction index=0 expected=503.89203355282507 actual=inf tolerance=0.000150778407
+FAIL op=Reduction max_abs_error=inf mismatches=3 nonfinite=3
+RUN Reduction op=10 case=spatial_3d_keep pattern=0 backend=selected_cpu coeff=0.5 keepdims=1
+NUMERICAL_MISMATCH op=Reduction index=0 expected=503.89203355282507 actual=inf tolerance=0.000150778407
+FAIL op=Reduction max_abs_error=inf mismatches=3 nonfinite=3
+RUN Reduction op=10 case=spatial_3d_keep pattern=1 backend=generic coeff=0.5 keepdims=1
+NUMERICAL_MISMATCH op=Reduction index=0 expected=-496.10796644717493 actual=-inf tolerance=0.000149221593
+FAIL op=Reduction max_abs_error=inf mismatches=3 nonfinite=3
+RUN Reduction op=10 case=spatial_3d_keep pattern=1 backend=selected_cpu coeff=0.5 keepdims=1
+NUMERICAL_MISMATCH op=Reduction index=0 expected=-496.10796644717493 actual=-inf tolerance=0.000149221593
+FAIL op=Reduction max_abs_error=inf mismatches=3 nonfinite=3
+RUN Reduction op=10 case=spatial_3d_keep pattern=2 backend=generic coeff=0.5 keepdims=1
+NUMERICAL_MISMATCH op=Reduction index=0 expected=503.65560799958888 actual=inf tolerance=0.000150731122
+FAIL op=Reduction max_abs_error=inf mismatches=3 nonfinite=3
+RUN Reduction op=10 case=spatial_3d_keep pattern=2 backend=selected_cpu coeff=0.5 keepdims=1
+NUMERICAL_MISMATCH op=Reduction index=0 expected=503.65560799958888 actual=inf tolerance=0.000150731122
+FAIL op=Reduction max_abs_error=inf mismatches=3 nonfinite=3
+RUN Reduction op=10 case=channels_3d pattern=0 backend=generic coeff=-0.5 keepdims=0
+NUMERICAL_MISMATCH op=Reduction index=0 expected=-501.78847332227099 actual=-inf tolerance=0.000150357695
+FAIL op=Reduction max_abs_error=inf mismatches=45 nonfinite=45
+RUN Reduction op=10 case=channels_3d pattern=0 backend=selected_cpu coeff=-0.5 keepdims=0
+NUMERICAL_MISMATCH op=Reduction index=0 expected=-501.78847332227099 actual=-inf tolerance=0.000150357695
+FAIL op=Reduction max_abs_error=inf mismatches=45 nonfinite=45
+RUN Reduction op=10 case=channels_3d pattern=1 backend=generic coeff=-0.5 keepdims=0
+NUMERICAL_MISMATCH op=Reduction index=0 expected=498.21152667772901 actual=inf tolerance=0.000149642305
+FAIL op=Reduction max_abs_error=inf mismatches=45 nonfinite=45
+RUN Reduction op=10 case=channels_3d pattern=1 backend=selected_cpu coeff=-0.5 keepdims=0
+NUMERICAL_MISMATCH op=Reduction index=0 expected=498.21152667772901 actual=inf tolerance=0.000149642305
+FAIL op=Reduction max_abs_error=inf mismatches=45 nonfinite=45
+RUN Reduction op=10 case=channels_3d pattern=2 backend=generic coeff=-0.5 keepdims=0
+NUMERICAL_MISMATCH op=Reduction index=0 expected=498.21152667772901 actual=inf tolerance=0.000149642305
+FAIL op=Reduction max_abs_error=inf mismatches=45 nonfinite=45
+RUN Reduction op=10 case=channels_3d pattern=2 backend=selected_cpu coeff=-0.5 keepdims=0
+NUMERICAL_MISMATCH op=Reduction index=0 expected=498.21152667772901 actual=inf tolerance=0.000149642305
+FAIL op=Reduction max_abs_error=inf mismatches=45 nonfinite=45
+RUN Reduction op=10 case=depth_width_4d pattern=0 backend=generic coeff=1 keepdims=0
+NUMERICAL_MISMATCH op=Reduction index=0 expected=1005.8467275266939 actual=inf tolerance=0.000251169346
+FAIL op=Reduction max_abs_error=inf mismatches=9 nonfinite=9
+RUN Reduction op=10 case=depth_width_4d pattern=0 backend=selected_cpu coeff=1 keepdims=0
+NUMERICAL_MISMATCH op=Reduction index=0 expected=1005.8467275266939 actual=inf tolerance=0.000251169346
+FAIL op=Reduction max_abs_error=inf mismatches=9 nonfinite=9
+RUN Reduction op=10 case=depth_width_4d pattern=1 backend=generic coeff=1 keepdims=0
+NUMERICAL_MISMATCH op=Reduction index=0 expected=-994.15327247330606 actual=-inf tolerance=0.000248830654
+FAIL op=Reduction max_abs_error=inf mismatches=9 nonfinite=9
+RUN Reduction op=10 case=depth_width_4d pattern=1 backend=selected_cpu coeff=1 keepdims=0
+NUMERICAL_MISMATCH op=Reduction index=0 expected=-994.15327247330606 actual=-inf tolerance=0.000248830654
+FAIL op=Reduction max_abs_error=inf mismatches=9 nonfinite=9
+RUN Reduction op=10 case=depth_width_4d pattern=2 backend=generic coeff=1 keepdims=0
+NUMERICAL_MISMATCH op=Reduction index=0 expected=1004.9371346458876 actual=inf tolerance=0.000250987427
+FAIL op=Reduction max_abs_error=inf mismatches=9 nonfinite=9
+RUN Reduction op=10 case=depth_width_4d pattern=2 backend=selected_cpu coeff=1 keepdims=0
+NUMERICAL_MISMATCH op=Reduction index=0 expected=1004.9371346458876 actual=inf tolerance=0.000250987427
+FAIL op=Reduction max_abs_error=inf mismatches=9 nonfinite=9
+RUN Reduction op=10 case=channels_4d_padded pattern=0 backend=generic coeff=1 keepdims=0
+NUMERICAL_MISMATCH op=Reduction index=0 expected=1004.5891036821571 actual=inf tolerance=0.000250917821
+FAIL op=Reduction max_abs_error=inf mismatches=30 nonfinite=30
+RUN Reduction op=10 case=channels_4d_padded pattern=0 backend=selected_cpu coeff=1 keepdims=0
+NUMERICAL_MISMATCH op=Reduction index=0 expected=1004.5891036821571 actual=inf tolerance=0.000250917821
+FAIL op=Reduction max_abs_error=inf mismatches=30 nonfinite=30
+RUN Reduction op=10 case=channels_4d_padded pattern=1 backend=generic coeff=1 keepdims=0
+NUMERICAL_MISMATCH op=Reduction index=0 expected=-995.41089631784291 actual=-inf tolerance=0.000249082179
+FAIL op=Reduction max_abs_error=inf mismatches=30 nonfinite=30
+RUN Reduction op=10 case=channels_4d_padded pattern=1 backend=selected_cpu coeff=1 keepdims=0
+NUMERICAL_MISMATCH op=Reduction index=0 expected=-995.41089631784291 actual=-inf tolerance=0.000249082179
+FAIL op=Reduction max_abs_error=inf mismatches=30 nonfinite=30
+RUN Reduction op=10 case=channels_4d_padded pattern=2 backend=generic coeff=1 keepdims=0
+NUMERICAL_MISMATCH op=Reduction index=0 expected=-995.41089631784291 actual=-inf tolerance=0.000249082179
+FAIL op=Reduction max_abs_error=inf mismatches=30 nonfinite=30
+RUN Reduction op=10 case=channels_4d_padded pattern=2 backend=selected_cpu coeff=1 keepdims=0
+NUMERICAL_MISMATCH op=Reduction index=0 expected=-995.41089631784291 actual=-inf tolerance=0.000249082179
+FAIL op=Reduction max_abs_error=inf mismatches=30 nonfinite=30
+RUN Reduction op=10 case=all_4d_keep pattern=0 backend=generic coeff=0.5 keepdims=1
+NUMERICAL_MISMATCH op=Reduction index=0 expected=504.24193856040461 actual=inf tolerance=0.000150848388
+FAIL op=Reduction max_abs_error=inf mismatches=1 nonfinite=1
+RUN Reduction op=10 case=all_4d_keep pattern=0 backend=selected_cpu coeff=0.5 keepdims=1
+NUMERICAL_MISMATCH op=Reduction index=0 expected=504.24193856040461 actual=inf tolerance=0.000150848388
+FAIL op=Reduction max_abs_error=inf mismatches=1 nonfinite=1
+RUN Reduction op=10 case=all_4d_keep pattern=1 backend=generic coeff=0.5 keepdims=1
+NUMERICAL_MISMATCH op=Reduction index=0 expected=-495.75806143959539 actual=-inf tolerance=0.000149151612
+FAIL op=Reduction max_abs_error=inf mismatches=1 nonfinite=1
+RUN Reduction op=10 case=all_4d_keep pattern=1 backend=selected_cpu coeff=0.5 keepdims=1
+NUMERICAL_MISMATCH op=Reduction index=0 expected=-495.75806143959539 actual=-inf tolerance=0.000149151612
+FAIL op=Reduction max_abs_error=inf mismatches=1 nonfinite=1
+RUN Reduction op=10 case=all_4d_keep pattern=2 backend=generic coeff=0.5 keepdims=1
+NUMERICAL_MISMATCH op=Reduction index=0 expected=504.02510461041561 actual=inf tolerance=0.000150805021
+FAIL op=Reduction max_abs_error=inf mismatches=1 nonfinite=1
+RUN Reduction op=10 case=all_4d_keep pattern=2 backend=selected_cpu coeff=0.5 keepdims=1
+NUMERICAL_MISMATCH op=Reduction index=0 expected=504.02510461041561 actual=inf tolerance=0.000150805021
+FAIL op=Reduction max_abs_error=inf mismatches=1 nonfinite=1
+FAIL: 48 CPU LogSumExp cases; numerical_failures=48; no model inference

@@ -1,0 +1,65 @@
+Executed validation: Linux x86-64, GCC 14.2.0, real unchanged ncnn support
+sources and generic/x86 Reduction operators. No substitute Mat or kernel.
+CPU current: exit 0, 48/48 cases passed. Old-kernel substitution: exit 2,
+48/48 cases reported NUMERICAL_MISMATCH. Vulkan C++ syntax: exit 0, no warnings.
+CMake, Vulkan execution/negative controls, ARM and model inference were not run.
+
+Reproducible commands, from the Local Agent repository root:
+Set NCNN_SOURCE_DIR to the clean 09981a0796cc0dd629ed5ba0f8d55653cc1406a5
+checkout, OLD_NCNN_SOURCE_DIR to the clean 36036fe31a585b2b8e051844af76b9edf0a5e518
+checkout, and BUILD_DIR to a separate writable build directory. Export all three.
+The generated headers below match the limited configuration actually executed.
+
+mkdir -p "$BUILD_DIR/include" "$BUILD_DIR/vulkan-syntax-include" "$BUILD_DIR/old/layer/x86"
+python3 - <<'PY'
+import os, re
+from pathlib import Path
+src = Path(os.environ['NCNN_SOURCE_DIR'])
+build = Path(os.environ['BUILD_DIR'])
+cpu = {'NCNN_STDIO', 'NCNN_STRING', 'NCNN_VALIDATION', 'NCNN_THREADS', 'NCNN_INT8', 'NCNN_BF16'}
+vk = {'NCNN_STDIO', 'NCNN_STRING', 'NCNN_THREADS', 'NCNN_VULKAN', 'NCNN_SIMPLEVK', 'NCNN_INT8', 'NCNN_BF16'}
+for dirname, enabled in [('include', cpu), ('vulkan-syntax-include', vk)]:
+    dest = build / dirname
+    template = (src / 'src/platform.h.in').read_text()
+    configured = re.sub(r'^#cmakedefine01 (\w+)$', lambda m: f'#define {m[1]} {int(m[1] in enabled)}', template, flags=re.M)
+    configured = re.sub(r'^#cmakedefine .*$', '', configured, flags=re.M)
+    (dest / 'platform.h').write_text(configured)
+    (dest / 'ncnn_export.h').write_text('#define NCNN_EXPORT\n#define NCNN_NO_EXPORT\n#define NCNN_DEPRECATED\n')
+dest = build / 'include'
+classes = re.findall(r'^ncnn_add_layer\((\w+)', (src / 'src/CMakeLists.txt').read_text(), re.M)
+(dest / 'layer_type_enum.h').write_text(''.join(f'{c} = {i},\n' for i, c in enumerate(classes)))
+(dest / 'layer_declaration.h').write_text('#include "layer/reduction.h"\n#include "layer/x86/reduction_x86.h"\nnamespace ncnn { DEFINE_LAYER_CREATOR(Reduction) DEFINE_LAYER_CREATOR(Reduction_x86) }\n')
+registry = ''
+for name, suffix in [('layer_registry', ''), ('layer_registry_arch', '_x86')]:
+    registry += 'static const layer_registry_entry ' + name + '[] = {\n'
+    for c in classes:
+        creator = 'Reduction' + suffix + '_layer_creator' if c == 'Reduction' else '0'
+        registry += '{"' + c + '", ' + creator + '},\n'
+    registry += '};\n'
+(dest / 'layer_registry.h').write_text(registry)
+PY
+
+src="$NCNN_SOURCE_DIR/src"
+g++ -std=c++11 -O2 -msse2 -mno-avx -ffunction-sections -fdata-sections -Wl,--gc-sections -pthread \
+  -I"$BUILD_DIR/include" -I"$src" -I"$src/layer" -I"$src/layer/x86" \
+  model-tests/ncnn-core/test_reduction_logsumexp.cpp \
+  "$src"/{allocator,option,cpu,mat,layer,paramdict,datareader,modelbin}.cpp \
+  "$src/layer/reduction.cpp" "$src/layer/x86/reduction_x86.cpp" \
+  -o "$BUILD_DIR/test_reduction_logsumexp"
+"$BUILD_DIR/test_reduction_logsumexp"
+
+for file in reduction.cpp x86/reduction_fp32.h x86/reduction_functor.h x86/reduction_x86.cpp; do
+  cp "$OLD_NCNN_SOURCE_DIR/src/layer/$file" "$BUILD_DIR/old/layer/$file"
+done
+g++ -std=c++11 -O2 -msse2 -mno-avx -ffunction-sections -fdata-sections -Wl,--gc-sections -pthread \
+  -I"$BUILD_DIR/include" -I"$src" -I"$src/layer" -I"$src/layer/x86" \
+  model-tests/ncnn-core/test_reduction_logsumexp.cpp \
+  "$src"/{allocator,option,cpu,mat,layer,paramdict,datareader,modelbin}.cpp \
+  "$BUILD_DIR/old/layer/reduction.cpp" "$BUILD_DIR/old/layer/x86/reduction_x86.cpp" \
+  -o "$BUILD_DIR/test_reduction_logsumexp_old"
+"$BUILD_DIR/test_reduction_logsumexp_old"
+# The old binary must return 2 and print NUMERICAL_MISMATCH, not merely fail to build.
+
+g++ -std=c++11 -Wall -Wextra -fsyntax-only \
+  -I"$BUILD_DIR/vulkan-syntax-include" -I"$src" -I"$src/layer" -I"$src/layer/vulkan" \
+  model-tests/ncnn-core/test_vulkan_stability.cpp model-tests/ncnn-core/test_reduction_logsumexp.cpp

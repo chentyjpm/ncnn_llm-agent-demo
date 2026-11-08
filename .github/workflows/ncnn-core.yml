@@ -17,6 +17,9 @@ jobs:
     # x86 operator integration coverage, not execution of the RISC-V kernels.
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
@@ -46,26 +49,73 @@ jobs:
       - name: Check direct FP32 and BF16 Softplus ISA paths
         run: python3 model-tests/ncnn-core/run_x86_softplus.py --source .ci-src/ncnn --build-dir build/ncnn-core/softplus-isa --cxx ${{ matrix.cxx }} --require scalar,sse2,avx,avx-fma,avx2 --expect-revision ${{ steps.pins.outputs.ncnn }}
       - name: Compile CPU, layout, norm, ReLU, Sigmoid, TanH, ELU, Swish, HardSigmoid, HardSwish, SELU, ShuffleChannel and convolution tests
-        run: cmake --build build/ncnn-core --parallel 2 --target test_absval test_bnll test_dropout test_erf test_exp test_gelu test_log test_mish test_power test_shrink test_softplus test_threshold test_cpu test_convolution_int8_smoke test_convolution_3a test_convolution_oom test_net test_layernorm test_rmsnorm test_groupnorm test_instancenorm test_unaryop test_relu test_sigmoid test_tanh test_elu test_swish test_hardsigmoid test_hardswish test_selu test_shufflechannel test_convolutiondepthwise_5x5_smoke test_packing test_convolutiondepthwise_int8_smoke
+        run: cmake --build build/ncnn-core --parallel 2 --target test_net_custom_allocator test_net_storage_featmask test_padding_int8_negative test_padding test_reduction_fp32_accum_reference test_reduction_logsumexp test_reduction test_cumulativesum test_absval test_bnll test_dropout test_erf test_exp test_gelu test_log test_mish test_power test_shrink test_softplus test_threshold test_cpu test_convolution_int8_smoke test_convolution_3a test_convolution_oom test_net test_layernorm test_rmsnorm test_groupnorm test_instancenorm test_unaryop test_relu test_sigmoid test_tanh test_elu test_swish test_hardsigmoid test_hardswish test_selu test_shufflechannel test_convolutiondepthwise_5x5_smoke test_packing test_convolutiondepthwise_int8_smoke
       - name: Run CPU regressions including BF16 storage packing
-        run: ctest --test-dir build/ncnn-core --output-on-failure --no-tests=error --timeout 300 -R '^test_(absval|bnll|dropout|erf|exp|gelu|log|mish|power|shrink|softplus|threshold|cpu|convolution_int8_smoke|convolution_3a|convolution_oom|net|layernorm|rmsnorm|groupnorm|instancenorm|unaryop|relu|sigmoid|tanh|elu|swish|hardsigmoid|hardswish|selu|shufflechannel|convolutiondepthwise_5x5_smoke|packing|convolutiondepthwise_int8_smoke)$'
+        run: ctest --test-dir build/ncnn-core --output-on-failure --no-tests=error --timeout 300 -R '^test_(net_custom_allocator|net_storage_featmask|padding_int8_negative|padding|reduction_fp32_accum_reference|reduction_logsumexp|reduction|cumulativesum|absval|bnll|dropout|erf|exp|gelu|log|mish|power|shrink|softplus|threshold|cpu|convolution_int8_smoke|convolution_3a|convolution_oom|net|layernorm|rmsnorm|groupnorm|instancenorm|unaryop|relu|sigmoid|tanh|elu|swish|hardsigmoid|hardswish|selu|shufflechannel|convolutiondepthwise_5x5_smoke|packing|convolutiondepthwise_int8_smoke)$'
+      - name: Prove LogSumExp companion detects previous CPU implementation
+        if: matrix.cc == 'gcc' && matrix.openmp == 'ON'
+        run: |
+          git -C .ci-src/ncnn fetch --no-tags --depth=1 origin 36036fe31a585b2b8e051844af76b9edf0a5e518
+          files=(src/layer/reduction.cpp src/layer/x86/reduction_fp32.h src/layer/x86/reduction_functor.h src/layer/x86/reduction_x86.cpp)
+          for file in "${files[@]}"; do
+            git -C .ci-src/ncnn show "36036fe31a585b2b8e051844af76b9edf0a5e518:$file" > ".ci-src/ncnn/$file"
+          done
+          cmake --build build/ncnn-core --parallel 2 --target test_reduction_logsumexp
+          set +e
+          build/ncnn-core/test_reduction_logsumexp > build/ncnn-core/reduction-old.txt 2>&1
+          result=$?
+          set -e
+          cat build/ncnn-core/reduction-old.txt
+          test "$result" = 2
+          grep -F NUMERICAL_MISMATCH build/ncnn-core/reduction-old.txt
+          git -C .ci-src/ncnn restore --source=HEAD -- "${files[@]}"
+          git -C .ci-src/ncnn diff --exit-code
+          cmake --build build/ncnn-core --parallel 2 --target test_reduction_logsumexp
+          ctest --test-dir build/ncnn-core --verbose --no-tests=error -R '^test_reduction_logsumexp$' | tee build/ncnn-core/reduction-restored.txt
+      - name: Prove storage masks and negative INT8 Padding detect previous kernels
+        if: matrix.cc == 'gcc' && matrix.openmp == 'ON'
+        run: |
+          git -C .ci-src/ncnn fetch --no-tags --depth=1 origin 09981a0796cc0dd629ed5ba0f8d55653cc1406a5
+          files=(src/net.cpp src/layer/x86/padding_x86.cpp)
+          for file in "${files[@]}"; do
+            git -C .ci-src/ncnn show "09981a0796cc0dd629ed5ba0f8d55653cc1406a5:$file" > ".ci-src/ncnn/$file"
+          done
+          cmake --build build/ncnn-core --parallel 2 --target test_net_storage_featmask test_padding_int8_negative
+          for suite in net_storage_featmask padding_int8_negative; do
+            set +e
+            "build/ncnn-core/test_$suite" > "build/ncnn-core/storage-old-$suite.txt" 2>&1
+            result=$?
+            set -e
+            cat "build/ncnn-core/storage-old-$suite.txt"
+            test "$result" = 2
+            if test "$suite" = net_storage_featmask; then
+              grep -F STORAGE_FEATMASK_REGRESSION "build/ncnn-core/storage-old-$suite.txt"
+              grep -F "test_net storage featmask failed" "build/ncnn-core/storage-old-$suite.txt"
+            else
+              grep -F NUMERICAL_MISMATCH "build/ncnn-core/storage-old-$suite.txt"
+            fi
+          done
+          git -C .ci-src/ncnn restore --source=HEAD -- "${files[@]}"
+          git -C .ci-src/ncnn diff --exit-code
+          cmake --build build/ncnn-core --parallel 2 --target test_net_storage_featmask test_padding_int8_negative
+          ctest --test-dir build/ncnn-core --verbose --no-tests=error -R '^test_(net_storage_featmask|padding_int8_negative)$' | tee build/ncnn-core/storage-restored.txt
       - name: Prove custom-allocator extraction detects previous Net condition
         if: matrix.cc == 'gcc' && matrix.openmp == 'ON'
         run: |
           git -C .ci-src/ncnn fetch --no-tags --depth=1 origin 14004273e767eaee969c792ea0dbc3ae0b441251
           git -C .ci-src/ncnn show 14004273e767eaee969c792ea0dbc3ae0b441251:src/net.cpp > .ci-src/ncnn/src/net.cpp
-          cmake --build build/ncnn-core --parallel 2 --target test_net
+          cmake --build build/ncnn-core --parallel 2 --target test_net_custom_allocator
           set +e
-          build/ncnn-core/ncnn/tests/test_net > build/ncnn-core/net-old.txt 2>&1
+          build/ncnn-core/test_net_custom_allocator > build/ncnn-core/net-old.txt 2>&1
           result=$?
           set -e
           cat build/ncnn-core/net-old.txt
-          test "$result" != 0
+          test "$result" = 2
           grep -F 'test_net extract unexpectedly cloned the input' build/ncnn-core/net-old.txt
           git -C .ci-src/ncnn restore --source=HEAD -- src/net.cpp
           git -C .ci-src/ncnn diff --exit-code
-          cmake --build build/ncnn-core --parallel 2 --target test_net
-          ctest --test-dir build/ncnn-core --verbose --no-tests=error -R '^test_net$' | tee build/ncnn-core/net-restored.txt
+          cmake --build build/ncnn-core --parallel 2 --target test_net_custom_allocator
+          ctest --test-dir build/ncnn-core --verbose --no-tests=error -R '^test_net_custom_allocator$' | tee build/ncnn-core/net-restored.txt
       - if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
@@ -73,6 +123,8 @@ jobs:
           path: |
             build/ncnn-core/CMakeCache.txt
             build/ncnn-core/net-*.txt
+            build/ncnn-core/reduction-*.txt
+            build/ncnn-core/storage-*.txt
             build/ncnn-core/Testing/Temporary/
             build/ncnn-core/rmsnorm-isa/*.log
             build/ncnn-core/rmsnorm-isa/summary.json
@@ -127,12 +179,12 @@ jobs:
           git -C .ci-src/ncnn submodule status > build/ncnn-vulkan/submodules.txt
           cmake -S model-tests/ncnn-core -B build/ncnn-vulkan -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DAGENT_NCNN_SOURCE_DIR="$PWD/.ci-src/ncnn" -DAGENT_NCNN_VULKAN_TESTS=ON -DNCNN_SIMPLEVK=ON -DNCNN_SYSTEM_GLSLANG=OFF -DNCNN_OPENMP=OFF -DNCNN_SIMPLEOMP=OFF -DCMAKE_POLICY_VERSION_MINIMUM=3.5
       - name: Compile strict Vulkan and upstream operator regressions
-        run: cmake --build build/ncnn-vulkan --parallel 2 --target test_vulkan_required test_vulkan_matrix_required test_vulkan_int8_storage test_vulkan_interp_coordinates test_vulkan_priorbox test_convolution_int8_smoke test_memorydata test_layernorm test_rmsnorm test_groupnorm test_instancenorm test_unaryop test_net
+        run: cmake --build build/ncnn-vulkan --parallel 2 --target test_vulkan_required test_vulkan_matrix_required test_vulkan_int8_storage test_vulkan_interp_coordinates test_vulkan_priorbox test_vulkan_stability test_convolution_int8_smoke test_memorydata test_layernorm test_rmsnorm test_groupnorm test_instancenorm test_unaryop test_net
       - name: Require INT8 StorageBuffer SPIR-V compilation
         run: ctest --test-dir build/ncnn-vulkan --verbose --no-tests=error --timeout 120 -R '^test_vulkan_int8_storage$'
       - name: Verify a missing Vulkan device fails instead of skipping
         run: |
-          for target in test_vulkan_required test_vulkan_matrix_required test_vulkan_int8_storage test_vulkan_interp_coordinates test_vulkan_priorbox; do
+          for target in test_vulkan_required test_vulkan_matrix_required test_vulkan_int8_storage test_vulkan_interp_coordinates test_vulkan_priorbox test_vulkan_stability; do
             if VK_DRIVER_FILES="$PWD/no-such-icd.json" VK_ICD_FILENAMES="$PWD/no-such-icd.json" "build/ncnn-vulkan/$target" > "build/ncnn-vulkan/no-device-$target.txt" 2>&1; then
               echo "ERROR: $target no-device regression unexpectedly passed"
               exit 1
@@ -140,6 +192,65 @@ jobs:
             cat "build/ncnn-vulkan/no-device-$target.txt"
             grep -F 'a working Vulkan device is required' "build/ncnn-vulkan/no-device-$target.txt"
           done
+      - name: Require finite LogSumExp, FP32 accumulation and standalone or fused Mish
+        run: ctest --test-dir build/ncnn-vulkan --verbose --no-tests=error --timeout 600 -R '^test_vulkan_stability$' | tee build/ncnn-vulkan/stability-current.txt
+      - name: Prove FP32 accumulation companion detects previous half accumulation
+        run: |
+          git -C .ci-src/ncnn fetch --no-tags --depth=1 origin 09981a0796cc0dd629ed5ba0f8d55653cc1406a5
+          shader=src/layer/vulkan/shader/reduction.comp
+          git -C .ci-src/ncnn show "09981a0796cc0dd629ed5ba0f8d55653cc1406a5:$shader" > ".ci-src/ncnn/$shader"
+          cmake --build build/ncnn-vulkan --parallel 2 --target test_vulkan_stability
+          set +e
+          build/ncnn-vulkan/test_vulkan_stability --reduction-fp32-accum --legacy-fp16-reduction-shader > build/ncnn-vulkan/accumulation-old.txt 2>&1
+          result=$?
+          set -e
+          cat build/ncnn-vulkan/accumulation-old.txt
+          test "$result" = 2
+          grep -F NUMERICAL_MISMATCH build/ncnn-vulkan/accumulation-old.txt
+          git -C .ci-src/ncnn restore --source=HEAD -- "$shader"
+          git -C .ci-src/ncnn diff --exit-code
+          cmake --build build/ncnn-vulkan --parallel 2 --target test_vulkan_stability
+          build/ncnn-vulkan/test_vulkan_stability --reduction-fp32-accum --require-reduction-path=subgroup > build/ncnn-vulkan/accumulation-restored.txt 2>&1
+          cat build/ncnn-vulkan/accumulation-restored.txt
+      - name: Check previous Reduction regression and diagnose driver-specific old Mish
+        run: |
+          git -C .ci-src/ncnn fetch --no-tags --depth=1 origin 36036fe31a585b2b8e051844af76b9edf0a5e518
+          for suite in reduction mish; do
+            if test "$suite" = reduction; then
+              shaders=(reduction.comp)
+            else
+              shaders=(mish.comp vulkan_activation.comp)
+            fi
+            for shader in "${shaders[@]}"; do
+              git -C .ci-src/ncnn show "36036fe31a585b2b8e051844af76b9edf0a5e518:src/layer/vulkan/shader/$shader" > ".ci-src/ncnn/src/layer/vulkan/shader/$shader"
+            done
+            cmake --build build/ncnn-vulkan --parallel 2 --target test_vulkan_stability
+            set +e
+            extra=()
+            if test "$suite" = reduction; then extra=(--legacy-fp16-reduction-shader); fi
+            build/ncnn-vulkan/test_vulkan_stability "--$suite" "${extra[@]}" > "build/ncnn-vulkan/stability-old-$suite.txt" 2>&1
+            result=$?
+            set -e
+            cat "build/ncnn-vulkan/stability-old-$suite.txt"
+            if test "$suite" = reduction; then
+              test "$result" = 2
+              grep -F NUMERICAL_MISMATCH "build/ncnn-vulkan/stability-old-$suite.txt"
+            elif test "$result" = 2; then
+              grep -F NUMERICAL_MISMATCH "build/ncnn-vulkan/stability-old-$suite.txt"
+            else
+              # Some drivers already implement tanh(inf) as 1. A correct old
+              # result is not evidence that the new shader or test failed.
+              # Infrastructure errors are never accepted as a negative control.
+              test "$result" = 0
+              echo 'OLD_MISH_NOT_REPRODUCED: this driver returns finite expected results' | tee -a "build/ncnn-vulkan/stability-old-$suite.txt"
+            fi
+            for shader in "${shaders[@]}"; do
+              git -C .ci-src/ncnn restore --source=HEAD -- "src/layer/vulkan/shader/$shader"
+            done
+            git -C .ci-src/ncnn diff --exit-code
+          done
+          cmake --build build/ncnn-vulkan --parallel 2 --target test_vulkan_stability
+          ctest --test-dir build/ncnn-vulkan --verbose --no-tests=error --timeout 600 -R '^test_vulkan_stability$' | tee build/ncnn-vulkan/stability-restored.txt
       - name: Require FP16 Interp coordinate regression on current shaders
         run: ctest --test-dir build/ncnn-vulkan --verbose --no-tests=error --timeout 300 -R '^test_vulkan_interp_coordinates$' | tee build/ncnn-vulkan/interp-current.txt
       - name: Prove coordinate regression detects the previous shaders
@@ -230,8 +341,12 @@ jobs:
           fi
       - name: Compile and require current kernel numerical regression
         run: |
-          cmake --build build/ncnn-arm --parallel 2 --target test_arm_fp16_depthwise
+          cmake --build build/ncnn-arm --parallel 2 --target test_arm_fp16_depthwise test_cumulativesum test_net test_net_custom_allocator test_net_storage_featmask test_padding
           ctest --test-dir build/ncnn-arm --verbose --no-tests=error -R '^test_arm_fp16_depthwise$' | tee build/ncnn-arm/current.txt
+      - name: Run ARM NEON CumulativeSum axes and tail regressions
+        run: ctest --test-dir build/ncnn-arm --verbose --no-tests=error --timeout 300 -R '^test_cumulativesum$' | tee build/ncnn-arm/cumulativesum.txt
+      - name: Require ARM Net storage consistency and padding regressions
+        run: ctest --test-dir build/ncnn-arm --verbose --no-tests=error --timeout 300 -R '^test_(net|net_custom_allocator|net_storage_featmask|padding)$' | tee build/ncnn-arm/storage-padding.txt
       - name: Diagnose an unexpected ARM runtime failure
         if: failure()
         run: |

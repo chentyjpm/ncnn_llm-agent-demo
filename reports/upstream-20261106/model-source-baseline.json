@@ -1,0 +1,663 @@
+{
+  "checked_at": "2026-11-06T01:36:50.585867+00:00",
+  "completed_at": "2026-11-06T01:37:26.808807+00:00",
+  "base_project_commit": "bb81cd9c3061d75ac1955ce9aa92213ce4f0a00f",
+  "comparison_baseline_date": "2026-11-05",
+  "summary": {
+    "hf_repositories": 4,
+    "hf_file_identities": 59,
+    "hf_revision_changes": 0,
+    "hf_file_identity_changes": 0,
+    "hf_profile_pin_discrepancies": 0,
+    "sdu_successful_gets": 21,
+    "sdu_directory_count": 10,
+    "sdu_directory_file_entries": 100,
+    "sdu_raw_response_byte_changes": 0,
+    "sdu_config_byte_hash_discrepancies": 0,
+    "successful_live_gets": 25,
+    "modelscope_requested": false,
+    "modelscope_current_status": "unknown",
+    "no_adaptation_trigger_found_in_verified_scope": true
+  },
+  "hf": [
+    {
+      "source": "https://huggingface.co/api/models/Qwen/Qwen2.5-0.5B-Instruct?blobs=true",
+      "sha": "7ae557604adf67be50417f59c2c2f167def9a775",
+      "modified": "2024-09-25T12:32:56.000Z",
+      "files": [
+        {
+          "rfilename": ".gitattributes",
+          "blobId": "a6344aac8c09253b3b630fb776ae94478aa0275b",
+          "size": 1519
+        },
+        {
+          "rfilename": "LICENSE",
+          "blobId": "6634c8cc3133b3848ec74b9f275acaaa1ea618ab",
+          "size": 11343
+        },
+        {
+          "rfilename": "README.md",
+          "blobId": "4b8373851d093eb9f3017443f27781c6971eff24",
+          "size": 4917
+        },
+        {
+          "rfilename": "config.json",
+          "blobId": "0dbb161213629a23f0fc00ef286e6b1e366d180f",
+          "size": 659
+        },
+        {
+          "rfilename": "generation_config.json",
+          "blobId": "dfc11073787daf1b0f9c0f1499487ab5f4c93738",
+          "size": 242
+        },
+        {
+          "rfilename": "merges.txt",
+          "blobId": "20024bfe7c83998e9aeaf98a0cd6a2ce6306c2f0",
+          "size": 1671839
+        },
+        {
+          "rfilename": "model.safetensors",
+          "blobId": "d7db405a3f0d9bf1ba5bdd4e4211db8022ebe4eb",
+          "size": 988097824,
+          "lfs": {
+            "sha256": "fdf756fa7fcbe7404d5c60e26bff1a0c8b8aa1f72ced49e7dd0210fe288fb7fe",
+            "size": 988097824,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "tokenizer.json",
+          "blobId": "443909a61d429dff23010e5bddd28ff530edda00",
+          "size": 7031645
+        },
+        {
+          "rfilename": "tokenizer_config.json",
+          "blobId": "07bfe0640cb5a0037f9322287fbfc682806cf672",
+          "size": 7305
+        },
+        {
+          "rfilename": "vocab.json",
+          "blobId": "4783fe10ac3adce15ac8f358ef5462739852c569",
+          "size": 2776833
+        }
+      ]
+    },
+    {
+      "source": "https://huggingface.co/api/models/Qwen/Qwen2.5-Coder-0.5B-Instruct?blobs=true",
+      "sha": "ea3f2471cf1b1f0db85067f1ef93848e38e88c25",
+      "modified": "2024-11-18T12:52:41.000Z",
+      "files": [
+        {
+          "rfilename": ".gitattributes",
+          "blobId": "a6344aac8c09253b3b630fb776ae94478aa0275b",
+          "size": 1519
+        },
+        {
+          "rfilename": "LICENSE",
+          "blobId": "6634c8cc3133b3848ec74b9f275acaaa1ea618ab",
+          "size": 11343
+        },
+        {
+          "rfilename": "README.md",
+          "blobId": "ac19f5b31845270145a877d1ff18c35926895c22",
+          "size": 5023
+        },
+        {
+          "rfilename": "config.json",
+          "blobId": "e2aa18293b0dd66539341467fa454878a5adb2be",
+          "size": 659
+        },
+        {
+          "rfilename": "generation_config.json",
+          "blobId": "c28f9c697cbc09f047434efec57556505af31111",
+          "size": 243
+        },
+        {
+          "rfilename": "merges.txt",
+          "blobId": "20024bfe7c83998e9aeaf98a0cd6a2ce6306c2f0",
+          "size": 1671839
+        },
+        {
+          "rfilename": "model.safetensors",
+          "blobId": "eec1bfbec6eb971923b39af693d096d1016b0df3",
+          "size": 988097824,
+          "lfs": {
+            "sha256": "f9523886352217ded3aeeef552b381af79d568c6d49a4b9e423288cea56b0a44",
+            "size": 988097824,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "tokenizer.json",
+          "blobId": "443909a61d429dff23010e5bddd28ff530edda00",
+          "size": 7031645
+        },
+        {
+          "rfilename": "tokenizer_config.json",
+          "blobId": "acee076f49bf3c0298e15de0909d1da7b392f0c3",
+          "size": 7305
+        },
+        {
+          "rfilename": "vocab.json",
+          "blobId": "4783fe10ac3adce15ac8f358ef5462739852c569",
+          "size": 2776833
+        }
+      ]
+    },
+    {
+      "source": "https://huggingface.co/api/models/Qwen/Qwen2.5-1.5B-Instruct?blobs=true",
+      "sha": "989aa7980e4cf806f80c7fef2b1adb7bc71aa306",
+      "modified": "2024-09-25T12:32:50.000Z",
+      "files": [
+        {
+          "rfilename": ".gitattributes",
+          "blobId": "a6344aac8c09253b3b630fb776ae94478aa0275b",
+          "size": 1519
+        },
+        {
+          "rfilename": "LICENSE",
+          "blobId": "6634c8cc3133b3848ec74b9f275acaaa1ea618ab",
+          "size": 11343
+        },
+        {
+          "rfilename": "README.md",
+          "blobId": "b3327a17e2ffa52e0fd941a2810b18a9fd0e7d94",
+          "size": 4917
+        },
+        {
+          "rfilename": "config.json",
+          "blobId": "f81ead14ab072d65a07817f83a3ee0e5a1890d10",
+          "size": 660
+        },
+        {
+          "rfilename": "generation_config.json",
+          "blobId": "dfc11073787daf1b0f9c0f1499487ab5f4c93738",
+          "size": 242
+        },
+        {
+          "rfilename": "merges.txt",
+          "blobId": "20024bfe7c83998e9aeaf98a0cd6a2ce6306c2f0",
+          "size": 1671839
+        },
+        {
+          "rfilename": "model.safetensors",
+          "blobId": "9127f71e7314df0064f469223749e5f237e06463",
+          "size": 3087467144,
+          "lfs": {
+            "sha256": "dd924a11b4c220f385b51ffa522daea7c9f3d850e31b162bb5661df483c6d3ee",
+            "size": 3087467144,
+            "pointerSize": 135
+          }
+        },
+        {
+          "rfilename": "tokenizer.json",
+          "blobId": "443909a61d429dff23010e5bddd28ff530edda00",
+          "size": 7031645
+        },
+        {
+          "rfilename": "tokenizer_config.json",
+          "blobId": "07bfe0640cb5a0037f9322287fbfc682806cf672",
+          "size": 7305
+        },
+        {
+          "rfilename": "vocab.json",
+          "blobId": "4783fe10ac3adce15ac8f358ef5462739852c569",
+          "size": 2776833
+        }
+      ]
+    },
+    {
+      "source": "https://huggingface.co/api/models/nihui-szyl/qwen-image-ncnn?blobs=true",
+      "sha": "86b205ef3d6ecd7387b7796aeceefbffb6bf1883",
+      "modified": "2026-10-10T03:02:00.000Z",
+      "files": [
+        {
+          "rfilename": ".gitattributes",
+          "blobId": "7505fb6d408e3c29ddd0b0a1d63eff0ce8cacc8c",
+          "size": 1595
+        },
+        {
+          "rfilename": "LICENSE",
+          "blobId": "13ae08d5a5828f508cf0e852b1b316c0c0bbb9b3",
+          "size": 7831
+        },
+        {
+          "rfilename": "README.md",
+          "blobId": "f5a39c82e1c8350e7954fb10024aa5a7574d8d40",
+          "size": 1745
+        },
+        {
+          "rfilename": "config.json",
+          "blobId": "55c0ebb90c418810f084680a8447a050991f5a27",
+          "size": 268
+        },
+        {
+          "rfilename": "qwenimage21-turbo/transformer/blocks.ncnn.bin",
+          "blobId": "20298e332796c8b5f6050439849bdcfb1b9b03e6",
+          "size": 13958677376,
+          "lfs": {
+            "sha256": "2af914fe0088a78fc290e4b56082857a6764002801dc5c03d9641c894ef06628",
+            "size": 13958677376,
+            "pointerSize": 136
+          }
+        },
+        {
+          "rfilename": "qwenimage21-turbo/transformer/blocks.ncnn.param",
+          "blobId": "2f4601f19cc8c8f0611005126d945a0375ba7a48",
+          "size": 108829
+        },
+        {
+          "rfilename": "qwenimage21-turbo/transformer/input.ncnn.bin",
+          "blobId": "d3125f789d2bf2be4ef83967c3d3eb2037226037",
+          "size": 237519384,
+          "lfs": {
+            "sha256": "11db1d481a7093385eb9fe8702c8fdbf4feea997217244bf8c084751c900aeca",
+            "size": 237519384,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwenimage21-turbo/transformer/input.ncnn.param",
+          "blobId": "07d7c85fce89aa02812378b10a2baa5cd2536af3",
+          "size": 1878
+        },
+        {
+          "rfilename": "qwenimage21-turbo/transformer/output.ncnn.bin",
+          "blobId": "6c5dd0d5e1125d4733938129ea4bef1e45e94819",
+          "size": 34078728,
+          "lfs": {
+            "sha256": "1ca6f8a49f118dbf35a6fddfc25304997087e5f6cd8f7501cb61998063ddbbd3",
+            "size": 34078728,
+            "pointerSize": 133
+          }
+        },
+        {
+          "rfilename": "qwenimage21-turbo/transformer/output.ncnn.param",
+          "blobId": "ec5b5fcfb49c1917f0653573b77c18c5950923e1",
+          "size": 596
+        },
+        {
+          "rfilename": "qwenimage21/controlnet/controlnet.ncnn.bin",
+          "blobId": "3a0dda13587c1124ed013e7a753491c362c8e989",
+          "size": 7550968400,
+          "lfs": {
+            "sha256": "bb2cceda8073cdaa51534e37ba328a21e1a5cdca9d8b1e20c9572d8efebf2cb4",
+            "size": 7550968400,
+            "pointerSize": 135
+          }
+        },
+        {
+          "rfilename": "qwenimage21/controlnet/controlnet.ncnn.param",
+          "blobId": "28e827874ed276789a21625fefd184722f4d592c",
+          "size": 41794
+        },
+        {
+          "rfilename": "qwenimage21/processor/merges.txt",
+          "blobId": "31349551d90c7606f325fe0f11bbb8bd5fa0d7c7",
+          "size": 1671853
+        },
+        {
+          "rfilename": "qwenimage21/processor/vocab.txt",
+          "blobId": "0ac11909c76149f8abd8472dd0e89a41779a0aff",
+          "size": 1521126
+        },
+        {
+          "rfilename": "qwenimage21/text_encoder/text_encoder.ncnn.bin",
+          "blobId": "ad981a0cf07be8a09864fd82cb69e56d5c7ce1bf",
+          "size": 15137412084,
+          "lfs": {
+            "sha256": "19c7bc6511ace26bfb6012347a497ae8b8d97ffbea8d888a87cecbba7324c46d",
+            "size": 15137412084,
+            "pointerSize": 136
+          }
+        },
+        {
+          "rfilename": "qwenimage21/text_encoder/text_encoder.ncnn.param",
+          "blobId": "fffc1cfe45f7856ce01e5f1818c10ee8524119a7",
+          "size": 99131
+        },
+        {
+          "rfilename": "qwenimage21/transformer/blocks.ncnn.bin",
+          "blobId": "0e1f0ca8d191cc81c6fb8898b4dbf92adb3558c7",
+          "size": 13958677376,
+          "lfs": {
+            "sha256": "52f4b35dad9fbfce180b5adf301b1a656db252f2e7bdef0806393591a85cbbe3",
+            "size": 13958677376,
+            "pointerSize": 136
+          }
+        },
+        {
+          "rfilename": "qwenimage21/transformer/blocks.ncnn.param",
+          "blobId": "2f4601f19cc8c8f0611005126d945a0375ba7a48",
+          "size": 108829
+        },
+        {
+          "rfilename": "qwenimage21/transformer/input.ncnn.bin",
+          "blobId": "0749c5bbaaa03a2c2fd87ff3d3b6c18c49323e2b",
+          "size": 237519384,
+          "lfs": {
+            "sha256": "c36f22f4b0038cc89bb2d677d1e296f998ff718f5d8e07ac0a1531d0681fe934",
+            "size": 237519384,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwenimage21/transformer/input.ncnn.param",
+          "blobId": "07d7c85fce89aa02812378b10a2baa5cd2536af3",
+          "size": 1878
+        },
+        {
+          "rfilename": "qwenimage21/transformer/output.ncnn.bin",
+          "blobId": "4f1802e6d31676409fcf3170a5665dc6d02998ed",
+          "size": 34078728,
+          "lfs": {
+            "sha256": "319b75bc130216ac863794651d152c89bfa42d9c9a143a110d79cbae2ba66b68",
+            "size": 34078728,
+            "pointerSize": 133
+          }
+        },
+        {
+          "rfilename": "qwenimage21/transformer/output.ncnn.param",
+          "blobId": "ec5b5fcfb49c1917f0653573b77c18c5950923e1",
+          "size": 596
+        },
+        {
+          "rfilename": "qwenimage21/vae/decoder.ncnn.bin",
+          "blobId": "5c28ba0c77af9c40a74deae50a58b6a0c4b7ca5e",
+          "size": 506263832,
+          "lfs": {
+            "sha256": "3e8a4a3e1779baea3ca2a54773749cd26ea4ce63134724f31a4e89dae0bb9c06",
+            "size": 506263832,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwenimage21/vae/decoder.ncnn.param",
+          "blobId": "6f2589bd125f21085d0cee5ff27af57b49b579e9",
+          "size": 15848
+        },
+        {
+          "rfilename": "qwenimage21/vae/encoder.ncnn.bin",
+          "blobId": "39b7ea68d95dca3f232e61e3d4e4591c61587e50",
+          "size": 155895416,
+          "lfs": {
+            "sha256": "e78396730feef0de57beddc31701176e8fa3e75f0190e314afb1222ae8a7e8ea",
+            "size": 155895416,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "qwenimage21/vae/encoder.ncnn.param",
+          "blobId": "4ff2fbe8f3bb93d931b76ed5cbaeeadeac931dd5",
+          "size": 6923
+        },
+        {
+          "rfilename": "qwenimage21/vision/vision_encoder.ncnn.bin",
+          "blobId": "89175e7adf139ca555ecf6449a33139ad1c7489d",
+          "size": 1147777928,
+          "lfs": {
+            "sha256": "0b913627e74cc7cbef7760af01a105d6c6cf6e1726469fb150415a4c78093cba",
+            "size": 1147777928,
+            "pointerSize": 135
+          }
+        },
+        {
+          "rfilename": "qwenimage21/vision/vision_encoder.ncnn.param",
+          "blobId": "246e5b664fc11a79b2dd99830ce8a6e994393f81",
+          "size": 59289
+        },
+        {
+          "rfilename": "qwenimage21/vision/vision_pos_embed.f32",
+          "blobId": "bd8193782e038e14cda22dbd3bd859ea2ab1dd4c",
+          "size": 10616832,
+          "lfs": {
+            "sha256": "50558c7b01a2349b5840754dd0c9bf3deeac21600e9b26a458b1aaa4879a6c5a",
+            "size": 10616832,
+            "pointerSize": 133
+          }
+        }
+      ]
+    }
+  ],
+  "sdu": [
+    {
+      "name": "sdu-root",
+      "source": "https://mirrors.sdu.edu.cn/ncnn_modelzoo/",
+      "comparison_status": "unchanged_json_metadata",
+      "response_bytes": 6201,
+      "response_sha256": "c3c215360e0a142859ce2b660e95d14a070e2844e7bb11df41d7413d16b2b00a",
+      "raw_bytes_equal": true
+    },
+    {
+      "name": "sdu-minicpm4_0.5b-index",
+      "source": "https://mirrors.sdu.edu.cn/ncnn_modelzoo/minicpm4_0.5b/",
+      "comparison_status": "unchanged_json_metadata",
+      "response_bytes": 1345,
+      "response_sha256": "60c862b90032e64e02f03f447fe4979f392beb02001f7208779e065ba1ce5964",
+      "raw_bytes_equal": true,
+      "sizes_match_catalog": true,
+      "entry_count": 8,
+      "catalog_inventory_revision": "212472bd9f3693dd1debddc1f41e1837c23f272e3e8c4dc73e71f0a1c823de21"
+    },
+    {
+      "name": "sdu-minicpm4_0.5b-model",
+      "source": "https://mirrors.sdu.edu.cn/ncnn_modelzoo/minicpm4_0.5b/model.json",
+      "comparison_status": "unchanged_json_metadata",
+      "response_bytes": 2492,
+      "response_sha256": "a9fe852d44ab66f0d3fad16e9f4faf84a42f4ba87e1fc2b38877487f767b2ad6",
+      "raw_bytes_equal": true,
+      "config_sha256": "a9fe852d44ab66f0d3fad16e9f4faf84a42f4ba87e1fc2b38877487f767b2ad6",
+      "expected_config_sha256": "a9fe852d44ab66f0d3fad16e9f4faf84a42f4ba87e1fc2b38877487f767b2ad6",
+      "config_bytes_match_catalog": true
+    },
+    {
+      "name": "sdu-minicpm4_0.5b_int8-index",
+      "source": "https://mirrors.sdu.edu.cn/ncnn_modelzoo/minicpm4_0.5b_int8/",
+      "comparison_status": "unchanged_json_metadata",
+      "response_bytes": 1343,
+      "response_sha256": "54cedccccd07977444265e6a6f2ab9497e9d21f5ad718282dfcabeb9ba856bce",
+      "raw_bytes_equal": true,
+      "sizes_match_catalog": true,
+      "entry_count": 8,
+      "catalog_inventory_revision": "940a2cf6d0d56f84d3f0aa201a210bb90401e06fcd2f8d91b46c8cc90fc5bc88"
+    },
+    {
+      "name": "sdu-minicpm4_0.5b_int8-model",
+      "source": "https://mirrors.sdu.edu.cn/ncnn_modelzoo/minicpm4_0.5b_int8/model.json",
+      "comparison_status": "unchanged_json_metadata",
+      "response_bytes": 3172,
+      "response_sha256": "78632908fc09dca07dd5147b159aca7cb63da48565df36530b7f71175fd0ccdb",
+      "raw_bytes_equal": true,
+      "config_sha256": "78632908fc09dca07dd5147b159aca7cb63da48565df36530b7f71175fd0ccdb",
+      "expected_config_sha256": "78632908fc09dca07dd5147b159aca7cb63da48565df36530b7f71175fd0ccdb",
+      "config_bytes_match_catalog": true
+    },
+    {
+      "name": "sdu-qwen2.5_vl_3b-index",
+      "source": "https://mirrors.sdu.edu.cn/ncnn_modelzoo/qwen2.5_vl_3b/",
+      "comparison_status": "unchanged_json_metadata",
+      "response_bytes": 2165,
+      "response_sha256": "7f0267312da3956cf9fbee91b2529ba892ab71b696a35bea48ca4ec2ae6a6fb8",
+      "raw_bytes_equal": true,
+      "sizes_match_catalog": true,
+      "entry_count": 12,
+      "catalog_inventory_revision": "e80f47b187edaec291f4328621e872d87b5840b30d6db9f5417285ff404bc7da"
+    },
+    {
+      "name": "sdu-qwen2.5_vl_3b-model",
+      "source": "https://mirrors.sdu.edu.cn/ncnn_modelzoo/qwen2.5_vl_3b/model.json",
+      "comparison_status": "unchanged_json_metadata",
+      "response_bytes": 2143,
+      "response_sha256": "46dedb4ded93eb568e64076d3130c0bd3163b6787d79e818a19faa1c7f4dc05f",
+      "raw_bytes_equal": true,
+      "config_sha256": "46dedb4ded93eb568e64076d3130c0bd3163b6787d79e818a19faa1c7f4dc05f",
+      "expected_config_sha256": "46dedb4ded93eb568e64076d3130c0bd3163b6787d79e818a19faa1c7f4dc05f",
+      "config_bytes_match_catalog": true
+    },
+    {
+      "name": "sdu-qwen2.5_vl_3b_int8-index",
+      "source": "https://mirrors.sdu.edu.cn/ncnn_modelzoo/qwen2.5_vl_3b_int8/",
+      "comparison_status": "unchanged_json_metadata",
+      "response_bytes": 2165,
+      "response_sha256": "29cd30ba80e50da4a58ab255bb4c1485f49b58d8c450f5e2be50513e8fb22a9b",
+      "raw_bytes_equal": true,
+      "sizes_match_catalog": true,
+      "entry_count": 12,
+      "catalog_inventory_revision": "7d31c4666c985b5d763e79d323c7d391c9d86e122757b4a59081d1140751dbf0"
+    },
+    {
+      "name": "sdu-qwen2.5_vl_3b_int8-model",
+      "source": "https://mirrors.sdu.edu.cn/ncnn_modelzoo/qwen2.5_vl_3b_int8/model.json",
+      "comparison_status": "unchanged_json_metadata",
+      "response_bytes": 2165,
+      "response_sha256": "347070cddf4b1a24ea07b0055927bf1e289938ba939e903fd2c75fbea928e91b",
+      "raw_bytes_equal": true,
+      "config_sha256": "347070cddf4b1a24ea07b0055927bf1e289938ba939e903fd2c75fbea928e91b",
+      "expected_config_sha256": "347070cddf4b1a24ea07b0055927bf1e289938ba939e903fd2c75fbea928e91b",
+      "config_bytes_match_catalog": true
+    },
+    {
+      "name": "sdu-qwen3.5_0.8b-index",
+      "source": "https://mirrors.sdu.edu.cn/ncnn_modelzoo/qwen3.5_0.8b/",
+      "comparison_status": "unchanged_json_metadata",
+      "response_bytes": 2499,
+      "response_sha256": "34003df711618c1e6f82de4bc4f48cf4342f5a2e15e834938485b0dd7be77e07",
+      "raw_bytes_equal": true,
+      "sizes_match_catalog": true,
+      "entry_count": 14,
+      "catalog_inventory_revision": "5b9834c6cd319380ddc28e58b8ba59577f918967808e515f51f95012f992c65d"
+    },
+    {
+      "name": "sdu-qwen3.5_0.8b-model",
+      "source": "https://mirrors.sdu.edu.cn/ncnn_modelzoo/qwen3.5_0.8b/model.json",
+      "comparison_status": "unchanged_json_metadata",
+      "response_bytes": 2315,
+      "response_sha256": "7028dcb4ea3d7d4f67fd6f7bbb7a2898cb96e62fba7edb0a94915abc89df718e",
+      "raw_bytes_equal": true,
+      "config_sha256": "7028dcb4ea3d7d4f67fd6f7bbb7a2898cb96e62fba7edb0a94915abc89df718e",
+      "expected_config_sha256": "7028dcb4ea3d7d4f67fd6f7bbb7a2898cb96e62fba7edb0a94915abc89df718e",
+      "config_bytes_match_catalog": true
+    },
+    {
+      "name": "sdu-qwen3.5_0.8b_int8-index",
+      "source": "https://mirrors.sdu.edu.cn/ncnn_modelzoo/qwen3.5_0.8b_int8/",
+      "comparison_status": "unchanged_json_metadata",
+      "response_bytes": 2496,
+      "response_sha256": "9832bac92d4a90fa8637d31849f741e31c1341c306ff9e1997f0bccef5ddcb34",
+      "raw_bytes_equal": true,
+      "sizes_match_catalog": true,
+      "entry_count": 14,
+      "catalog_inventory_revision": "e1823f23525a0accd6ac44ff7f4a4ba93abff3d70d680c4be0330d83447d318d"
+    },
+    {
+      "name": "sdu-qwen3.5_0.8b_int8-model",
+      "source": "https://mirrors.sdu.edu.cn/ncnn_modelzoo/qwen3.5_0.8b_int8/model.json",
+      "comparison_status": "unchanged_json_metadata",
+      "response_bytes": 2491,
+      "response_sha256": "ebcdbf80cc39a7388c3c4b1245ee8619ae998303cffdf52deded1dd3c3ca86d2",
+      "raw_bytes_equal": true,
+      "config_sha256": "ebcdbf80cc39a7388c3c4b1245ee8619ae998303cffdf52deded1dd3c3ca86d2",
+      "expected_config_sha256": "ebcdbf80cc39a7388c3c4b1245ee8619ae998303cffdf52deded1dd3c3ca86d2",
+      "config_bytes_match_catalog": true
+    },
+    {
+      "name": "sdu-qwen3_0.6b-index",
+      "source": "https://mirrors.sdu.edu.cn/ncnn_modelzoo/qwen3_0.6b/",
+      "comparison_status": "unchanged_json_metadata",
+      "response_bytes": 1317,
+      "response_sha256": "bd6247de5bac6b94e2a922a2fafdcc22b73194a9f52cbf9d350926c3399d6ada",
+      "raw_bytes_equal": true,
+      "sizes_match_catalog": true,
+      "entry_count": 8,
+      "catalog_inventory_revision": "a14de6a7e3c903387178a482d9564a7eea272376360b7506d323e0673d29dfd2"
+    },
+    {
+      "name": "sdu-qwen3_0.6b-model",
+      "source": "https://mirrors.sdu.edu.cn/ncnn_modelzoo/qwen3_0.6b/model.json",
+      "comparison_status": "unchanged_json_metadata",
+      "response_bytes": 1551,
+      "response_sha256": "08c35f37fb1423be1054314ed582077dc3c5854bc2b76e082f9a53a759ba2864",
+      "raw_bytes_equal": true,
+      "config_sha256": "08c35f37fb1423be1054314ed582077dc3c5854bc2b76e082f9a53a759ba2864",
+      "expected_config_sha256": "08c35f37fb1423be1054314ed582077dc3c5854bc2b76e082f9a53a759ba2864",
+      "config_bytes_match_catalog": true
+    },
+    {
+      "name": "sdu-qwen3_0.6b_int8-index",
+      "source": "https://mirrors.sdu.edu.cn/ncnn_modelzoo/qwen3_0.6b_int8/",
+      "comparison_status": "unchanged_json_metadata",
+      "response_bytes": 1317,
+      "response_sha256": "3c2745cd6d5de5c9a1fe200c7a23fcf8885b63ad64e4f351ce67f8dc118630b8",
+      "raw_bytes_equal": true,
+      "sizes_match_catalog": true,
+      "entry_count": 8,
+      "catalog_inventory_revision": "83eea0c8f63d3b944619886941368eb362ddc31b0cbab640236a6234363ec424"
+    },
+    {
+      "name": "sdu-qwen3_0.6b_int8-model",
+      "source": "https://mirrors.sdu.edu.cn/ncnn_modelzoo/qwen3_0.6b_int8/model.json",
+      "comparison_status": "unchanged_json_metadata",
+      "response_bytes": 1727,
+      "response_sha256": "33e433565ba3fb4982c8bf854e64f62952a6193ce94c26154f82bc1ae1ed6ee5",
+      "raw_bytes_equal": true,
+      "config_sha256": "33e433565ba3fb4982c8bf854e64f62952a6193ce94c26154f82bc1ae1ed6ee5",
+      "expected_config_sha256": "33e433565ba3fb4982c8bf854e64f62952a6193ce94c26154f82bc1ae1ed6ee5",
+      "config_bytes_match_catalog": true
+    },
+    {
+      "name": "sdu-youtu_llm-index",
+      "source": "https://mirrors.sdu.edu.cn/ncnn_modelzoo/youtu_llm/",
+      "comparison_status": "unchanged_json_metadata",
+      "response_bytes": 1358,
+      "response_sha256": "99ac64621654cc776e2322c4cccd6c9b8329e33f4b60a2bc5128e99df1c26845",
+      "raw_bytes_equal": true,
+      "sizes_match_catalog": true,
+      "entry_count": 8,
+      "catalog_inventory_revision": "ea58d390943885ad82c2cd8f96899ede706daf8bc5523a028e2b67db519feecb"
+    },
+    {
+      "name": "sdu-youtu_llm-model",
+      "source": "https://mirrors.sdu.edu.cn/ncnn_modelzoo/youtu_llm/model.json",
+      "comparison_status": "unchanged_json_metadata",
+      "response_bytes": 11178,
+      "response_sha256": "4d2b9bb4efd25e244e4e030db0d9a1a5d94de8246a15d2f38b45fffd5c8be9e6",
+      "raw_bytes_equal": true,
+      "config_sha256": "4d2b9bb4efd25e244e4e030db0d9a1a5d94de8246a15d2f38b45fffd5c8be9e6",
+      "expected_config_sha256": "4d2b9bb4efd25e244e4e030db0d9a1a5d94de8246a15d2f38b45fffd5c8be9e6",
+      "config_bytes_match_catalog": true
+    },
+    {
+      "name": "sdu-youtu_llm_int8-index",
+      "source": "https://mirrors.sdu.edu.cn/ncnn_modelzoo/youtu_llm_int8/",
+      "comparison_status": "unchanged_json_metadata",
+      "response_bytes": 1358,
+      "response_sha256": "32e50fbd2e0fda1a536f1135712772d297d4d517ec95a7952e2bf70f7f80ea49",
+      "raw_bytes_equal": true,
+      "sizes_match_catalog": true,
+      "entry_count": 8,
+      "catalog_inventory_revision": "f414c938b97e18b36c5f252f39ba0f7544b050dc899c64ab79c5ee5677f65cac"
+    },
+    {
+      "name": "sdu-youtu_llm_int8-model",
+      "source": "https://mirrors.sdu.edu.cn/ncnn_modelzoo/youtu_llm_int8/model.json",
+      "comparison_status": "unchanged_json_metadata",
+      "response_bytes": 10770,
+      "response_sha256": "d9e3695ea3321abf460d9d1d14aafc1128753e1fa9bab0eeb803abaf48b02a7c",
+      "raw_bytes_equal": true,
+      "config_sha256": "d9e3695ea3321abf460d9d1d14aafc1128753e1fa9bab0eeb803abaf48b02a7c",
+      "expected_config_sha256": "d9e3695ea3321abf460d9d1d14aafc1128753e1fa9bab0eeb803abaf48b02a7c",
+      "config_bytes_match_catalog": true
+    }
+  ],
+  "modelscope": {
+    "status": "unverified",
+    "last_successful_baseline_date": "2026-11-01"
+  },
+  "weights_downloaded": false,
+  "weight_bytes_independently_verified": false,
+  "limitations": [
+    "HF file hashes are provider metadata, not independently read weight bytes.",
+    "SDU listings and small model.json hashes do not establish complete weight integrity or independent model authority.",
+    "ModelScope current master manifests were not verified."
+  ]
+}
