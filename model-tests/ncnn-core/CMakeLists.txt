@@ -56,6 +56,33 @@ target_link_libraries(test_reduction_logsumexp PRIVATE ncnn)
 add_test(NAME test_reduction_logsumexp COMMAND test_reduction_logsumexp)
 set_tests_properties(test_reduction_logsumexp PROPERTIES TIMEOUT 120)
 
+# Isolate allocator negative controls from unrelated upstream Net cases while
+# retaining the complete test_net positive suite. Storage checks require all
+# relevant builtins and BF16, rather than silently skipping missing layers.
+foreach(net_test test_net_custom_allocator test_net_storage_featmask)
+    add_executable(${net_test} ${net_test}.cpp)
+    target_include_directories(${net_test} PRIVATE "${AGENT_NCNN_SOURCE_DIR}/tests")
+    target_link_libraries(${net_test} PRIVATE ncnntestutil ncnn)
+    add_test(NAME ${net_test} COMMAND ${net_test})
+    set_tests_properties(${net_test} PROPERTIES TIMEOUT 300)
+endforeach()
+
+# Exact-reference negative padding targets the changed x86 SSE2 pack8 code.
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64|i.86)$")
+    add_executable(test_padding_int8_negative test_padding_int8_negative.cpp)
+    target_include_directories(test_padding_int8_negative PRIVATE "${AGENT_NCNN_SOURCE_DIR}/src/layer")
+    target_link_libraries(test_padding_int8_negative PRIVATE ncnn)
+    add_test(NAME test_padding_int8_negative COMMAND test_padding_int8_negative)
+    set_tests_properties(test_padding_int8_negative PROPERTIES TIMEOUT 120)
+endif()
+
+# Validate independent arithmetic expectations even without a Vulkan device.
+# This is an oracle self-check, not GPU operator execution.
+add_executable(test_reduction_fp32_accum_reference test_reduction_fp32_accum_reference.cpp)
+target_link_libraries(test_reduction_fp32_accum_reference PRIVATE ncnn)
+add_test(NAME test_reduction_fp32_accum_reference COMMAND test_reduction_fp32_accum_reference)
+set_tests_properties(test_reduction_fp32_accum_reference PROPERTIES TIMEOUT 120)
+
 if(AGENT_NCNN_VULKAN_TESTS)
     # Upstream helpers permit GPU skips. The strict companions instead require
     # a device, valid pipelines and submitted compute/copy work.

@@ -1,7 +1,8 @@
-// Strict direct Vulkan LogSumExp/Mish regression: no Net CPU fallback or skips.
+// Strict direct Vulkan Reduction/LogSumExp/Mish regression: no Net CPU fallback or skips.
 // Exit 1 is infrastructure failure; exit 2 + NUMERICAL_MISMATCH requires a
 // successfully submitted GPU result which disagrees with a finite reference.
 #include "stability_reference.h"
+#include "reduction_fp32_accum_reference.h"
 #include "allocator.h"
 #include "command.h"
 #include "gpu.h"
@@ -26,7 +27,7 @@ struct Resources
     ncnn::VkStagingAllocator staging;
     ncnn::VkWeightAllocator weight;
     ncnn::Option opt;
-    Resources(ncnn::VulkanDevice* device, bool half, bool packing, bool subgroup)
+    Resources(ncnn::VulkanDevice* device, bool half, bool packing, bool subgroup, bool half_arithmetic = true)
         : blob(device), staging(device), weight(device)
     {
         opt.num_threads = 1;
@@ -34,7 +35,8 @@ struct Resources
         opt.use_packing_layout = packing;
         opt.use_fp16_uniform = false;
         opt.use_fp16_packed = false;
-        opt.use_fp16_storage = opt.use_fp16_arithmetic = half;
+        opt.use_fp16_storage = half;
+        opt.use_fp16_arithmetic = half && half_arithmetic;
         opt.use_bf16_packed = opt.use_bf16_storage = false;
         opt.use_int8_packed = opt.use_int8_storage = opt.use_int8_arithmetic = false;
         opt.use_subgroup_ops = subgroup;
@@ -92,11 +94,26 @@ static int readback(const char* name, ncnn::VkCompute& cmd, const ncnn::VkMat& r
     return stability::compare(name, actual, expected, half);
 }
 
-static int reduction(ncnn::VulkanDevice* device, const stability::ReductionCase& tc,
-                     int pattern, bool half)
+static bool reduction_uses_subgroup(const ncnn::GpuInfo& info)
 {
-    std::fprintf(stderr, "RUN Reduction op=10 case=%s pattern=%d fp16=%d path=device_subgroup coeff=%.9g keepdims=%d\n",
-                 tc.name, pattern, half, tc.coeff, tc.keepdims);
+    const uint32_t required = VK_SUBGROUP_FEATURE_BASIC_BIT | VK_SUBGROUP_FEATURE_ARITHMETIC_BIT;
+    return (info.support_subgroup_ops() & required) == required;
+}
+
+static const char* reduction_path(const ncnn::GpuInfo& info, bool half_arithmetic, bool legacy_shader)
+{
+    // 09981/36036 gate their subgroup branch on extended FP16 types. 437f18
+    // does not: its subgroup accumulator is float even with FP16 arithmetic.
+    const bool subgroup = reduction_uses_subgroup(info) && (!legacy_shader || !half_arithmetic
+        || info.queryShaderSubgroupExtendedTypesFeatures().shaderSubgroupExtendedTypes);
+    return subgroup ? "subgroup" : "shared";
+}
+
+static int reduction(ncnn::VulkanDevice* device, const stability::ReductionCase& tc,
+                     int pattern, bool half, bool legacy_shader)
+{
+    std::fprintf(stderr, "RUN Reduction op=10 case=%s pattern=%d fp16=%d path=%s coeff=%.9g keepdims=%d\n",
+                 tc.name, pattern, half, reduction_path(device->info, half, legacy_shader), tc.coeff, tc.keepdims);
     const ncnn::Mat input = stability::reduction_input(tc, pattern);
     if (input.empty()) return failure("Reduction input allocation");
     const stability::Reference expected = stability::reduction_reference(tc, input);
@@ -122,6 +139,54 @@ static int reduction(ncnn::VulkanDevice* device, const stability::ReductionCase&
     std::fprintf(stderr, "EVIDENCE Reduction pipeline=op10 dispatch_groups=%llu expected_groups=%llu\n",
                  (unsigned long long)dispatches, (unsigned long long)required);
     return readback("Reduction", cmd, output, r.opt, expected, half);
+}
+
+static int reduction_fp32_accum(ncnn::VulkanDevice* device, const stability::ReductionCase& tc,
+                                int operation, int pattern, int storage_mode, bool legacy_shader)
+{
+    const bool half = storage_mode != 0;
+    const bool half_arithmetic = storage_mode == 2;
+    const char* name = accumulation::operation_name(operation);
+    std::fprintf(stderr, "RUN ReductionFP32Accum op=%d name=%s case=%s pattern=%d fp16_storage=%d fp16_arithmetic=%d path=%s coeff=%.9g keepdims=%d\n",
+                 operation, name, tc.name, pattern, half, half_arithmetic, reduction_path(device->info, half_arithmetic, legacy_shader),
+                 accumulation::coefficient(tc, operation), tc.keepdims);
+    const ncnn::Mat input = accumulation::input(tc, operation, pattern);
+    if (input.empty()) return failure("FP32 accumulation input allocation");
+    const accumulation::Reference expected = accumulation::reference(tc, input, operation);
+    if (!accumulation::valid_fixture(input, expected)) return failure("FP32 accumulation finite adversarial oracle");
+    Resources r(device, half, false, true, half_arithmetic);
+    ncnn::Option cpu_opt = r.opt;
+    cpu_opt.use_vulkan_compute = false;
+    ncnn::Mat storage;
+    if (!accumulation::exact_storage(input, half, storage, cpu_opt)) return failure("FP32 accumulation input storage conversion must be exact and finite");
+    ncnn::Reduction_vulkan op;
+    op.vkdev = device;
+    DestroyPipeline cleanup(op, r.opt);
+    ncnn::ParamDict pd = stability::reduction_params(tc);
+    pd.set(0, operation);
+    pd.set(2, accumulation::coefficient(tc, operation));
+    if (op.load_param(pd) || op.operation != operation || !op.support_vulkan
+        || op.create_pipeline(r.opt) || !valid(op.pipeline_reduction)) return failure("FP32 accumulation Reduction pipeline");
+    if (op.pipeline_reduction->local_size_x() != 256 || op.pipeline_reduction->local_size_y() != 1
+        || op.pipeline_reduction->local_size_z() != 1) return failure("FP32 accumulation Reduction local size");
+    ncnn::VkCompute cmd(device);
+    ncnn::VkMat gpu, output;
+    // Raw exact storage avoids any FP16 conversion dispatch in the GPU upload.
+    // Only the real Reduction_vulkan::forward contributes compute work.
+    cmd.record_clone(storage, gpu, r.opt);
+    if (cmd.pending_dispatch_total() || !layout(gpu, 1, half) || gpu.dims != input.dims
+        || gpu.w != input.w || gpu.h != input.h || gpu.d != input.d || gpu.c != input.c)
+        return failure("FP32 accumulation raw input upload shape/storage");
+    if (op.forward(gpu, output, cmd, r.opt)) return failure("FP32 accumulation Reduction forward");
+    const uint64_t dispatches = cmd.pending_dispatch_total();
+    const uint64_t required = groups(op.pipeline_reduction, 256, stability::count(expected.expected.layout), 1);
+    if (!dispatches || dispatches != required || !layout(output, 1, half)) return failure("FP32 accumulation dispatch/layout");
+    std::fprintf(stderr, "EVIDENCE ReductionFP32Accum pipeline=op%d path=%s exact_finite_input=1 min_accumulator=%.17g max_accumulator=%.17g dispatch_groups=%llu expected_groups=%llu\n",
+                 operation, reduction_path(device->info, half_arithmetic, legacy_shader),
+                 *std::min_element(expected.accumulators.begin(), expected.accumulators.end()),
+                 *std::max_element(expected.accumulators.begin(), expected.accumulators.end()),
+                 (unsigned long long)dispatches, (unsigned long long)required);
+    return readback(name, cmd, output, r.opt, expected.expected, half);
 }
 
 static ncnn::Mat mish_input(int channels)
@@ -228,7 +293,7 @@ static int mish(ncnn::VulkanDevice* device, bool half, int channels, bool fused)
     return readback(name, cmd, output, r.opt, expected, half);
 }
 
-static int run(ncnn::VulkanDevice* device, bool run_reduction, bool run_mish)
+static int run(ncnn::VulkanDevice* device, bool run_reduction, bool run_mish, bool run_accum, const char* required_path, bool legacy_shader)
 {
     if (!device) return failure("missing Vulkan device");
     const ncnn::GpuInfo& info = device->info;
@@ -238,10 +303,17 @@ static int run(ncnn::VulkanDevice* device, bool run_reduction, bool run_mish)
     // reduction.comp selects subgroup code from device feature macros, not
     // opt.use_subgroup_ops. Toggling that option on the same device would NOT
     // cover the shared-memory fallback; do not claim two paths from that toggle.
-    const uint32_t subgroup_required = VK_SUBGROUP_FEATURE_BASIC_BIT | VK_SUBGROUP_FEATURE_ARITHMETIC_BIT;
-    if (run_reduction && ((info.support_subgroup_ops() & subgroup_required) != subgroup_required
-        || !info.queryShaderSubgroupExtendedTypesFeatures().shaderSubgroupExtendedTypes))
-        return failure("Reduction requires subgroup basic/arithmetic and extended types; no skipped subgroup path");
+    if (run_reduction || run_accum)
+    {
+        const char* fp32_path = reduction_path(info, false, legacy_shader);
+        const char* fp16_path = reduction_path(info, true, legacy_shader);
+        std::fprintf(stderr, "CAPABILITY Reduction shader_contract=%s fp32_path=%s fp16_arithmetic_path=%s subgroup_size=%u extended_types=%d (not required by 437f18); %s\n",
+                     legacy_shader ? "legacy_fp16" : "437f18_float", fp32_path, fp16_path, info.subgroup_size(),
+                     info.queryShaderSubgroupExtendedTypesFeatures().shaderSubgroupExtendedTypes,
+                     std::strcmp(fp32_path, fp16_path) == 0 ? "other_path=NOT_COVERED" : "paths=precision_dependent");
+        if (required_path && std::strcmp(required_path, fp32_path) != 0)
+            return failure("requested Reduction shader path unavailable on this device; no skipped success");
+    }
     if (std::getenv("AGENT_REQUIRE_LAVAPIPE") && (info.type() != 3
         || (!std::strstr(info.device_name(), "llvmpipe") && !std::strstr(info.device_name(), "lavapipe"))))
         return failure("CI must select Mesa lavapipe software Vulkan");
@@ -252,7 +324,7 @@ static int run(ncnn::VulkanDevice* device, bool run_reduction, bool run_mish)
             for (size_t i = 0; i < sizeof(stability::reduction_cases) / sizeof(stability::reduction_cases[0]); i++)
                 for (int pattern = 0; pattern < 3; pattern++)
                 {
-                    const int ret = reduction(device, stability::reduction_cases[i], pattern, half != 0);
+                    const int ret = reduction(device, stability::reduction_cases[i], pattern, half != 0, legacy_shader);
                     if (ret == 1) return 1;
                     failures += ret == 2;
                     cases++;
@@ -267,6 +339,17 @@ static int run(ncnn::VulkanDevice* device, bool run_reduction, bool run_mish)
                     cases++;
                 }
     }
+    if (run_accum)
+        for (int mode = 0; mode < 3; mode++)
+            for (size_t op = 0; op < sizeof(accumulation::operations) / sizeof(accumulation::operations[0]); op++)
+                for (size_t i = 0; i < sizeof(accumulation::cases) / sizeof(accumulation::cases[0]); i++)
+                    for (int pattern = 0; pattern < 2; pattern++)
+                    {
+                        const int ret = reduction_fp32_accum(device, accumulation::cases[i], accumulation::operations[op], pattern, mode, legacy_shader);
+                        if (ret == 1) return 1;
+                        failures += ret == 2;
+                        cases++;
+                    }
     std::fprintf(stderr, "%s: %d submitted Vulkan stability cases; numerical_failures=%d; software Vulkan is not physical GPU/model validation\n",
                  failures ? "FAIL" : "PASS", cases, failures);
     return failures ? 2 : 0;
@@ -274,12 +357,28 @@ static int run(ncnn::VulkanDevice* device, bool run_reduction, bool run_mish)
 
 int main(int argc, char** argv)
 {
-    bool reduction = true, mish = true;
-    if (argc == 2 && std::strcmp(argv[1], "--reduction") == 0) mish = false;
-    else if (argc == 2 && std::strcmp(argv[1], "--mish") == 0) reduction = false;
-    else if (argc != 1) return failure("usage: test_vulkan_stability [--reduction|--mish]");
+    bool reduction = true, mish = true, accum = true;
+    bool selected_suite = false, legacy_shader = false;
+    const char* required_path = 0;
+    for (int i = 1; i < argc; i++)
+    {
+        if (!selected_suite && std::strcmp(argv[i], "--reduction") == 0)
+        { reduction = true; mish = accum = false; selected_suite = true; }
+        else if (!selected_suite && std::strcmp(argv[i], "--mish") == 0)
+        { mish = true; reduction = accum = false; selected_suite = true; }
+        else if (!selected_suite && std::strcmp(argv[i], "--reduction-fp32-accum") == 0)
+        { accum = true; reduction = mish = false; selected_suite = true; }
+        // Reporting/requirement contract ONLY. The workflow must separately
+        // replace and rebuild the old .comp; this flag never changes a shader.
+        else if (!legacy_shader && std::strcmp(argv[i], "--legacy-fp16-reduction-shader") == 0) legacy_shader = true;
+        else if (!required_path && std::strcmp(argv[i], "--require-reduction-path=subgroup") == 0) required_path = "subgroup";
+        else if (!required_path && std::strcmp(argv[i], "--require-reduction-path=shared") == 0) required_path = "shared";
+        else return failure("usage: test_vulkan_stability [--reduction|--mish|--reduction-fp32-accum] [--require-reduction-path=subgroup|shared | --legacy-fp16-reduction-shader]");
+    }
+    if ((required_path || legacy_shader) && !reduction && !accum) return failure("Reduction path contract is invalid for Mish-only suite");
+    if (required_path && legacy_shader) return failure("path requirement applies to current shaders; legacy precision paths are reported separately");
     if (ncnn::create_gpu_instance() != 0) return failure("a working Vulkan device is required; cannot create Vulkan instance");
-    const int ret = ncnn::get_gpu_count() ? run(ncnn::get_gpu_device(), reduction, mish)
+    const int ret = ncnn::get_gpu_count() ? run(ncnn::get_gpu_device(), reduction, mish, accum, required_path, legacy_shader)
         : failure("a working Vulkan device is required; no CPU fallback or skipped success");
     ncnn::destroy_gpu_instance();
     return ret;
