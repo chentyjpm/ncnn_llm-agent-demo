@@ -1,9 +1,11 @@
 // Exact, independent scalar expectations for all four SSE2 pack8 constant
 // Padding branches. No test helper, CPU fallback, tolerance or model weights.
+// This test has no intrinsics. ncnn compiles its SSE2 implementation privately,
+// so select the supported architecture without depending on its private macro.
 #include "mat.h"
 #include "paramdict.h"
 #include <stdio.h>
-#if defined(__SSE2__)
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
 #include "x86/padding_x86.h"
 
 struct Shape
@@ -103,7 +105,7 @@ static int run_case(int dims, int width, int value)
 
 int main()
 {
-#if !defined(__SSE2__)
+#if !defined(__x86_64__) && !defined(_M_X64) && !defined(__i386__) && !defined(_M_IX86)
     fprintf(stderr, "CONFIGURATION_FAILURE: this strict companion requires x86 SSE2\n");
     return 1;
 #else
